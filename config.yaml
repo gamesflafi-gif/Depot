@@ -1,0 +1,42 @@
+# Konfiguration der Aktien-KI
+# ---------------------------------
+# Datenquelle:
+#   live  = echte Daten via yfinance + RSS-News
+#           (benötigt Netzwerkzugriff auf finance.yahoo.com & news.google.com –
+#            in gesperrten Umgebungen ggf. die Netzwerk-Allowlist anpassen)
+#   demo  = synthetische Offline-Daten zum Ausprobieren der Lern-Logik
+# Standard ist "demo", damit das Projekt überall sofort läuft.
+data_source: demo
+
+# Welche Aktien werden beobachtet und analysiert?
+tickers:
+  - AAPL   # Apple
+  - MSFT   # Microsoft
+  - NVDA   # Nvidia
+  - GOOGL  # Alphabet
+  - AMZN   # Amazon
+  - TSLA   # Tesla
+  - META   # Meta
+
+# Wie viel Kurs-Historie wird für Training/Features geladen?
+history_period: "2y"        # z.B. 1y, 2y, 5y, max
+history_interval: "1d"      # 1d = Tageskerzen
+
+# Vorhersage-Ziel
+horizon_days: 5             # Über wie viele Handelstage wird die Rendite vorhergesagt?
+profit_threshold: 0.0       # Ab welcher Rendite gilt es als "profitabel" (0.0 = jede positive Bewegung)
+
+# News
+news_max_per_ticker: 25     # Maximale Anzahl Headlines pro Ticker
+news_lookback_days: 7       # Wie alt dürfen News für das Live-Sentiment sein?
+
+# Modell / Lernen
+model:
+  type: "gradient_boosting" # gradient_boosting | logistic | sgd_online
+  test_size: 0.2            # Anteil der Daten für die Out-of-Sample-Bewertung
+  random_state: 42
+
+# Pfade (relativ zum Projekt-Root)
+paths:
+  store_dir: "data/store"     # Feature-Store (gesammelte Lerndaten)
+  model_dir: "data/models"    # Gespeicherte Modelle + Lernhistorie

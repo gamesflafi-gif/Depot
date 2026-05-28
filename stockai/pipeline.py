@@ -1,0 +1,308 @@
+"""Orchestrierung der Aktien-KI.
+
+Verbindet Datenbeschaffung, Feature-Erzeugung, Lernen und Vorhersage zu
+nachvollziehbaren Arbeitsschritten:
+
+    build_history_dataset() – Trainings-Datensatz aus historischen Kursen
+    snapshot_live()         – aktuellen Zustand (inkl. echtem News-Sentiment)
+                              in den Feature-Store schreiben (für Selbstlernen)
+    label_pending()         – fällige Snapshots mit realer Rendite labeln
+    train()                 – Modell (neu) trainieren + Lernhistorie schreiben
+    analyze()               – Live-Analyse: wer wird profitabel? wohin fließt Geld?
+
+Hinweis zum News-Sentiment: Kostenlose, tagesgenaue Alt-News über 2 Jahre
+gibt es nicht. Deshalb werden historische Trainingszeilen mit neutralem
+Sentiment (0) gebootstrappt. Über ``snapshot_live`` + ``label_pending`` sammelt
+die KI im Betrieb echte Sentiment-/Ergebnis-Paare und lernt das News-Signal
+dadurch eigenständig dazu – ihre Präzision verbessert sich mit der Zeit.
+"""
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+
+import numpy as np
+import pandas as pd
+
+from stockai.advisor import recommend
+from stockai.config import Config
+from stockai.data import provider
+from stockai.features.sentiment import SENTIMENT_FEATURES, aggregate_sentiment
+from stockai.features.technical import TECHNICAL_FEATURES, add_technical_features
+from stockai.model.predictor import Predictor, TrainResult
+from stockai.model.store import FeatureStore, ModelStore
+
+log = logging.getLogger(__name__)
+
+FEATURE_COLUMNS = TECHNICAL_FEATURES + SENTIMENT_FEATURES
+KEY_COLS = ["ticker", "date"]
+
+
+# --------------------------------------------------------------------------- #
+@dataclass
+class TickerAnalysis:
+    ticker: str
+    last_price: float
+    profit_probability: float
+    sentiment_mean: float
+    news_count: int
+    rsi_14: float = 50.0
+    momentum_5d: float = 0.0
+    price_vs_high_20: float = 1.0
+    top_headlines: list[dict] = field(default_factory=list)
+    signal: str = ""
+    action: str = "HALTEN"
+    confidence: float = 0.5
+    reasons: list[str] = field(default_factory=list)
+    timing: str = ""
+
+
+# --------------------------------------------------------------------------- #
+def _target_from_prices(df: pd.DataFrame, horizon: int, threshold: float) -> pd.Series:
+    """1, wenn die Rendite über ``horizon`` Handelstage > ``threshold`` ist."""
+    future_return = df["Close"].shift(-horizon) / df["Close"] - 1.0
+    return (future_return > threshold).astype("float")
+
+
+def build_history_dataset(cfg: Config) -> pd.DataFrame:
+    """Baut aus historischen Kursen einen gelabelten Trainingsdatensatz.
+
+    Sentiment-Features werden hier neutral (0) gesetzt (siehe Modul-Doc).
+    """
+    frames: list[pd.DataFrame] = []
+    for ticker in cfg.tickers:
+        prices = provider.get_prices(cfg, ticker)
+        if prices.empty or len(prices) < 60:
+            log.warning("Überspringe %s (zu wenig Kurshistorie).", ticker)
+            continue
+        feat = add_technical_features(prices)
+        feat["target"] = _target_from_prices(
+            prices, cfg.horizon_days, cfg.profit_threshold
+        )
+        for col in SENTIMENT_FEATURES:
+            feat[col] = 0.0
+        feat["ticker"] = ticker
+        feat["date"] = feat.index.strftime("%Y-%m-%d")
+        frames.append(feat.reset_index(drop=True))
+
+    if not frames:
+        return pd.DataFrame()
+    data = pd.concat(frames, ignore_index=True)
+    # Letzte ``horizon`` Zeilen je Ticker haben kein gültiges Label -> entfernen
+    return data.dropna(subset=FEATURE_COLUMNS + ["target"])
+
+
+# --------------------------------------------------------------------------- #
+def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | None:
+    """Aktuelle technische + Sentiment-Features für einen Ticker.
+
+    Returns (feature_dict, scored_news, last_price) oder None.
+    """
+    prices = provider.get_prices(cfg, ticker)
+    if prices.empty or len(prices) < 60:
+        return None
+    feat = add_technical_features(prices).iloc[-1]
+    last_price = float(prices["Close"].iloc[-1])
+
+    news = provider.get_news(cfg, ticker)
+    sent = aggregate_sentiment(news)
+
+    row: dict[str, float] = {f: float(feat[f]) for f in TECHNICAL_FEATURES}
+    row.update(sent.features)
+    return row, sent.scored_items, last_price
+
+
+def snapshot_live(cfg: Config) -> int:
+    """Schreibt den aktuellen Zustand aller Ticker in den Feature-Store.
+
+    Diese Snapshots haben zunächst kein Label (``target`` = NaN). Sobald der
+    Horizont verstrichen ist, füllt ``label_pending`` die echte Rendite ein.
+    """
+    store = FeatureStore(cfg.store_dir)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows: list[dict] = []
+    for ticker in cfg.tickers:
+        result = _live_feature_row(cfg, ticker)
+        if result is None:
+            continue
+        row, _, last_price = result
+        row.update(
+            {
+                "ticker": ticker,
+                "date": today,
+                "snapshot_close": last_price,
+                "target": np.nan,
+            }
+        )
+        rows.append(row)
+    if not rows:
+        return 0
+    store.update(pd.DataFrame(rows), key_cols=KEY_COLS)
+    return len(rows)
+
+
+def label_pending(cfg: Config) -> int:
+    """Labelt Snapshot-Zeilen, deren Vorhersage-Horizont verstrichen ist.
+
+    Holt aktuelle Kurse und vergleicht sie mit dem Snapshot-Kurs.
+    Returns: Anzahl neu gelabelter Zeilen.
+    """
+    store = FeatureStore(cfg.store_dir)
+    df = store.load()
+    if df.empty or "snapshot_close" not in df.columns:
+        return 0
+
+    pending = df[df["target"].isna() & df["snapshot_close"].notna()]
+    if pending.empty:
+        return 0
+
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=cfg.horizon_days)
+    labeled = 0
+    for ticker in pending["ticker"].unique():
+        prices = provider.get_prices_window(cfg, ticker, period="3mo")
+        if prices.empty:
+            continue
+        for idx, row in pending[pending["ticker"] == ticker].iterrows():
+            snap_date = datetime.strptime(row["date"], "%Y-%m-%d").date()
+            if snap_date > cutoff:
+                continue  # Horizont noch nicht erreicht
+            future = prices[prices.index.date > snap_date]
+            if future.empty:
+                continue
+            future_price = float(future["Close"].iloc[min(cfg.horizon_days - 1, len(future) - 1)])
+            ret = future_price / float(row["snapshot_close"]) - 1.0
+            df.loc[idx, "target"] = float(ret > cfg.profit_threshold)
+            labeled += 1
+
+    if labeled:
+        store.update(df, key_cols=KEY_COLS)
+    return labeled
+
+
+# --------------------------------------------------------------------------- #
+def _combined_training_data(cfg: Config) -> pd.DataFrame:
+    """Bootstrap-Historie + gelabelte Live-Snapshots zusammenführen."""
+    history = build_history_dataset(cfg)
+    store_df = FeatureStore(cfg.store_dir).load()
+    labeled_live = pd.DataFrame()
+    if not store_df.empty and "target" in store_df.columns:
+        labeled_live = store_df.dropna(subset=["target"])
+        labeled_live = labeled_live[
+            [c for c in FEATURE_COLUMNS + ["target", "ticker", "date"] if c in labeled_live.columns]
+        ]
+    frames = [f for f in [history, labeled_live] if not f.empty]
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+def train(cfg: Config) -> TrainResult:
+    """Trainiert das Modell neu und protokolliert die Güte in der Lernhistorie."""
+    data = _combined_training_data(cfg)
+    if data.empty:
+        raise RuntimeError("Keine Trainingsdaten verfügbar (Netzwerk/Ticker prüfen).")
+
+    predictor = Predictor(
+        feature_names=FEATURE_COLUMNS,
+        model_type=cfg.model.get("type", "gradient_boosting"),
+        random_state=int(cfg.model.get("random_state", 42)),
+    )
+    result = predictor.train(
+        data, target_col="target", test_size=float(cfg.model.get("test_size", 0.2))
+    )
+
+    model_store = ModelStore(cfg.model_dir)
+    model_store.save_model(predictor)
+    model_store.append_history(
+        {
+            "model_type": predictor.model_type,
+            "n_samples": int(len(data)),
+            "n_train": result.n_train,
+            "n_test": result.n_test,
+            "n_live_labeled": int(
+                len(data) - len(build_history_dataset(cfg))
+            ) if not data.empty else 0,
+            "metrics": result.metrics,
+            "top_features": dict(list(result.feature_importance.items())[:8]),
+        }
+    )
+    return result
+
+
+# --------------------------------------------------------------------------- #
+def analyze(cfg: Config, retrain_if_missing: bool = True) -> list[TickerAnalysis]:
+    """Live-Analyse: berechnet je Ticker die Profitabilitäts-Wahrscheinlichkeit.
+
+    Das Ranking zeigt, *wer* wahrscheinlich profitabel wird und *wohin*
+    (relativ) das Kapital tendiert.
+    """
+    model_store = ModelStore(cfg.model_dir)
+    predictor = model_store.load_model()
+    if predictor is None:
+        if not retrain_if_missing:
+            raise RuntimeError("Kein trainiertes Modell vorhanden. Bitte zuerst 'train'.")
+        log.info("Kein Modell gefunden – trainiere zunächst …")
+        train(cfg)
+        predictor = model_store.load_model()
+
+    results: list[TickerAnalysis] = []
+    for ticker in cfg.tickers:
+        live = _live_feature_row(cfg, ticker)
+        if live is None:
+            continue
+        row, scored_news, last_price = live
+        X = pd.DataFrame([row])[FEATURE_COLUMNS]
+        proba = float(predictor.predict_proba(X)[0])
+
+        scored_sorted = sorted(scored_news, key=lambda kv: abs(kv[1]), reverse=True)
+        headlines = [
+            {
+                "title": item.title,
+                "sentiment": round(score, 3),
+                "source": item.source,
+                "link": item.link,
+            }
+            for item, score in scored_sorted[:5]
+        ]
+
+        macd_hist = row.get("macd", 0.0) - row.get("macd_signal", 0.0)
+        rec = recommend(
+            profit_probability=proba,
+            rsi_14=row.get("rsi_14", 50.0),
+            momentum_5d=row.get("ret_5d", 0.0),
+            price_vs_high_20=row.get("price_vs_high_20", 1.0),
+            macd_hist=macd_hist,
+            sentiment_mean=row.get("sent_mean", 0.0),
+        )
+        results.append(
+            TickerAnalysis(
+                ticker=ticker,
+                last_price=last_price,
+                profit_probability=proba,
+                sentiment_mean=row.get("sent_mean", 0.0),
+                news_count=int(row.get("news_count", 0)),
+                rsi_14=row.get("rsi_14", 50.0),
+                momentum_5d=row.get("ret_5d", 0.0),
+                price_vs_high_20=row.get("price_vs_high_20", 1.0),
+                top_headlines=headlines,
+                signal=_signal(proba),
+                action=rec.action,
+                confidence=rec.confidence,
+                reasons=rec.reasons,
+                timing=rec.timing,
+            )
+        )
+
+    results.sort(key=lambda r: r.profit_probability, reverse=True)
+    return results
+
+
+def _signal(proba: float) -> str:
+    if proba >= 0.60:
+        return "STARK (Geld fließt wahrscheinlich hier hin)"
+    if proba >= 0.52:
+        return "leicht positiv"
+    if proba <= 0.40:
+        return "negativ (eher meiden)"
+    return "neutral"

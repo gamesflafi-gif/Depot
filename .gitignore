@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Modelle & Daten (lokal generiert, lernen kontinuierlich dazu)
+data/store/
+data/models/
+*.joblib
+data/store/*.csv
+
+# Logs & Caches
+*.log
+.cache/
+.pytest_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
