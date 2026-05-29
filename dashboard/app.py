@@ -64,9 +64,10 @@ def _run_analysis():
 
 
 # --- Hauptbereich --------------------------------------------------------- #
-tab_overview, tab_detail, tab_portfolio, tab_strategy, tab_learning = st.tabs(
+(tab_overview, tab_detail, tab_portfolio, tab_strategy,
+ tab_scorecard, tab_learning) = st.tabs(
     ["🎯 Empfehlungen", "🔍 Detail & News", "💼 Portfolio",
-     "📉 Strategie-Backtest", "🧠 Lernfortschritt"]
+     "📉 Strategie-Backtest", "🏅 Scorecard", "🧠 Lernfortschritt"]
 )
 
 with tab_overview:
@@ -204,6 +205,43 @@ with tab_strategy:
             st.dataframe(kpi, use_container_width=True, hide_index=True)
             st.caption(f"{res.n_rebalances} Rebalancings. Demo-Daten dienen nur "
                        "der Veranschaulichung – keine reale Performance.")
+
+with tab_scorecard:
+    st.write("**Wie treffsicher sind die Empfehlungen?** (Walk-Forward-Bewertung)")
+    if st.button("Scorecard berechnen", type="primary"):
+        from stockai import scorecard as _sc
+        with st.spinner("Bewerte historische Empfehlungen …"):
+            try:
+                card = _sc.evaluate_recommendations(cfg)
+            except Exception as exc:
+                st.error(f"Scorecard fehlgeschlagen: {exc}")
+                card = None
+        if card is not None:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Treffer (ohne HALTEN)", f"{card.overall_hit_rate:.0%}")
+            if card.buy_avg_return == card.buy_avg_return:
+                c2.metric("Ø Rendite nach Kauf", f"{card.buy_avg_return:+.1%}")
+            if card.sell_avg_return == card.sell_avg_return:
+                c3.metric("Ø Rendite nach Verkauf", f"{card.sell_avg_return:+.1%}")
+            act_df = pd.DataFrame([
+                {"Aktion": a, "Anzahl": v["count"],
+                 "Trefferquote": v["hit_rate"], "Ø Rendite": v["avg_return"]}
+                for a, v in card.by_action.items()
+            ])
+            st.dataframe(
+                act_df.style.format({"Trefferquote": "{:.1%}", "Ø Rendite": "{:+.2%}"}),
+                use_container_width=True, hide_index=True,
+            )
+            cal = pd.DataFrame(card.calibration)
+            if not cal.empty:
+                fig = px.line(cal, x="predicted", y="actual", markers=True,
+                              title="Kalibrierung: vorhergesagt vs. tatsächlich profitabel")
+                fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1,
+                              line=dict(dash="dash", color="gray"))
+                fig.update_layout(xaxis_tickformat=".0%", yaxis_tickformat=".0%")
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption("Je näher die Linie an der Diagonale, desto verlässlicher "
+                           "sind die Wahrscheinlichkeiten.")
 
 with tab_learning:
     history = ModelStore(cfg.model_dir).load_history()

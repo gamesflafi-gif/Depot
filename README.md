@@ -35,13 +35,16 @@ stockai/
 │   ├── technical.py       # technische Indikatoren (RSI, MACD, Vola, …)
 │   └── sentiment.py       # News-Sentiment via VADER
 ├── model/
-│   ├── predictor.py       # lernendes ML-Modell + Bewertung
+│   ├── predictor.py       # lernendes ML-Modell + CV-Bewertung + Kalibrierung
+│   ├── selection.py       # automatische Modellwahl (type: auto)
+│   ├── tuning.py          # Hyperparameter-Tuning (Zeitreihen-CV)
 │   └── store.py           # Feature-Store, Modellspeicher, Lernhistorie
 ├── advisor.py             # Entscheidungs-Schicht: BOOM/KAUFEN/HALTEN/VERKAUFEN
 ├── portfolio.py           # Allokations-Engine (wohin wie viel Kapital)
 ├── pipeline.py            # Orchestrierung (train/analyze/learn/…)
 ├── backtest.py            # Signalgüte-Backtest (Edge)
 ├── strategy.py            # P&L-Strategie-Backtest (Equity, Sharpe, Drawdown)
+├── scorecard.py           # Treffsicherheit der Empfehlungen + Kalibrierung
 └── cli.py                 # Kommandozeilen-Interface
 dashboard/app.py           # Streamlit-Dashboard
 tests/                     # Offline-Tests (kein Netzwerk nötig)
@@ -80,6 +83,11 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 - **Ehrliche Validierung:** Bewertung per **zeitlicher Kreuzvalidierung**
   (`TimeSeriesSplit`) – das Modell sieht beim Testen nie die Zukunft. `train`
   zeigt AUC/Accuracy als Mittelwert ± Streuung, `evaluate` vergleicht alle Modelle.
+- **Hyperparameter-Tuning:** `tune` optimiert die Modellparameter per CV und
+  speichert sie; `train` wendet sie automatisch an.
+- **Recommendation-Scorecard:** `scorecard` bewertet per Walk-Forward, wie
+  treffsicher die Empfehlungen je Aktion (BOOM/KAUFEN/VERKAUFEN …) waren und ob
+  die Wahrscheinlichkeiten gut **kalibriert** sind (vorhergesagt ≈ tatsächlich).
 
 > 🔬 **Realistische Erwartung:** Aktienmärkte sind nahezu effizient – kein
 > seriöses Modell „besiegt" sie zuverlässig. Ziel dieses Projekts ist die
@@ -109,6 +117,12 @@ python -m stockai.cli analyze --headlines
 
 # 2b) Modelltypen per Kreuzvalidierung vergleichen
 python -m stockai.cli evaluate
+
+# 2c) Hyperparameter optimieren (werden beim nächsten train angewandt)
+python -m stockai.cli tune
+
+# 2d) Treffsicherheit der Empfehlungen bewerten (Scorecard)
+python -m stockai.cli scorecard
 
 # 3) Einen kompletten Lernzyklus laufen lassen (labeln + snapshot + neu trainieren)
 python -m stockai.cli learn
@@ -140,8 +154,9 @@ streamlit run dashboard/app.py
 
 Tabs: **Empfehlungen** (Ranking + Chart), **Detail & News** (Begründungen,
 Schlagzeilen, Timing), **Portfolio** (Allokation + Kapital-Pie),
-**Strategie-Backtest** (Equity-Kurve vs. Buy & Hold, Sharpe, Drawdown) und
-**Lernfortschritt** (Güte über die Trainingsläufe).
+**Strategie-Backtest** (Equity-Kurve vs. Buy & Hold, Sharpe, Drawdown),
+**Scorecard** (Treffsicherheit + Kalibrierung) und **Lernfortschritt**
+(Güte über die Trainingsläufe).
 
 ---
 

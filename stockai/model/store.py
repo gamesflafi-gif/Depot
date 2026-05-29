@@ -57,9 +57,23 @@ class ModelStore:
         self.model_dir = Path(model_dir)
         self.model_path = self.model_dir / _MODEL_FILE
         self.history_path = self.model_dir / _HISTORY_FILE
+        self.tuned_path = self.model_dir / "tuned_params.json"
 
     def save_model(self, predictor: Predictor) -> None:
         joblib.dump(predictor, self.model_path)
+
+    # --- getunte Hyperparameter ----------------------------------------- #
+    def save_tuned_params(self, model_type: str, params: dict, score: float) -> None:
+        with open(self.tuned_path, "w", encoding="utf-8") as fh:
+            json.dump({"model_type": model_type, "params": params, "score": score}, fh, indent=2)
+
+    def load_tuned_params(self, model_type: str) -> dict:
+        """Liefert getunte Parameter, falls sie zum Modelltyp passen."""
+        if not self.tuned_path.exists():
+            return {}
+        with open(self.tuned_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data.get("params", {}) if data.get("model_type") == model_type else {}
 
     def load_model(self) -> Predictor | None:
         if self.model_path.exists():

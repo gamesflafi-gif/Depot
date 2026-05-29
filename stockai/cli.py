@@ -52,6 +52,59 @@ def cmd_train(cfg, args) -> None:
         print(f"    {name:18s}: {imp:.3f}")
 
 
+def cmd_tune(cfg, args) -> None:
+    """Sucht die besten Hyperparameter (Zeitreihen-CV) und speichert sie."""
+    from stockai.model.tuning import tune_model
+    from stockai.model.predictor import AUTO_CANDIDATES
+
+    data = pipeline._combined_training_data(cfg)
+    if data.empty:
+        print("Keine Daten verfügbar.")
+        return
+    model_type, _ = pipeline.resolve_model_type(cfg, data)
+    print(f"Tune Hyperparameter für '{model_type}' (Zeitreihen-CV) …\n")
+    res = tune_model(data, pipeline.FEATURE_COLUMNS, model_type,
+                     random_state=int(cfg.model.get("random_state", 42)))
+    if not res.best_params:
+        print(f"Für '{model_type}' ist kein Suchraum definiert "
+              f"(z.B. ensemble/sgd_online).")
+        return
+    print(f"  Beste CV-AUC: {res.best_score:.3f}  "
+          f"({res.n_candidates} Kombinationen getestet)")
+    print("  Beste Parameter:")
+    for k, v in res.best_params.items():
+        print(f"    {k}: {v}")
+    ModelStore(cfg.model_dir).save_tuned_params(model_type, res.best_params, res.best_score)
+    print("\n  ✔ Gespeichert – werden beim nächsten 'train' automatisch angewandt.")
+
+
+def cmd_scorecard(cfg, args) -> None:
+    """Bewertet die Treffsicherheit der Empfehlungen (Walk-Forward)."""
+    from stockai import scorecard as sc
+
+    print("Bewerte historische Empfehlungen (Walk-Forward) …\n")
+    card = sc.evaluate_recommendations(cfg, prob_threshold=args.threshold)
+    print(f"  Empfehlungen gesamt: {card.n_recommendations}")
+    print(f"  Trefferquote (handlungsrelevant, ohne HALTEN): {card.overall_hit_rate:.1%}")
+    if card.buy_avg_return == card.buy_avg_return:
+        print(f"  Ø Rendite nach KAUF-Signal:    {card.buy_avg_return:+.2%}")
+    if card.sell_avg_return == card.sell_avg_return:
+        print(f"  Ø Rendite nach VERKAUF-Signal: {card.sell_avg_return:+.2%}")
+
+    print(f"\n  {'Aktion':12s}{'Anzahl':>8s}{'Treffer':>10s}{'Ø Rendite':>12s}")
+    print("  " + "-" * 42)
+    for action in ("BOOM", "KAUFEN", "HALTEN", "VERKAUFEN", "MEIDEN"):
+        a = card.by_action.get(action)
+        if a:
+            print(f"  {action:12s}{a['count']:8d}{a['hit_rate']:10.1%}{a['avg_return']:+12.2%}")
+
+    print(f"\n  Kalibrierung (vorhergesagt vs. tatsächlich profitabel):")
+    print(f"  {'P-Bereich':12s}{'Anzahl':>8s}{'Vorhergesagt':>14s}{'Tatsächlich':>13s}")
+    print("  " + "-" * 47)
+    for c in card.calibration:
+        print(f"  {c['bin']:12s}{c['count']:8d}{c['predicted']:14.1%}{c['actual']:13.1%}")
+
+
 def cmd_evaluate(cfg, args) -> None:
     """Vergleicht mehrere Modelltypen per Zeitreihen-Kreuzvalidierung."""
     from stockai.model.predictor import AUTO_CANDIDATES, Predictor
@@ -270,6 +323,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("train", help="Modell (neu) trainieren")
     sub.add_parser("evaluate", help="Modelltypen per Kreuzvalidierung vergleichen")
+    sub.add_parser("tune", help="Hyperparameter optimieren (und speichern)")
+
+    psc = sub.add_parser("scorecard", help="Treffsicherheit der Empfehlungen bewerten")
+    psc.add_argument("--threshold", type=float, default=0.55)
 
     pa = sub.add_parser("analyze", help="Live-Analyse + Empfehlungen")
     pa.add_argument("--headlines", action="store_true", help="Schlagzeilen anzeigen")
@@ -302,6 +359,8 @@ def build_parser() -> argparse.ArgumentParser:
 _COMMANDS = {
     "train": cmd_train,
     "evaluate": cmd_evaluate,
+    "tune": cmd_tune,
+    "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,
     "label": cmd_label,

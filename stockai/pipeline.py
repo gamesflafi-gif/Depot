@@ -278,11 +278,15 @@ def train(cfg: Config) -> TrainResult:
     if selected_via is not None:
         log.info("Auto-Auswahl: %s (Ranking: %s)", model_type, selected_via)
 
+    model_store = ModelStore(cfg.model_dir)
+    # Getunte Hyperparameter anwenden, sofern vorhanden (siehe 'tune')
+    tuned = model_store.load_tuned_params(model_type)
     predictor = Predictor(
         feature_names=FEATURE_COLUMNS,
         model_type=model_type,
         random_state=random_state,
         calibrate=bool(cfg.model.get("calibrate", False)),
+        params=tuned,
     )
     # Ehrliche Präzisionsschätzung per Zeitreihen-CV (vor dem finalen Fit)
     cv_metrics = predictor.cross_validate(data, target_col="target")
@@ -300,7 +304,6 @@ def train(cfg: Config) -> TrainResult:
         else 0
     )
 
-    model_store = ModelStore(cfg.model_dir)
     model_store.save_model(predictor)
     model_store.append_history(
         {

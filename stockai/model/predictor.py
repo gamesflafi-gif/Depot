@@ -51,7 +51,17 @@ class TrainResult:
     cv_metrics: dict[str, float] = field(default_factory=dict)
 
 
-def _build_estimator(model_type: str, random_state: int):
+def _build_estimator(model_type: str, random_state: int, params: dict | None = None):
+    est = _build_estimator_base(model_type, random_state)
+    if params:
+        try:
+            est.set_params(**params)
+        except ValueError:
+            pass  # inkompatible Parameter ignorieren statt zu scheitern
+    return est
+
+
+def _build_estimator_base(model_type: str, random_state: int):
     if model_type == "gradient_boosting":
         return GradientBoostingClassifier(random_state=random_state)
     if model_type == "hist_gradient_boosting":
@@ -110,12 +120,14 @@ class Predictor:
         model_type: str = "gradient_boosting",
         random_state: int = 42,
         calibrate: bool = False,
+        params: dict | None = None,
     ) -> None:
         self.feature_names = feature_names
         self.model_type = model_type
         self.random_state = random_state
+        self.params = params or {}
         self.calibrate = calibrate and model_type != "sgd_online"
-        self.base_estimator: Any = _build_estimator(model_type, random_state)
+        self.base_estimator: Any = _build_estimator(model_type, random_state, self.params)
         # Kalibrierte Wahrscheinlichkeiten (verlässlichere P(Profit)) via
         # isotonischer Regression auf zeitlich sauberen CV-Folds.
         if self.calibrate:

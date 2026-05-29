@@ -140,6 +140,42 @@ def test_portfolio_no_candidates():
     assert "X" in pf.sells
 
 
+def test_scorecard_demo():
+    """Recommendation-Scorecard (Walk-Forward) im Demo-Modus."""
+    from stockai import scorecard as sc
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.model = {"type": "logistic", "random_state": 42}
+
+    card = sc.evaluate_recommendations(cfg)
+    assert card.n_recommendations > 0
+    assert 0.0 <= card.overall_hit_rate <= 1.0
+    assert card.by_action  # mindestens eine Aktion bewertet
+    for c in card.calibration:
+        assert 0.0 <= c["actual"] <= 1.0
+
+
+def test_hyperparameter_tuning_demo():
+    """Hyperparameter-Tuning liefert gültige Parameter für ein Baummodell."""
+    from stockai import pipeline
+    from stockai.config import load_config
+    from stockai.model.tuning import tune_model
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.model = {"type": "random_forest", "random_state": 42}
+
+    data = pipeline._combined_training_data(cfg)
+    res = tune_model(data, pipeline.FEATURE_COLUMNS, "random_forest")
+    assert res.best_params
+    assert "n_estimators" in res.best_params
+    assert 0.0 <= res.best_score <= 1.0
+
+
 def test_strategy_backtest_demo(tmp_path):
     """Walk-Forward-Strategie-Backtest im Demo-Modus (schnelles Modell)."""
     from stockai import strategy
