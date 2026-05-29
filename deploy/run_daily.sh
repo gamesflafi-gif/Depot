@@ -17,7 +17,9 @@ STAMP="$(date +%Y-%m-%d)"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ====="
   # 1) Aus echten Daten dazulernen (sammelt Sentiment + Ergebnis)
   "$PY" -m stockai.cli --source live learn || echo "learn fehlgeschlagen"
-  # 2) Sparplan erstellen + per Telegram/Webhook benachrichtigen
+  # 2) Briefing mit Moves-Alerts per Telegram senden
+  "$PY" -m stockai.cli --source live briefing --notify || echo "briefing fehlgeschlagen"
+  # 3) Sparplan erstellen + per Telegram/Webhook benachrichtigen
   "$PY" -m stockai.cli --source live sparplan \
         --monthly "${STOCKAI_MONTHLY:-100}" \
         --report "$PROJECT_DIR/sparplan.md" --notify || echo "sparplan fehlgeschlagen"

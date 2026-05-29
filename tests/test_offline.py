@@ -146,6 +146,37 @@ def test_stooq_csv_parser_and_symbol():
     assert parse_stooq_csv("kaputt\n1,2,3").empty
 
 
+def test_briefing_and_moves(tmp_path):
+    """Briefing erzeugt Report; zweiter Lauf erkennt Veränderungen."""
+    from stockai import briefing as bf
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.etfs = []
+    cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    br1 = bf.build_briefing(cfg)
+    assert br1.has_changes is False          # erster Lauf: kein Vorzustand
+    report = bf.render_briefing(br1, cfg)
+    assert "Briefing" in report
+
+    # Vorzustand künstlich verändern -> zweiter Lauf muss Moves erkennen
+    import json
+    state_file = tmp_path / "s" / "last_briefing.json"
+    state = json.load(open(state_file))
+    for t in state:
+        state[t] = {"action": "MEIDEN", "prob": 0.05}
+    json.dump(state, open(state_file, "w"))
+
+    br2 = bf.build_briefing(cfg)
+    assert br2.has_changes is True
+    assert br2.new_buys or br2.prob_moves
+
+
 def test_crypto_support():
     """Krypto: höhere Demo-Volatilität, Anlageklasse, Sparplan-Topf."""
     from stockai.data import demo

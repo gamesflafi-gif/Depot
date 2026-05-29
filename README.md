@@ -88,6 +88,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
+- **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und
+  Verkaufssignale zusammen und meldet gezielt **Veränderungen seit dem letzten
+  Lauf** (neue Kauf-/Verkaufssignale, große Wahrscheinlichkeits-Sprünge) – ideal
+  als tägliche Telegram-Nachricht.
 - **Mehrere Anlageklassen:** Aktien, **ETFs** und **Krypto** werden gemeinsam
   analysiert (alles OHLCV). Krypto wird in der Demo volatiler modelliert und im
   Sparplan als kleiner, risikoreicher Topf behandelt; yfinance (`BTC-USD`) und
@@ -175,6 +179,9 @@ python -m stockai.cli portfolio --capital 10000
 
 # 5b) Sparplan: ETF-Core + beste Aktien, optional als Report/Benachrichtigung
 python -m stockai.cli sparplan --monthly 100 --report sparplan.md --notify
+
+# 5c) Tägliches Briefing mit "Moves"-Alerts (Veränderungen seit letztem Lauf)
+python -m stockai.cli briefing --notify
 
 # 6) Signalgüte historisch testen (Edge gegenüber Zufall)
 python -m stockai.cli backtest
