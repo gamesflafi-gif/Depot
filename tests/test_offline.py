@@ -61,6 +61,7 @@ def test_predictor_trains_and_predicts():
     df["xs_mom_rank"] = 0.5
     df["xs_sent_rank"] = 0.5
     df["pattern_mem"] = 0.0
+    df["analog_mem"] = 0.0
     df = df.dropna(subset=FEATURE_COLUMNS + ["target"])
     pred = Predictor(FEATURE_COLUMNS, model_type="logistic")
     result = pred.train(df, test_size=0.2)

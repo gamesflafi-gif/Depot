@@ -86,9 +86,11 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   dadurch zu den einflussreichsten Merkmalen.
 - **Expected-Return-Modell:** Neben „steigt ja/nein" schätzt ein Regressor die
   **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
-- **Wiederkehrende Muster & Saisonalität:** Kalendereffekte (Wochentag/Monat)
-  plus ein **kausales Muster-Gedächtnis** – die KI merkt sich, welche Folge-
-  Rendite in der Vergangenheit auf den *gleichen* Kurs-Zustand folgte.
+- **Wiederkehrende Muster & Saisonalität:** Kalendereffekte (Wochentag/Monat),
+  ein **kausales Muster-Gedächtnis** (Folge-Rendite je Kurs-Zustand) und eine
+  **Analog-Mustererkennung**: Die KI vergleicht die *Form* der jüngsten
+  Kursbewegung mit allen früheren Verläufen und merkt sich, was nach den
+  ähnlichsten historischen Mustern im Schnitt passierte.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
 - **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und

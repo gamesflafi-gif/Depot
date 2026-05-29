@@ -40,8 +40,8 @@ log = logging.getLogger(__name__)
 MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_rank"]
 
 # Muster-Gedächtnis: erwartete Folge-Rendite für den aktuellen, wiederkehrenden
-# Kurs-Zustand – die KI „merkt sich", was nach ähnlichen Mustern passierte.
-PATTERN_FEATURES = ["pattern_mem"]
+# Kurs-Zustand + Analog-Mustererkennung (ähnliche historische Kursverläufe).
+PATTERN_FEATURES = ["pattern_mem", "analog_mem"]
 
 FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES + PATTERN_FEATURES
 KEY_COLS = ["ticker", "date"]
@@ -91,6 +91,57 @@ def pattern_memory(prices: pd.DataFrame, horizon: int) -> pd.Series:
         st = state_of(t)
         if st is not None and mem_cnt[st] > 0:
             out[t] = mem_sum[st] / mem_cnt[st]
+    return pd.Series(out, index=prices.index)
+
+
+def analog_memory(
+    prices: pd.DataFrame, horizon: int, window: int = 8, k: int = 20,
+    max_hist: int = 756,
+) -> pd.Series:
+    """Analog-Mustererkennung: ähnliche historische Kursverläufe finden & merken.
+
+    Für jeden Tag wird die *Form* der jüngsten ``window`` Tagesrenditen
+    (z-normiert, also skalenunabhängig) mit allen früheren Fenstern verglichen.
+    Aus den ``k`` ähnlichsten **vergangenen** Mustern wird die durchschnittliche
+    Folge-Rendite gebildet – „als der Kurs zuletzt so aussah, ging es danach im
+    Schnitt um X%". Kausal: nur Fenster, deren Ausgang bereits bekannt ist.
+    """
+    close = prices["Close"]
+    n = len(close)
+    out = np.full(n, np.nan)
+    if n < window + horizon + 30:
+        return pd.Series(out, index=prices.index)
+
+    r = close.pct_change().values
+    fwd = (close.shift(-horizon) / close - 1).values
+
+    # Z-normierte Form-Fenster je Endindex i
+    W = np.full((n, window), np.nan, dtype=float)
+    for i in range(window - 1, n):
+        seg = r[i - window + 1:i + 1]
+        if np.isnan(seg).any():
+            continue
+        sd = seg.std()
+        W[i] = (seg - seg.mean()) / sd if sd > 1e-9 else 0.0
+
+    for t in range(window - 1, n):
+        if np.isnan(W[t]).any():
+            continue
+        hi = t - horizon                     # nur Muster mit bekanntem Ausgang
+        lo = max(window - 1, hi - max_hist + 1)
+        if hi < lo:
+            continue
+        cand = W[lo:hi + 1]
+        cf = fwd[lo:hi + 1]
+        valid = ~np.isnan(cand).any(axis=1) & ~np.isnan(cf)
+        if valid.sum() < 5:
+            continue
+        cw = cand[valid]
+        cfv = cf[valid]
+        dist = ((cw - W[t]) ** 2).sum(axis=1)
+        kk = min(k, len(dist))
+        idx = np.argpartition(dist, kk - 1)[:kk]
+        out[t] = float(np.mean(cfv[idx]))
     return pd.Series(out, index=prices.index)
 
 
@@ -180,8 +231,9 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         )
         # Stetige Folge-Rendite als Ziel für das Expected-Return-Modell
         feat["fwd_ret"] = prices["Close"].shift(-cfg.horizon_days) / prices["Close"] - 1.0
-        # Muster-Gedächtnis (wiederkehrende Kurs-Zustände)
+        # Muster-Gedächtnis (wiederkehrende Kurs-Zustände) + Analog-Muster
         feat["pattern_mem"] = pattern_memory(prices, cfg.horizon_days).values
+        feat["analog_mem"] = analog_memory(prices, cfg.horizon_days).values
         # News-Sentiment je Tag einfügen, damit das Modell daraus lernt.
         # Verfügbar (z.B. Demo) -> echte Reihe; sonst neutral (0).
         sent_hist = provider.get_sentiment_history(cfg, ticker)
@@ -225,9 +277,11 @@ def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | No
 
     row: dict[str, float] = {f: float(feat[f]) for f in TECHNICAL_FEATURES}
     row.update({k: float(v) for k, v in sent_features.items()})
-    # Muster-Gedächtnis für den aktuellen (letzten) Tag
+    # Muster-Gedächtnis + Analog-Muster für den aktuellen (letzten) Tag
     pm = pattern_memory(prices, cfg.horizon_days).iloc[-1]
     row["pattern_mem"] = float(pm) if pm == pm else 0.0  # NaN -> 0
+    am = analog_memory(prices, cfg.horizon_days).iloc[-1]
+    row["analog_mem"] = float(am) if am == am else 0.0
     return row, scored_news, last_price
 
 
