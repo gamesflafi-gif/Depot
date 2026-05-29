@@ -19,6 +19,7 @@ class Config:
 
     tickers: list[str]
     etfs: list[str]
+    sectors: dict[str, str]
     history_period: str
     history_interval: str
     horizon_days: int
@@ -81,6 +82,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     return Config(
         tickers=list(data.get("tickers", [])),
         etfs=list(data.get("etfs", [])),
+        sectors=dict(data.get("sectors", {})),
         history_period=str(data.get("history_period", "2y")),
         history_interval=str(data.get("history_interval", "1d")),
         horizon_days=int(data.get("horizon_days", 5)),

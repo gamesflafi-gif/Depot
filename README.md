@@ -85,8 +85,13 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
 - **Beste Modellwahl:** `type: auto` lässt mehrere Modelle (HistGradientBoosting,
-  GradientBoosting, RandomForest, Logistic, Ensemble) gegeneinander antreten und
-  wählt automatisch das mit der besten kreuzvalidierten Güte.
+  GradientBoosting, RandomForest, Logistic, Ensemble, **Stacking**) gegeneinander
+  antreten und wählt automatisch das mit der besten kreuzvalidierten Güte.
+  Das **Stacking-Ensemble** lernt per Meta-Modell, die Basismodelle optimal zu
+  kombinieren (`type: stacking`; im `evaluate`-Vergleich enthalten).
+- **Risiko- & Sektor-bewusste Allokation:** Portfolio und Sparplan gewichten
+  invers zur Volatilität (Risikoparität-Tilt), verstärkt durch die erwartete
+  Rendite, und begrenzen den Anteil je **Branche** (Sektor-Diversifikation).
 - **Kalibrierte Wahrscheinlichkeiten:** Mit `calibrate: true` werden die
   P(Profit)-Werte isotonisch kalibriert – „70 %" heißt dann wirklich ~70 %.
 - **Ehrliche Validierung:** Bewertung per **zeitlicher Kreuzvalidierung**

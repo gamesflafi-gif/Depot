@@ -37,6 +37,34 @@ tickers:
   - DIS    # Disney
   - BA     # Boeing
 
+# Branchen-Zuordnung (für Sektor-Diversifikation im Portfolio/Sparplan).
+# Nicht zugeordnete Ticker zählen als "Sonstige".
+sectors:
+  AAPL: Tech
+  MSFT: Tech
+  NVDA: Tech
+  GOOGL: Tech
+  AMZN: ConsumerDiscretionary
+  TSLA: ConsumerDiscretionary
+  META: Tech
+  AVGO: Tech
+  AMD: Tech
+  NFLX: Communication
+  CRM: Tech
+  ORCL: Tech
+  ADBE: Tech
+  INTC: Tech
+  QCOM: Tech
+  JPM: Financials
+  V: Financials
+  MA: Financials
+  JNJ: Healthcare
+  WMT: ConsumerStaples
+  XOM: Energy
+  KO: ConsumerStaples
+  DIS: Communication
+  BA: Industrials
+
 # ETFs/Fonds für den "Core" des Sparplans (breiter gestreut, geringeres Risiko).
 # Im Demo-Modus sind das synthetische Platzhalter; für echte Daten z.B.:
 #   VWCE.DE (FTSE All-World), EUNL.DE (MSCI World), SXR8.DE (S&P 500)

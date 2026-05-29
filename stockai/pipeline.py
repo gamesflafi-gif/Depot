@@ -75,6 +75,7 @@ class TickerAnalysis:
     rsi_14: float = 50.0
     momentum_5d: float = 0.0
     price_vs_high_20: float = 1.0
+    volatility: float = 0.02
     expected_return: float | None = None
     top_headlines: list[dict] = field(default_factory=list)
     signal: str = ""
@@ -463,6 +464,7 @@ def analyze(
                 rsi_14=row.get("rsi_14", 50.0),
                 momentum_5d=row.get("ret_5d", 0.0),
                 price_vs_high_20=row.get("price_vs_high_20", 1.0),
+                volatility=float(row.get("vol_20d", 0.02) or 0.02),
                 expected_return=expected_return,
                 top_headlines=headlines,
                 signal=_signal(proba),

@@ -230,7 +230,7 @@ def cmd_evaluate(cfg, args) -> None:
     print(f"{'Modell':24s} {'AUC':>14s} {'Accuracy':>14s} {'F1':>7s}")
     print("-" * 62)
     rows = []
-    for mtype in AUTO_CANDIDATES + ["ensemble"]:
+    for mtype in AUTO_CANDIDATES + ["ensemble", "stacking"]:
         cv = Predictor(pipeline.FEATURE_COLUMNS, model_type=mtype,
                        random_state=int(cfg.model.get("random_state", 42))).cross_validate(data)
         if not cv:
@@ -345,7 +345,8 @@ def cmd_portfolio(cfg, args) -> None:
         print("Keine Analyse-Ergebnisse (Netzwerk/Ticker prüfen).")
         return
     pf = build_portfolio(
-        analyses, capital=args.capital, max_position_pct=args.max_position
+        analyses, capital=args.capital, max_position_pct=args.max_position,
+        sectors=cfg.sectors, max_sector_pct=args.max_sector,
     )
     if not pf.allocations:
         print("Aktuell keine Kaufkandidaten – Empfehlung: investiert nicht / abwarten.")
@@ -518,6 +519,8 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--capital", type=float, default=10_000.0, help="Gesamtkapital")
     pp.add_argument("--max-position", type=float, default=0.25,
                     help="Max. Anteil je Position (0..1)")
+    pp.add_argument("--max-sector", type=float, default=0.40,
+                    help="Max. Anteil je Branche (0..1)")
 
     psp = sub.add_parser("sparplan", help="Sparplan (ETF-Core + beste Aktien) erstellen")
     psp.add_argument("--monthly", type=float, default=100.0, help="Sparbetrag €/Monat")

@@ -108,6 +108,24 @@ def _build_estimator_base(model_type: str, random_state: int):
             ],
             voting="soft",
         )
+    if model_type == "stacking":
+        # Meta-Modell lernt, die Basismodelle optimal zu kombinieren.
+        from sklearn.ensemble import StackingClassifier
+
+        return StackingClassifier(
+            estimators=[
+                ("hgb", HistGradientBoostingClassifier(
+                    random_state=random_state, learning_rate=0.06, max_iter=300)),
+                ("rf", RandomForestClassifier(
+                    n_estimators=300, max_depth=8, min_samples_leaf=20,
+                    random_state=random_state, n_jobs=-1)),
+                ("lr", Pipeline([("scaler", StandardScaler()),
+                                 ("clf", LogisticRegression(max_iter=1000))])),
+            ],
+            final_estimator=LogisticRegression(max_iter=1000),
+            cv=3,  # interne Meta-Feature-Erzeugung (StackingClassifier braucht Partitions-CV)
+            n_jobs=-1,
+        )
     raise ValueError(f"Unbekannter Modelltyp: {model_type}")
 
 

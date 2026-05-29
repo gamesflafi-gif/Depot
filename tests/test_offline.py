@@ -128,6 +128,19 @@ def test_portfolio_allocation_and_cap():
     assert pf.allocations[0].ticker == "A"   # stärkstes Signal zuerst
 
 
+def test_sector_cap_diversification():
+    from stockai.portfolio import _apply_sector_cap
+
+    # 4 Tech-Werte (je 0.25) -> Sektor 100%; Cap 40% muss umverteilen
+    weights = {"A": 0.25, "B": 0.25, "C": 0.25, "D": 0.25}
+    sectors = {"A": "Tech", "B": "Tech", "C": "Tech", "D": "Energy"}
+    capped = _apply_sector_cap(weights, sectors, cap=0.40, pos_cap=0.40)
+    tech = capped["A"] + capped["B"] + capped["C"]
+    assert tech <= 0.40 + 1e-6           # Tech-Sektor begrenzt
+    assert capped["D"] >= 0.25           # Energy bekommt mehr Gewicht
+    assert all(w <= 0.40 + 1e-6 for w in capped.values())
+
+
 def test_portfolio_no_candidates():
     from types import SimpleNamespace
     from stockai.portfolio import build_portfolio

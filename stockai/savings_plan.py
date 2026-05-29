@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from stockai.config import Config
-from stockai.portfolio import _apply_cap
+from stockai.portfolio import _apply_cap, _apply_sector_cap
 
 
 @dataclass
@@ -110,8 +110,11 @@ def build_savings_plan(
         raw = {a.ticker: _score(a) for a in candidates}
         total = sum(raw.values())
         weights = {t: (w / total) * sat_budget_share for t, w in raw.items()}
-        # Obergrenze je Aktie (auf den Gesamt-Sparbetrag bezogen)
+        # Obergrenze je Aktie, dann je Branche (Diversifikation der Satelliten)
         weights = _apply_cap(weights, max_stock_weight)
+        if cfg.sectors:
+            sector_cap = min(sat_budget_share, max(max_stock_weight, sat_budget_share * 0.6))
+            weights = _apply_sector_cap(weights, cfg.sectors, sector_cap, max_stock_weight)
         for a in candidates:
             w = weights[a.ticker]
             if w <= 0:

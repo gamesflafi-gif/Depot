@@ -35,6 +35,9 @@ def build_portfolio(
     capital: float = 10_000.0,
     max_position_pct: float = 0.25,
     buy_actions=("BOOM", "KAUFEN"),
+    sectors: dict[str, str] | None = None,
+    max_sector_pct: float = 0.40,
+    risk_aware: bool = True,
 ) -> Portfolio:
     """Erzeugt einen Allokationsvorschlag aus Analyse-Ergebnissen.
 
@@ -43,7 +46,13 @@ def build_portfolio(
         capital: verfügbares Gesamtkapital.
         max_position_pct: maximaler Kapitalanteil je Einzelposition.
         buy_actions: welche Empfehlungen als Kaufkandidaten gelten.
+        sectors: optionale Ticker->Branche-Zuordnung für die Sektor-Obergrenze.
+        max_sector_pct: maximaler Kapitalanteil je Branche (Diversifikation).
+        risk_aware: wenn True, werden Positionen invers zur Volatilität gewichtet
+            (schwankungsärmere Werte bekommen mehr) und zusätzlich nach
+            erwarteter Rendite getiltet.
     """
+    sectors = sectors or {}
     candidates = [a for a in analyses if a.action in buy_actions]
     sells = [a.ticker for a in analyses if a.action in ("VERKAUFEN", "MEIDEN")]
 
@@ -51,25 +60,40 @@ def build_portfolio(
         return Portfolio(capital=capital, allocations=[], invested=0.0,
                          cash=capital, sells=sells)
 
-    # Rohgewichte: Überschuss der Wahrscheinlichkeit über 0.5, skaliert mit Konfidenz
-    raw = {
-        a.ticker: max(0.0, (a.profit_probability - 0.5)) * max(0.1, a.confidence)
-        for a in candidates
-    }
+    # Rohgewichte: Wahrscheinlichkeits-Edge × Konfidenz …
+    def _score(a) -> float:
+        s = max(0.0, (a.profit_probability - 0.5)) * max(0.1, a.confidence)
+        if risk_aware:
+            # … invers zur Volatilität (Risikoparität-Tilt) …
+            s /= max(getattr(a, "volatility", 0.02) or 0.02, 0.005)
+            # … und verstärkt durch positive erwartete Rendite
+            er = getattr(a, "expected_return", None)
+            if er is not None and er > 0:
+                s *= (1.0 + 8.0 * er)
+        return s
+
+    raw = {a.ticker: _score(a) for a in candidates}
     total = sum(raw.values())
     if total <= 0:
-        # Gleichgewichtung, falls keine klare Differenzierung
         weights = {t: 1.0 / len(candidates) for t in raw}
     else:
         weights = {t: w / total for t, w in raw.items()}
 
-    # Risiko-Cap je Position + iterative Umverteilung des Überhangs
+    # Obergrenze je Position, dann je Branche (Diversifikation)
     weights = _apply_cap(weights, max_position_pct)
+    if sectors:
+        weights = _apply_sector_cap(weights, sectors, max_sector_pct, max_position_pct)
 
     allocations: list[Allocation] = []
     invested = 0.0
     by_ticker = {a.ticker: a for a in candidates}
-    for ticker, w in sorted(weights.items(), key=lambda kv: kv[1], reverse=True):
+    # Sortierung nach Gewicht, bei Gleichstand nach Profit-Wahrscheinlichkeit
+    order = sorted(
+        weights.items(),
+        key=lambda kv: (round(kv[1], 6), by_ticker[kv[0]].profit_probability),
+        reverse=True,
+    )
+    for ticker, w in order:
         a = by_ticker[ticker]
         amount = capital * w
         shares = amount / a.last_price if a.last_price > 0 else 0.0
@@ -82,7 +106,9 @@ def build_portfolio(
                 amount=round(amount, 2),
                 shares=round(shares, 4),
                 last_price=a.last_price,
-                reason=f"P(Profit)={a.profit_probability:.0%}, Konfidenz={a.confidence:.0%}",
+                reason=(f"P(Profit)={a.profit_probability:.0%}, "
+                        f"Konfidenz={a.confidence:.0%}, "
+                        f"Vola={getattr(a, 'volatility', 0.0):.1%}"),
             )
         )
 
@@ -111,4 +137,42 @@ def _apply_cap(weights: dict[str, float], cap: float) -> dict[str, float]:
             break  # alles am Cap -> Rest bleibt Cash
         for t, w in receivers.items():
             weights[t] = w + excess * ((cap - w) / room)
+    return weights
+
+
+def _apply_sector_cap(
+    weights: dict[str, float], sectors: dict[str, str], cap: float, pos_cap: float
+) -> dict[str, float]:
+    """Begrenzt den Gesamtanteil je Branche auf ``cap`` (Diversifikation).
+
+    Überhänge übergewichteter Branchen werden auf Positionen anderer Branchen
+    umverteilt (bis zur Positions-Obergrenze). Was nicht untergebracht werden
+    kann, bleibt Cash.
+    """
+    weights = dict(weights)
+    for _ in range(40):
+        sect_tot: dict[str, float] = {}
+        for t, w in weights.items():
+            sect_tot.setdefault(sectors.get(t, "Sonstige"), 0.0)
+            sect_tot[sectors.get(t, "Sonstige")] += w
+        over = {s for s, tot in sect_tot.items() if tot > cap + 1e-9}
+        if not over:
+            break
+        excess = 0.0
+        for s in over:
+            scale = cap / sect_tot[s]
+            for t in weights:
+                if sectors.get(t, "Sonstige") == s:
+                    new = weights[t] * scale
+                    excess += weights[t] - new
+                    weights[t] = new
+        receivers = [
+            t for t in weights
+            if sectors.get(t, "Sonstige") not in over and weights[t] < pos_cap - 1e-9
+        ]
+        room = sum(pos_cap - weights[t] for t in receivers)
+        if excess <= 1e-9 or room <= 0:
+            break  # nicht unterbringbar -> bleibt Cash
+        for t in receivers:
+            weights[t] += excess * ((pos_cap - weights[t]) / room)
     return weights
