@@ -41,6 +41,8 @@ stockai/
 │   └── store.py           # Feature-Store, Modellspeicher, Lernhistorie
 ├── advisor.py             # Entscheidungs-Schicht: BOOM/KAUFEN/HALTEN/VERKAUFEN
 ├── portfolio.py           # Allokations-Engine (wohin wie viel Kapital)
+├── savings_plan.py        # Sparplan (ETF-Core + beste Aktien)
+├── notify.py              # Report (Markdown) + optionaler Webhook
 ├── pipeline.py            # Orchestrierung (train/analyze/learn/…)
 ├── backtest.py            # Signalgüte-Backtest (Edge)
 ├── strategy.py            # P&L-Strategie-Backtest (Equity, Sharpe, Drawdown)
@@ -147,6 +149,9 @@ python -m stockai.cli simulate
 # 5) Konkreter Allokationsvorschlag (wohin wie viel Kapital)
 python -m stockai.cli portfolio --capital 10000
 
+# 5b) Sparplan: ETF-Core + beste Aktien, optional als Report/Benachrichtigung
+python -m stockai.cli sparplan --monthly 100 --report sparplan.md --notify
+
 # 6) Signalgüte historisch testen (Edge gegenüber Zufall)
 python -m stockai.cli backtest
 
@@ -224,6 +229,35 @@ export STOCKAI_NEWSAPI_KEY="dein_key"
 > 🔐 **Sicherheit:** Den Key niemals in `config.yaml` oder ins Repo committen.
 > Als Umgebungsvariable bzw. (in Claude Code on the Web) als Environment-Secret
 > hinterlegen. `newsapi.org` muss zudem von der Netzwerk-Policy erlaubt sein.
+
+### Live-Sparplan, der sich aktualisiert und benachrichtigt
+
+Der `sparplan`-Befehl baut einen **Core-Satellite-Sparplan**: ein fester Anteil
+in breite ETFs/Fonds (Core, risikoärmer) plus die aktuell besten Einzelaktien
+laut Modell (Satelliten, mit Obergrenze je Position). Bei jeder Ausführung auf
+frischen Daten passt sich der Plan an.
+
+**Damit er „live" ist und dich informiert**, lässt du ihn regelmäßig laufen –
+das erfordert einen dauerhaft laufenden Rechner/Server (eine kurzlebige
+Web-Session reicht dafür nicht):
+
+```bash
+# Webhook für Benachrichtigungen (Telegram-Bot, Discord, Slack, Mattermost …)
+export STOCKAI_WEBHOOK_URL="https://…"
+
+# täglich 8:00 via cron (crontab -e):
+0 8 * * *  cd /pfad/zu/Depot && python -m stockai.cli --source live learn  >/dev/null 2>&1
+5 8 * * *  cd /pfad/zu/Depot && python -m stockai.cli --source live sparplan --monthly 100 --report sparplan.md --notify
+```
+
+So lernt die KI täglich dazu (`learn`) und schickt dir den aktualisierten
+Sparplan als Nachricht (`--notify`). `--report` legt zusätzlich eine
+Markdown-Datei ab.
+
+> ⚠️ Eine echte 24/7-Live-Überwachung mit Push aufs Handy braucht einen
+> dauerhaft laufenden Host. Aus einer ephemeren Web-Session heraus ist das
+> nicht möglich – die obigen Bausteine (Webhook + cron) machen es auf deinem
+> eigenen Rechner/Server möglich.
 
 ### Diagnose
 

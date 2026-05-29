@@ -375,11 +375,14 @@ def learning_curve(cfg: Config, steps: int = 5) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
-def analyze(cfg: Config, retrain_if_missing: bool = True) -> list[TickerAnalysis]:
+def analyze(
+    cfg: Config, retrain_if_missing: bool = True, universe: list[str] | None = None
+) -> list[TickerAnalysis]:
     """Live-Analyse: berechnet je Ticker die Profitabilitäts-Wahrscheinlichkeit.
 
     Das Ranking zeigt, *wer* wahrscheinlich profitabel wird und *wohin*
-    (relativ) das Kapital tendiert.
+    (relativ) das Kapital tendiert. ``universe`` überschreibt optional die zu
+    bewertenden Ticker (z.B. Aktien + ETFs für den Sparplan).
     """
     model_store = ModelStore(cfg.model_dir)
     predictor = model_store.load_model()
@@ -393,7 +396,7 @@ def analyze(cfg: Config, retrain_if_missing: bool = True) -> list[TickerAnalysis
     # 1. Durchgang: Features je Ticker sammeln
     collected: list[tuple[str, dict, list, float]] = []
     rows: list[dict] = []
-    for ticker in cfg.tickers:
+    for ticker in (universe if universe is not None else cfg.tickers):
         live = _live_feature_row(cfg, ticker)
         if live is None:
             continue

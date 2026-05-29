@@ -140,6 +140,28 @@ def test_portfolio_no_candidates():
     assert "X" in pf.sells
 
 
+def test_savings_plan_demo():
+    """Sparplan-Generator (Core-Satellite) im Demo-Modus."""
+    from stockai.savings_plan import build_savings_plan
+    from stockai import notify
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.etfs = ["WORLD", "SP500"]
+    cfg.model = {"type": "logistic", "random_state": 42}
+
+    plan = build_savings_plan(cfg, monthly_amount=100.0, core_share=0.5)
+    total = sum(p.monthly for p in plan.positions)
+    assert total <= 100.0 + 0.01           # nie mehr als der Sparbetrag
+    assert len(plan.core_positions) == 2    # beide ETFs im Core
+    # Report rendert ohne Fehler; ohne Webhook-URL wird nichts gesendet
+    report = notify.render_savings_plan(plan)
+    assert "Sparplan-Update" in report
+    assert notify.send_webhook("test", url=None) is False
+
+
 def test_scorecard_demo():
     """Recommendation-Scorecard (Walk-Forward) im Demo-Modus."""
     from stockai import scorecard as sc

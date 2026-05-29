@@ -399,6 +399,42 @@ def cmd_strategy(cfg, args) -> None:
         print(f"\n  Equity-Kurve gespeichert: {path}")
 
 
+def cmd_sparplan(cfg, args) -> None:
+    """Erstellt einen Core-Satellite-Sparplan aus den aktuellen Analysen."""
+    from stockai.savings_plan import build_savings_plan
+    from stockai import notify
+
+    print(f"Erstelle Sparplan für {args.monthly:.0f}€/Monat "
+          f"(Core/ETF-Anteil {args.core_share:.0%}) …\n")
+    plan = build_savings_plan(
+        cfg, monthly_amount=args.monthly, core_share=args.core_share,
+        max_stock_weight=args.max_position, max_stocks=args.max_stocks,
+    )
+    print(f"{'Instrument':12s}{'Typ':>7s}{'€/Monat':>10s}{'Anteil':>9s}"
+          f"{'Aktion':>11s}{'P(Profit)':>11s}")
+    print("-" * 62)
+    for p in plan.positions:
+        print(f"{p.instrument:12s}{p.kind:>7s}{p.monthly:10.2f}{p.weight:9.0%}"
+              f"{p.action:>11s}{p.probability:11.0%}")
+    print("-" * 62)
+    total = sum(p.monthly for p in plan.positions)
+    print(f"{'Summe':12s}{'':>7s}{total:10.2f}{total / args.monthly:9.0%}")
+    if plan.notes:
+        print("\nHinweise:")
+        for n in plan.notes:
+            print(f"  • {n}")
+
+    if args.report:
+        report = notify.render_savings_plan(plan)
+        with open(args.report, "w", encoding="utf-8") as fh:
+            fh.write(report)
+        print(f"\n  Report gespeichert: {args.report}")
+        if args.notify:
+            ok = notify.send_webhook(report)
+            print("  Webhook-Benachrichtigung: " +
+                  ("gesendet ✔" if ok else "nicht gesendet (kein STOCKAI_WEBHOOK_URL/Netz)"))
+
+
 def cmd_backtest(cfg, args) -> None:
     print("Führe Walk-Forward-Backtest durch …")
     res = bt.run_backtest(cfg, prob_threshold=args.threshold)
@@ -473,6 +509,17 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--max-position", type=float, default=0.25,
                     help="Max. Anteil je Position (0..1)")
 
+    psp = sub.add_parser("sparplan", help="Sparplan (ETF-Core + beste Aktien) erstellen")
+    psp.add_argument("--monthly", type=float, default=100.0, help="Sparbetrag €/Monat")
+    psp.add_argument("--core-share", type=float, default=0.5,
+                     help="Anteil in breite ETFs (0..1)")
+    psp.add_argument("--max-position", type=float, default=0.15,
+                     help="Max. Anteil je Einzelaktie")
+    psp.add_argument("--max-stocks", type=int, default=5, help="Max. Einzelaktien")
+    psp.add_argument("--report", default=None, help="Report als Markdown speichern")
+    psp.add_argument("--notify", action="store_true",
+                     help="Report an STOCKAI_WEBHOOK_URL senden")
+
     pst = sub.add_parser("strategy", help="P&L-Backtest + Equity-Kurve vs. Buy&Hold")
     pst.add_argument("--threshold", type=float, default=0.55)
     pst.add_argument("--top-k", type=int, default=3, help="Max. Positionen je Rebalancing")
@@ -507,6 +554,7 @@ _COMMANDS = {
     "learn": cmd_learn,
     "simulate": cmd_simulate,
     "portfolio": cmd_portfolio,
+    "sparplan": cmd_sparplan,
     "strategy": cmd_strategy,
     "backtest": cmd_backtest,
     "history": cmd_history,

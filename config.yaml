@@ -18,6 +18,13 @@ tickers:
   - TSLA   # Tesla
   - META   # Meta
 
+# ETFs/Fonds für den "Core" des Sparplans (breiter gestreut, geringeres Risiko).
+# Im Demo-Modus sind das synthetische Platzhalter; für echte Daten z.B.:
+#   VWCE.DE (FTSE All-World), EUNL.DE (MSCI World), SXR8.DE (S&P 500)
+etfs:
+  - WORLD   # breiter Welt-ETF (Demo-Platzhalter)
+  - SP500   # US-Leitindex (Demo-Platzhalter)
+
 # Wie viel Kurs-Historie wird für Training/Features geladen?
 history_period: "2y"        # z.B. 1y, 2y, 5y, max
 history_interval: "1d"      # 1d = Tageskerzen
