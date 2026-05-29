@@ -220,12 +220,42 @@ class Predictor:
         self.is_fitted = True
 
         metrics = self._evaluate(X_test, y_test)
+        # Ehrliche, modell-agnostische Wichtigkeit per Permutation auf dem
+        # Test-Split; Fallback auf modellinterne Wichtigkeit.
+        importance = self._permutation_importance(X_test, y_test) or self._feature_importance()
         return TrainResult(
             metrics=metrics,
             n_train=len(X_train),
             n_test=len(X_test),
-            feature_importance=self._feature_importance(),
+            feature_importance=importance,
         )
+
+    def _permutation_importance(self, X_test, y_test) -> dict[str, float]:
+        """Permutation-Importance (ROC-AUC) – funktioniert für jeden Modelltyp.
+
+        Misst, wie stark die Güte fällt, wenn ein Merkmal zufällig vertauscht
+        wird. Aussagekräftiger als impurity-basierte Wichtigkeit und auch für
+        kalibrierte/Ensemble-Modelle verfügbar.
+        """
+        if len(np.unique(y_test)) < 2 or len(X_test) < 20:
+            return {}
+        try:
+            from sklearn.inspection import permutation_importance
+
+            r = permutation_importance(
+                self.estimator, X_test, y_test, scoring="roc_auc",
+                n_repeats=5, random_state=self.random_state,
+            )
+            vals = np.clip(r.importances_mean, 0.0, None)  # negative -> 0
+            total = float(np.sum(vals)) or 1.0
+            return {
+                name: float(v) / total
+                for name, v in sorted(
+                    zip(self.feature_names, vals), key=lambda kv: kv[1], reverse=True
+                )
+            }
+        except Exception:
+            return {}
 
     def partial_train(self, df: pd.DataFrame, target_col: str = "target") -> None:
         """Inkrementelles Lernen (nur für ``sgd_online``).
