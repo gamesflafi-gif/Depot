@@ -382,9 +382,11 @@ def cmd_strategy(cfg, args) -> None:
         period=period, initial_capital=capital,
         retrain_every=getattr(args, "retrain_every", 1),
         train_frac=getattr(args, "train_frac", 0.4),
+        cost_bps=getattr(args, "cost_bps", 10.0),
     )
     m, b = res.metrics, res.benchmark_metrics
-    print(f"  Zeitraum:            ~{res.years:.1f} Jahre, {res.n_rebalances} Rebalancings")
+    print(f"  Zeitraum:            ~{res.years:.1f} Jahre, {res.n_rebalances} Rebalancings "
+          f"(netto, Kosten {getattr(args, 'cost_bps', 10.0):.0f} bps)")
     print(f"  {'':22s}{'KI-Strategie':>14s}{'Buy & Hold':>14s}")
     print("  " + "-" * 50)
     print(f"  {'Gesamtrendite':22s}{m['total_return']:13.1%}{b['total_return']:14.1%}")
@@ -584,6 +586,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Modell nur alle N Rebalancings neu trainieren (schneller)")
     pst.add_argument("--train-frac", type=float, default=0.4,
                      help="Anteil der Historie als Anfangs-Training (Rest wird gehandelt)")
+    pst.add_argument("--cost-bps", type=float, default=10.0,
+                     help="Transaktionskosten je Umschichtung in Basispunkten (10 = 0,1%)")
     pst.add_argument("--out", default="equity_curve.png", help="Pfad für den Chart")
     pst.add_argument("--no-chart", action="store_true", help="Keinen Chart erzeugen")
 

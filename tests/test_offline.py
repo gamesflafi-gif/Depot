@@ -367,6 +367,11 @@ def test_strategy_backtest_demo(tmp_path):
     path = strategy.plot_equity_curve(res, str(out))
     assert out.exists() and path == str(out)
 
+    # Mit Transaktionskosten ist die Gesamtrendite niedriger (ehrlicher)
+    res_cost = strategy.run_strategy_backtest(cfg, prob_threshold=0.5, top_k=2,
+                                              initial_capital=500.0, cost_bps=50.0)
+    assert res_cost.metrics["total_return"] <= res.metrics["total_return"] + 1e-9
+
 
 def test_demo_pipeline_train_and_learning_curve(tmp_path):
     """End-to-End im Demo-Modus (offline): trainieren + Lernkurve erzeugen."""
