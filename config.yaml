@@ -72,18 +72,18 @@ sectors:
   BA: Industrials
 
 # ETFs/Fonds für den "Core" des Sparplans (breiter gestreut, geringeres Risiko).
-# Im Demo-Modus sind das synthetische Platzhalter; für echte Daten z.B.:
-#   VWCE.DE (FTSE All-World), EUNL.DE (MSCI World), SXR8.DE (S&P 500)
+# US-Symbole sind über Stooq zuverlässig abrufbar. Für Xetra (z.B. VWCE.DE,
+# EUNL.DE) wird Yahoo benötigt – sobald yfinance auf dem Server läuft, einsetzbar.
 etfs:
-  - WORLD   # breiter Welt-ETF (Demo-Platzhalter)
-  - SP500   # US-Leitindex (Demo-Platzhalter)
+  - SPY     # S&P 500
+  - QQQ     # Nasdaq 100
+  - VT      # FTSE All-World (breit gestreut)
 
 # Kryptowährungen (höheres Risiko -> im Sparplan eigener, kleiner Topf).
-# Demo-Platzhalter; für echte Daten z.B.: BTC-USD, ETH-USD, SOL-USD (yfinance).
 crypto:
-  - BTC     # Bitcoin (Demo-Platzhalter)
-  - ETH     # Ethereum (Demo-Platzhalter)
-  - SOL     # Solana (Demo-Platzhalter)
+  - BTC-USD   # Bitcoin
+  - ETH-USD   # Ethereum
+  - SOL-USD   # Solana
 
 # Wie viel Kurs-Historie wird für Training/Features geladen?
 history_period: "2y"        # z.B. 1y, 2y, 5y, max
