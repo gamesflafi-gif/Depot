@@ -48,6 +48,11 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
     with open(cfg_path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
 
+    # Bequemes Umschalten ohne Datei-Edit: STOCKAI_DATA_SOURCE=live|demo
+    env_source = os.environ.get("STOCKAI_DATA_SOURCE")
+    if env_source:
+        data["data_source"] = env_source.strip().lower()
+
     return Config(
         tickers=list(data.get("tickers", [])),
         history_period=str(data.get("history_period", "2y")),

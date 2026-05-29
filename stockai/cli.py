@@ -359,6 +359,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("-c", "--config", default=None, help="Pfad zur config.yaml")
     p.add_argument("-v", "--verbose", action="store_true", help="Ausführliche Logs")
+    p.add_argument("--source", choices=["demo", "live"], default=None,
+                   help="Datenquelle überschreiben (ohne config.yaml zu ändern)")
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("doctor", help="Konfiguration & Datenquellen-Erreichbarkeit prüfen")
@@ -419,6 +421,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(args.verbose)
     cfg = load_config(args.config)
+    if args.source:  # globales Flag überschreibt config + Env
+        cfg.raw["data_source"] = args.source
     try:
         _COMMANDS[args.command](cfg, args)
     except Exception as exc:  # benutzerfreundliche Fehlermeldung

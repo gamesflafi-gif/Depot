@@ -175,7 +175,14 @@ Wichtigste Stellschrauben:
 
 ### Live-Daten aktivieren
 
-In `config.yaml` `data_source: live` setzen. Dafür muss die Umgebung Zugriff auf
+Am einfachsten ohne Datei-Edit (z. B. am Handy) per Flag oder Umgebungsvariable:
+
+```bash
+python -m stockai.cli --source live doctor     # einmalig umschalten
+export STOCKAI_DATA_SOURCE=live                 # dauerhaft für die Session
+```
+
+Alternativ in `config.yaml` `data_source: live` setzen. Dafür muss die Umgebung Zugriff auf
 `finance.yahoo.com` und `news.google.com` haben. In Claude Code on the Web wird
 der Netzwerkzugriff über die **Netzwerk-Policy** der Umgebung gesteuert – falls
 die Hosts blockiert sind (Fehler „Host not in allowlist“), muss die Policy
