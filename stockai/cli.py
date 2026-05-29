@@ -65,6 +65,14 @@ def cmd_doctor(cfg, args) -> None:
           f"(calibrate={cfg.model.get('calibrate', False)})")
     key_set = bool(os.environ.get("STOCKAI_NEWSAPI_KEY"))
     print(f"  NewsAPI-Key gesetzt:   {'ja' if key_set else 'nein'}")
+    from stockai import notify as _nf
+    if _nf.telegram_configured():
+        chan = "Telegram"
+    elif _nf.webhook_configured():
+        chan = "Webhook"
+    else:
+        chan = "keiner"
+    print(f"  Benachrichtigung:      {chan}")
 
     def _reach(url: str) -> str:
         try:
@@ -429,10 +437,11 @@ def cmd_sparplan(cfg, args) -> None:
         with open(args.report, "w", encoding="utf-8") as fh:
             fh.write(report)
         print(f"\n  Report gespeichert: {args.report}")
-        if args.notify:
-            ok = notify.send_webhook(report)
-            print("  Webhook-Benachrichtigung: " +
-                  ("gesendet ✔" if ok else "nicht gesendet (kein STOCKAI_WEBHOOK_URL/Netz)"))
+    if args.notify:
+        report = notify.render_savings_plan(plan)
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
 def cmd_backtest(cfg, args) -> None:

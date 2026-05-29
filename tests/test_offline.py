@@ -159,7 +159,11 @@ def test_savings_plan_demo():
     # Report rendert ohne Fehler; ohne Webhook-URL wird nichts gesendet
     report = notify.render_savings_plan(plan)
     assert "Sparplan-Update" in report
+    # Ohne Konfiguration wird nichts gesendet (kein Fehler)
     assert notify.send_webhook("test", url=None) is False
+    assert notify.send_telegram("test", token=None, chat_id=None) is False
+    sent, channel = notify.notify("test")
+    assert sent is False and isinstance(channel, str)
 
 
 def test_scorecard_demo():

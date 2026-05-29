@@ -241,9 +241,15 @@ frischen Daten passt sich der Plan an.
 das erfordert einen dauerhaft laufenden Rechner/Server (eine kurzlebige
 Web-Session reicht dafür nicht):
 
+**Telegram einrichten (empfohlen fürs Handy):**
+1. In Telegram **@BotFather** öffnen → `/newbot` → du erhältst einen **Token**.
+2. Eigene **Chat-ID** ermitteln (z. B. über **@userinfobot**).
+3. Als Secrets setzen:
+
 ```bash
-# Webhook für Benachrichtigungen (Telegram-Bot, Discord, Slack, Mattermost …)
-export STOCKAI_WEBHOOK_URL="https://…"
+export STOCKAI_TELEGRAM_TOKEN="123456:ABC…"
+export STOCKAI_TELEGRAM_CHAT_ID="987654321"
+# Alternativ Discord/Slack: export STOCKAI_WEBHOOK_URL="https://…"
 
 # täglich 8:00 via cron (crontab -e):
 0 8 * * *  cd /pfad/zu/Depot && python -m stockai.cli --source live learn  >/dev/null 2>&1
