@@ -72,8 +72,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 
 - **Viele Signale:** 18 technische Indikatoren (Renditen über mehrere Horizonte,
   RSI, MACD inkl. Histogramm, gleitende Durchschnitte, Bollinger %B, ATR,
-  Stochastik, Volumen-z-Score …), **Markt-/relative-Stärke-Features** (wohin
-  rotiert das Geld) und **News-Sentiment als gelerntes Merkmal**.
+  Stochastik, Volumen-z-Score …), **Markt-/Querschnitts-Features** (relative
+  Stärke + Perzentil-Ränge von Momentum & Sentiment im Universum – „wohin
+  rotiert das Geld") und **News-Sentiment als gelerntes Merkmal**.
 - **News fließen ins Lernen ein:** Das Modell wird auf tagesgenauem Sentiment
   mit-trainiert (im Demo-Modus an das Trend-Regime gekoppelt), nicht nur als
   Anzeige – News-Features gehören dadurch zu den einflussreichsten Merkmalen.

@@ -36,8 +36,8 @@ from stockai.model.store import FeatureStore, ModelStore
 log = logging.getLogger(__name__)
 
 # Markt-/Querschnitts-Features: Kontext über alle Ticker hinweg
-# ("wohin rotiert das Geld" – relative Stärke gegenüber dem Gesamtmarkt).
-MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d"]
+# ("wohin rotiert das Geld" – relative Stärke + Rang gegenüber den Peers).
+MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_rank"]
 
 FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
 KEY_COLS = ["ticker", "date"]
@@ -46,12 +46,21 @@ KEY_COLS = ["ticker", "date"]
 def add_market_features(df: pd.DataFrame) -> pd.DataFrame:
     """Ergänzt Querschnitts-Features über alle Ticker je Datum.
 
-    Erwartet Spalten ``date``, ``ret_5d``, ``ret_20d``. Bei nur einem Ticker
-    ist die relative Stärke 0 und der Markt = der Ticker selbst.
+    Neben Marktdurchschnitt und relativer Stärke werden **Perzentil-Ränge**
+    innerhalb des Universums berechnet (cross-sectional Momentum/Sentiment –
+    ein real belegter Effekt: relativ stärkste Werte tendieren weiterzulaufen).
+    Bei nur einem Ticker ist der Rang neutral (0.5).
     """
     g = df.groupby("date")
     df["mkt_ret_5d"] = g["ret_5d"].transform("mean")
     df["rel_strength_20d"] = df["ret_20d"] - g["ret_20d"].transform("mean")
+    df["xs_mom_rank"] = g["ret_20d"].rank(pct=True)
+    if "sent_mean" in df.columns:
+        df["xs_sent_rank"] = g["sent_mean"].rank(pct=True)
+    else:
+        df["xs_sent_rank"] = 0.5
+    # Einzel-Ticker / fehlende Werte -> neutraler Rang
+    df[["xs_mom_rank", "xs_sent_rank"]] = df[["xs_mom_rank", "xs_sent_rank"]].fillna(0.5)
     return df
 
 
@@ -143,14 +152,19 @@ def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | No
 
 
 def _augment_with_market(rows: list[dict]) -> None:
-    """Ergänzt Markt-/relative-Stärke-Features über die aktuellen Ticker-Zeilen."""
+    """Ergänzt Markt-/relative-Stärke-/Rang-Features über die aktuellen Zeilen."""
     if not rows:
         return
     mkt5 = float(np.mean([r.get("ret_5d", 0.0) for r in rows]))
     mkt20 = float(np.mean([r.get("ret_20d", 0.0) for r in rows]))
-    for r in rows:
+    n = len(rows)
+    mom = pd.Series([r.get("ret_20d", 0.0) for r in rows]).rank(pct=True)
+    sent = pd.Series([r.get("sent_mean", 0.0) for r in rows]).rank(pct=True)
+    for i, r in enumerate(rows):
         r["mkt_ret_5d"] = mkt5
         r["rel_strength_20d"] = float(r.get("ret_20d", 0.0) - mkt20)
+        r["xs_mom_rank"] = float(mom.iloc[i]) if n > 1 else 0.5
+        r["xs_sent_rank"] = float(sent.iloc[i]) if n > 1 else 0.5
 
 
 def snapshot_live(cfg: Config) -> int:
