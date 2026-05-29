@@ -8,11 +8,13 @@ Snapshots konsistent funktioniert.
 from __future__ import annotations
 
 import hashlib
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
 
 from stockai.data.news import NewsItem
+from stockai.features.sentiment import SENTIMENT_FEATURES
 
 _POS_TEMPLATES = [
     "{t} beats earnings expectations, shares rally",
@@ -48,20 +50,19 @@ def _period_to_days(period: str) -> int:
     return mapping.get(period, 504)
 
 
-def _canonical_series(ticker: str) -> pd.DataFrame:
-    """Erzeugt die vollständige, deterministische OHLCV-Reihe eines Tickers.
+@lru_cache(maxsize=64)
+def _canonical_arrays(ticker: str) -> tuple:
+    """Berechnet (einmalig je Ticker) Index, Close-Reihe und verborgene Drift.
 
-    Besitzt eine persistente, langsam wandernde Drift (AR(1)-Trend-Regime), sodass
-    das aktuelle Momentum die Folge-Rendite teilweise vorhersagt – das Modell kann
-    also ein echtes Signal lernen. Da immer dieselbe Reihe erzeugt wird, sind alle
-    Zeitfenster (z.B. "2y" und "3mo") konsistente Ausschnitte derselben Historie.
+    Die persistente AR(1)-Drift (Trend-Regime) ist die treibende, *vorhersagende*
+    Größe: Sie bestimmt sowohl die künftige Kursrichtung als auch – über
+    ``demo_sentiment_*`` – das News-Sentiment. Dadurch ist das News-Signal ein
+    echter, lernbarer Frühindikator, der mit der Kursentwicklung zusammenhängt.
     """
     n = _CANONICAL_DAYS
     rng = np.random.default_rng(_seed(ticker))
     base_vol = rng.uniform(0.011, 0.016)
 
-    # AR(1)-Drift mit hoher Persistenz -> lernbare Trend-Regime. Die Drift wird
-    # begrenzt, damit die Kurse realistisch bleiben (keine Explosion).
     drift = np.zeros(n)
     d = rng.normal(0, 0.0012)
     for i in range(n):
@@ -69,13 +70,19 @@ def _canonical_series(ticker: str) -> pd.DataFrame:
         d = float(np.clip(d, -0.007, 0.007))
         drift[i] = d
     rets = drift + rng.normal(0, base_vol, n)
-    # gelegentliche "News-Schocks" für Realismus
     shocks = rng.choice([0, 1], size=n, p=[0.985, 0.015]) * rng.normal(0, 0.05, n)
     rets = rets + shocks
     start = rng.uniform(40, 400)
     close = start * np.cumprod(1 + rets)
-
     idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=n)
+    return idx, close, drift, base_vol
+
+
+def _canonical_series(ticker: str) -> pd.DataFrame:
+    """Vollständige, deterministische OHLCV-Reihe eines Tickers."""
+    idx, close, _drift, base_vol = _canonical_arrays(ticker)
+    n = len(close)
+    rng = np.random.default_rng(_seed(ticker) + 1)
     daily_range = np.abs(rng.normal(0, base_vol, n)) * close
     df = pd.DataFrame(
         {
@@ -92,54 +99,75 @@ def _canonical_series(ticker: str) -> pd.DataFrame:
 
 
 def demo_prices(ticker: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
-    """Liefert das angeforderte Zeitfenster der kanonischen Ticker-Reihe.
-
-    Alle Zeiträume sind Ausschnitte derselben Historie – dadurch passen
-    Snapshot-Kurs, späteres Label und News-Trend exakt zusammen.
-    """
+    """Liefert das angeforderte Zeitfenster der kanonischen Ticker-Reihe."""
     n = _period_to_days(period)
     return _canonical_series(ticker).iloc[-n:].copy()
 
 
-def _recent_trend(ticker: str) -> float:
-    """Vorzeichen/Stärke des jüngsten Trends – steuert das News-Sentiment."""
-    df = demo_prices(ticker, period="3mo")
-    if len(df) < 10:
-        return 0.0
-    return float(df["Close"].iloc[-1] / df["Close"].iloc[-10] - 1.0)
+# --------------------------------------------------------------------------- #
+# News-Sentiment (an das verborgene Trend-Regime gekoppelt)
+# --------------------------------------------------------------------------- #
+def _sentiment_mean_series(ticker: str) -> tuple:
+    """Tägliches mittleres Sentiment, gekoppelt an die Drift (+ Rauschen)."""
+    idx, _close, drift, _vol = _canonical_arrays(ticker)
+    rng = np.random.default_rng(_seed(ticker) + 13)
+    # tanh-Mapping der Drift auf [-1,1] + Rauschen -> realistisches, verrauschtes
+    # aber vorhersagekräftiges News-Signal
+    sent = np.tanh(drift * 90.0) + rng.normal(0, 0.18, len(drift))
+    sent = np.clip(sent, -1.0, 1.0)
+    return idx, sent
+
+
+def _sentiment_features_from_mean(s: float, rng) -> dict:
+    """Leitet aus einem mittleren Sentiment die aggregierten Feature-Werte ab."""
+    n = int(4 + round(4 * abs(s)) + rng.integers(0, 3))
+    return {
+        "news_count": float(n),
+        "sent_mean": float(s),
+        "sent_pos_ratio": float(np.clip(0.5 + 0.5 * s, 0.0, 1.0)),
+        "sent_neg_ratio": float(np.clip(0.5 - 0.5 * s, 0.0, 1.0)),
+        "sent_max": float(np.clip(s + 0.3, -1.0, 1.0)),
+        "sent_min": float(np.clip(s - 0.3, -1.0, 1.0)),
+    }
+
+
+def demo_sentiment_history(ticker: str) -> pd.DataFrame:
+    """Historische, tagesgenaue Sentiment-Features (für das Modell-Training)."""
+    idx, sent = _sentiment_mean_series(ticker)
+    rng = np.random.default_rng(_seed(ticker) + 17)
+    rows = [_sentiment_features_from_mean(float(s), rng) for s in sent]
+    df = pd.DataFrame(rows, index=idx)
+    df.index.name = "Date"
+    return df
+
+
+def demo_sentiment_today(ticker: str) -> dict:
+    """Aktuelle Sentiment-Features (konsistent zur Historie)."""
+    _idx, sent = _sentiment_mean_series(ticker)
+    rng = np.random.default_rng(_seed(ticker) + 19)
+    return _sentiment_features_from_mean(float(sent[-1]), rng)
 
 
 def demo_news(ticker: str, limit: int = 25) -> list[NewsItem]:
-    """Erzeugt Schlagzeilen, deren Sentiment zum aktuellen Trend passt.
-
-    So korreliert das News-Sentiment mit der Kursrichtung (wie in der Realität)
-    und liefert dem Modell ein zusätzliches, lernbares Signal.
-    """
+    """Schlagzeilen, deren Polarität zum aktuellen Sentiment passt (für Anzeige)."""
     rng = np.random.default_rng(_seed(ticker) + 7)
-    n = int(min(limit, rng.integers(4, 9)))
-    trend = _recent_trend(ticker)
-    # Wahrscheinlichkeiten je nach Trend gewichten (pos, neg, neutral)
-    if trend > 0.01:
-        probs = [0.6, 0.15, 0.25]
-    elif trend < -0.01:
-        probs = [0.15, 0.6, 0.25]
-    else:
-        probs = [0.34, 0.33, 0.33]
+    _idx, sent = _sentiment_mean_series(ticker)
+    s = float(sent[-1])
+    n = int(min(limit, 4 + round(4 * abs(s)) + rng.integers(0, 3)))
+    # Wahrscheinlichkeiten je nach Sentiment gewichten (pos, neg, neutral)
+    pos = np.clip(0.3 + 0.5 * s, 0.05, 0.85)
+    neg = np.clip(0.3 - 0.5 * s, 0.05, 0.85)
+    neu = max(0.05, 1.0 - pos - neg)
+    probs = np.array([pos, neg, neu]); probs = probs / probs.sum()
     pools = [_POS_TEMPLATES, _NEG_TEMPLATES, _NEUTRAL_TEMPLATES]
 
     items: list[NewsItem] = []
     for _ in range(n):
-        kind = rng.choice([0, 1, 2], p=probs)
+        kind = int(rng.choice([0, 1, 2], p=probs))
         templates = pools[kind]
         title = templates[rng.integers(0, len(templates))].format(t=ticker)
         items.append(
-            NewsItem(
-                ticker=ticker,
-                title=title,
-                summary="",
-                link="https://example.local/news",
-                published=None,
-                source="demo",
-            )
+            NewsItem(ticker=ticker, title=title, summary="",
+                     link="https://example.local/news", published=None, source="demo")
         )
     return items

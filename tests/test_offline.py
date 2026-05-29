@@ -55,6 +55,9 @@ def test_predictor_trains_and_predicts():
     df["target"] = (df["Close"].shift(-5) / df["Close"] - 1 > 0).astype(float)
     for col in SENTIMENT_FEATURES:
         df[col] = 0.0
+    # Markt-Features (Einzel-Ticker: Markt = Ticker selbst, relative Stärke 0)
+    df["mkt_ret_5d"] = df["ret_5d"]
+    df["rel_strength_20d"] = 0.0
     df = df.dropna(subset=FEATURE_COLUMNS + ["target"])
     pred = Predictor(FEATURE_COLUMNS, model_type="logistic")
     result = pred.train(df, test_size=0.2)

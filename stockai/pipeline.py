@@ -28,15 +28,31 @@ import pandas as pd
 from stockai.advisor import recommend
 from stockai.config import Config
 from stockai.data import provider
-from stockai.features.sentiment import SENTIMENT_FEATURES, aggregate_sentiment
+from stockai.features.sentiment import SENTIMENT_FEATURES, score_text
 from stockai.features.technical import TECHNICAL_FEATURES, add_technical_features
 from stockai.model.predictor import Predictor, TrainResult
 from stockai.model.store import FeatureStore, ModelStore
 
 log = logging.getLogger(__name__)
 
-FEATURE_COLUMNS = TECHNICAL_FEATURES + SENTIMENT_FEATURES
+# Markt-/Querschnitts-Features: Kontext über alle Ticker hinweg
+# ("wohin rotiert das Geld" – relative Stärke gegenüber dem Gesamtmarkt).
+MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d"]
+
+FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
 KEY_COLS = ["ticker", "date"]
+
+
+def add_market_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Ergänzt Querschnitts-Features über alle Ticker je Datum.
+
+    Erwartet Spalten ``date``, ``ret_5d``, ``ret_20d``. Bei nur einem Ticker
+    ist die relative Stärke 0 und der Markt = der Ticker selbst.
+    """
+    g = df.groupby("date")
+    df["mkt_ret_5d"] = g["ret_5d"].transform("mean")
+    df["rel_strength_20d"] = df["ret_20d"] - g["ret_20d"].transform("mean")
+    return df
 
 
 # --------------------------------------------------------------------------- #
@@ -80,8 +96,17 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         feat["target"] = _target_from_prices(
             prices, cfg.horizon_days, cfg.profit_threshold
         )
-        for col in SENTIMENT_FEATURES:
-            feat[col] = 0.0
+        # News-Sentiment je Tag einfügen, damit das Modell daraus lernt.
+        # Verfügbar (z.B. Demo) -> echte Reihe; sonst neutral (0).
+        sent_hist = provider.get_sentiment_history(cfg, ticker)
+        if sent_hist is not None and not sent_hist.empty:
+            aligned = sent_hist.reindex(feat.index)
+            for col in SENTIMENT_FEATURES:
+                feat[col] = aligned[col].values if col in aligned else 0.0
+            feat[SENTIMENT_FEATURES] = feat[SENTIMENT_FEATURES].fillna(0.0)
+        else:
+            for col in SENTIMENT_FEATURES:
+                feat[col] = 0.0
         feat["ticker"] = ticker
         feat["date"] = feat.index.strftime("%Y-%m-%d")
         frames.append(feat.reset_index(drop=True))
@@ -89,6 +114,7 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     data = pd.concat(frames, ignore_index=True)
+    data = add_market_features(data)
     # Letzte ``horizon`` Zeilen je Ticker haben kein gültiges Label -> entfernen
     return data.dropna(subset=FEATURE_COLUMNS + ["target"])
 
@@ -106,11 +132,25 @@ def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | No
     last_price = float(prices["Close"].iloc[-1])
 
     news = provider.get_news(cfg, ticker)
-    sent = aggregate_sentiment(news)
+    # Sentiment-Features konsistent zur Trainingsquelle (Demo: gekoppelte Reihe;
+    # Live: Aggregat der aktuellen News).
+    sent_features = provider.get_sentiment_features(cfg, ticker, news=news)
+    scored_news = [(item, score_text(item.text)) for item in news]
 
     row: dict[str, float] = {f: float(feat[f]) for f in TECHNICAL_FEATURES}
-    row.update(sent.features)
-    return row, sent.scored_items, last_price
+    row.update({k: float(v) for k, v in sent_features.items()})
+    return row, scored_news, last_price
+
+
+def _augment_with_market(rows: list[dict]) -> None:
+    """Ergänzt Markt-/relative-Stärke-Features über die aktuellen Ticker-Zeilen."""
+    if not rows:
+        return
+    mkt5 = float(np.mean([r.get("ret_5d", 0.0) for r in rows]))
+    mkt20 = float(np.mean([r.get("ret_20d", 0.0) for r in rows]))
+    for r in rows:
+        r["mkt_ret_5d"] = mkt5
+        r["rel_strength_20d"] = float(r.get("ret_20d", 0.0) - mkt20)
 
 
 def snapshot_live(cfg: Config) -> int:
@@ -136,6 +176,7 @@ def snapshot_live(cfg: Config) -> int:
             }
         )
         rows.append(row)
+    _augment_with_market(rows)
     if not rows:
         return 0
     store.update(pd.DataFrame(rows), key_cols=KEY_COLS)
@@ -346,12 +387,22 @@ def analyze(cfg: Config, retrain_if_missing: bool = True) -> list[TickerAnalysis
         train(cfg)
         predictor = model_store.load_model()
 
-    results: list[TickerAnalysis] = []
+    # 1. Durchgang: Features je Ticker sammeln
+    collected: list[tuple[str, dict, list, float]] = []
+    rows: list[dict] = []
     for ticker in cfg.tickers:
         live = _live_feature_row(cfg, ticker)
         if live is None:
             continue
         row, scored_news, last_price = live
+        collected.append((ticker, row, scored_news, last_price))
+        rows.append(row)
+    # Markt-/relative-Stärke-Features über alle Ticker ergänzen
+    _augment_with_market(rows)
+
+    # 2. Durchgang: Vorhersage + Empfehlung
+    results: list[TickerAnalysis] = []
+    for ticker, row, scored_news, last_price in collected:
         X = pd.DataFrame([row])[FEATURE_COLUMNS]
         proba = float(predictor.predict_proba(X)[0])
 

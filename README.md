@@ -67,7 +67,11 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 
 - **Viele Signale:** 18 technische Indikatoren (Renditen über mehrere Horizonte,
   RSI, MACD inkl. Histogramm, gleitende Durchschnitte, Bollinger %B, ATR,
-  Stochastik, Volumen-z-Score …) plus News-Sentiment.
+  Stochastik, Volumen-z-Score …), **Markt-/relative-Stärke-Features** (wohin
+  rotiert das Geld) und **News-Sentiment als gelerntes Merkmal**.
+- **News fließen ins Lernen ein:** Das Modell wird auf tagesgenauem Sentiment
+  mit-trainiert (im Demo-Modus an das Trend-Regime gekoppelt), nicht nur als
+  Anzeige – News-Features gehören dadurch zu den einflussreichsten Merkmalen.
 - **Beste Modellwahl:** `type: auto` lässt mehrere Modelle (HistGradientBoosting,
   GradientBoosting, RandomForest, Logistic, Ensemble) gegeneinander antreten und
   wählt automatisch das mit der besten kreuzvalidierten Güte.

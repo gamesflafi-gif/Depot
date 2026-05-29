@@ -33,3 +33,25 @@ def get_news(cfg: Config, ticker: str) -> list[NewsItem]:
     if cfg.raw.get("data_source", "live") == "demo":
         return demo.demo_news(ticker, cfg.news_max_per_ticker)
     return news_mod.fetch_news(ticker, limit=cfg.news_max_per_ticker)
+
+
+def get_sentiment_history(cfg: Config, ticker: str) -> pd.DataFrame | None:
+    """Tagesgenaue historische Sentiment-Features (für das Training).
+
+    Demo: an das Trend-Regime gekoppelte Reihe. Live: nicht verfügbar (None) –
+    kostenlose, tagesgenaue Alt-News über Jahre gibt es nicht; das News-Signal
+    wird dann im Betrieb über die Snapshot-Schleife dazugelernt.
+    """
+    if cfg.raw.get("data_source", "live") == "demo":
+        return demo.demo_sentiment_history(ticker)
+    return None
+
+
+def get_sentiment_features(cfg: Config, ticker: str, news: list[NewsItem] | None = None) -> dict:
+    """Aktuelle Sentiment-Features – konsistent zur Trainingsquelle."""
+    if cfg.raw.get("data_source", "live") == "demo":
+        return demo.demo_sentiment_today(ticker)
+    from stockai.features.sentiment import aggregate_sentiment
+
+    news = news if news is not None else get_news(cfg, ticker)
+    return aggregate_sentiment(news).features

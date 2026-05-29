@@ -22,7 +22,8 @@ import pandas as pd
 
 from stockai.config import Config
 from stockai.data import provider
-from stockai.features.technical import TECHNICAL_FEATURES, add_technical_features
+from stockai.features.sentiment import SENTIMENT_FEATURES
+from stockai.features.technical import add_technical_features
 from stockai.model.predictor import Predictor
 
 log = logging.getLogger(__name__)
@@ -41,7 +42,9 @@ class StrategyResult:
 
 # --------------------------------------------------------------------------- #
 def _build_panel(cfg: Config) -> pd.DataFrame:
-    """Long-Panel: je (Datum, Ticker) Features + reale Folge-Rendite."""
+    """Long-Panel: je (Datum, Ticker) Features (inkl. News) + reale Folge-Rendite."""
+    from stockai.pipeline import FEATURE_COLUMNS, add_market_features
+
     horizon = cfg.horizon_days
     rows: list[pd.DataFrame] = []
     for ticker in cfg.tickers:
@@ -51,13 +54,24 @@ def _build_panel(cfg: Config) -> pd.DataFrame:
         feat = add_technical_features(prices)
         feat["fwd_ret"] = prices["Close"].shift(-horizon) / prices["Close"] - 1.0
         feat["target"] = (feat["fwd_ret"] > cfg.profit_threshold).astype("float")
+        # News-Sentiment je Tag (sofern verfügbar) -> News im Backtest nutzen
+        sent_hist = provider.get_sentiment_history(cfg, ticker)
+        if sent_hist is not None and not sent_hist.empty:
+            aligned = sent_hist.reindex(feat.index)
+            for col in SENTIMENT_FEATURES:
+                feat[col] = aligned[col].values if col in aligned else 0.0
+            feat[SENTIMENT_FEATURES] = feat[SENTIMENT_FEATURES].fillna(0.0)
+        else:
+            for col in SENTIMENT_FEATURES:
+                feat[col] = 0.0
         feat["ticker"] = ticker
         feat["date"] = feat.index
         rows.append(feat)
     if not rows:
         return pd.DataFrame()
     panel = pd.concat(rows, ignore_index=True)
-    return panel.dropna(subset=TECHNICAL_FEATURES + ["fwd_ret"])
+    panel = add_market_features(panel)
+    return panel.dropna(subset=FEATURE_COLUMNS + ["fwd_ret"])
 
 
 def _annualized(period_returns: np.ndarray, periods_per_year: float) -> dict[str, float]:
@@ -97,9 +111,9 @@ def run_strategy_backtest(
     horizon = cfg.horizon_days
     # Modelltyp einmal auflösen (auto -> konkret), damit alle Rebalancings das
     # gleiche, beste Modell nutzen statt bei jedem Schritt neu zu suchen.
-    from stockai.pipeline import resolve_model_type
+    from stockai.pipeline import FEATURE_COLUMNS, resolve_model_type
 
-    model_type, _ = resolve_model_type(cfg, panel, feature_names=TECHNICAL_FEATURES)
+    model_type, _ = resolve_model_type(cfg, panel, feature_names=FEATURE_COLUMNS)
 
     all_dates = np.sort(panel["date"].unique())
     start_idx = int(len(all_dates) * train_frac)
@@ -120,12 +134,12 @@ def run_strategy_backtest(
             continue
 
         predictor = Predictor(
-            feature_names=TECHNICAL_FEATURES,
+            feature_names=FEATURE_COLUMNS,
             model_type=model_type,
             random_state=int(cfg.model.get("random_state", 42)),
         )
         predictor.estimator.fit(
-            train[TECHNICAL_FEATURES].values, train["target"].astype(int).values
+            train[FEATURE_COLUMNS].values, train["target"].astype(int).values
         )
         predictor.is_fitted = True
 
