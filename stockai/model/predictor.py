@@ -128,6 +128,8 @@ class Predictor:
         self.params = params or {}
         self.calibrate = calibrate and model_type != "sgd_online"
         self.base_estimator: Any = _build_estimator(model_type, random_state, self.params)
+        # Optionales Expected-Return-Modell (Regression der Folge-Rendite)
+        self.regressor: Any = None
         # Kalibrierte Wahrscheinlichkeiten (verlässlichere P(Profit)) via
         # isotonischer Regression auf zeitlich sauberen CV-Folds.
         if self.calibrate:
@@ -256,6 +258,32 @@ class Predictor:
             }
         except Exception:
             return {}
+
+    def fit_regressor(self, df: pd.DataFrame, ret_col: str = "fwd_ret") -> bool:
+        """Trainiert das Expected-Return-Modell auf der stetigen Folge-Rendite.
+
+        Liefert True bei Erfolg. Robust gegenüber fehlender Zielspalte.
+        """
+        if ret_col not in df.columns:
+            return False
+        data = df.dropna(subset=self.feature_names + [ret_col])
+        if len(data) < 50:
+            return False
+        from sklearn.ensemble import HistGradientBoostingRegressor
+
+        reg = HistGradientBoostingRegressor(
+            random_state=self.random_state, learning_rate=0.06, max_iter=300,
+            l2_regularization=1.0,
+        )
+        reg.fit(data[self.feature_names].values, data[ret_col].astype(float).values)
+        self.regressor = reg
+        return True
+
+    def predict_return(self, df: pd.DataFrame) -> np.ndarray | None:
+        """Erwartete Folge-Rendite je Zeile (oder None, falls kein Regressor)."""
+        if self.regressor is None:
+            return None
+        return self.regressor.predict(df[self.feature_names].values)
 
     def partial_train(self, df: pd.DataFrame, target_col: str = "target") -> None:
         """Inkrementelles Lernen (nur für ``sgd_online``).

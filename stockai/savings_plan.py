@@ -99,8 +99,15 @@ def build_savings_plan(
     candidates = candidates[:max_stocks]
 
     if candidates:
-        raw = {a.ticker: max(1e-6, (a.profit_probability - 0.5)) * max(0.1, a.confidence)
-               for a in candidates}
+        # Gewichtung nach Profit-Wahrscheinlichkeit × Konfidenz und – falls
+        # verfügbar – verstärkt durch die erwartete Rendite (Expected Return).
+        def _score(a) -> float:
+            base = max(1e-6, (a.profit_probability - 0.5)) * max(0.1, a.confidence)
+            if a.expected_return is not None and a.expected_return > 0:
+                base *= (1.0 + 10.0 * a.expected_return)
+            return base
+
+        raw = {a.ticker: _score(a) for a in candidates}
         total = sum(raw.values())
         weights = {t: (w / total) * sat_budget_share for t, w in raw.items()}
         # Obergrenze je Aktie (auf den Gesamt-Sparbetrag bezogen)

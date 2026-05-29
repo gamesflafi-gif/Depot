@@ -75,6 +75,7 @@ class TickerAnalysis:
     rsi_14: float = 50.0
     momentum_5d: float = 0.0
     price_vs_high_20: float = 1.0
+    expected_return: float | None = None
     top_headlines: list[dict] = field(default_factory=list)
     signal: str = ""
     action: str = "HALTEN"
@@ -105,6 +106,8 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         feat["target"] = _target_from_prices(
             prices, cfg.horizon_days, cfg.profit_threshold
         )
+        # Stetige Folge-Rendite als Ziel für das Expected-Return-Modell
+        feat["fwd_ret"] = prices["Close"].shift(-cfg.horizon_days) / prices["Close"] - 1.0
         # News-Sentiment je Tag einfügen, damit das Modell daraus lernt.
         # Verfügbar (z.B. Demo) -> echte Reihe; sonst neutral (0).
         sent_hist = provider.get_sentiment_history(cfg, ticker)
@@ -308,6 +311,8 @@ def train(cfg: Config) -> TrainResult:
         data, target_col="target", test_size=float(cfg.model.get("test_size", 0.2))
     )
     result.cv_metrics = cv_metrics
+    # Expected-Return-Modell (Regression) mittrainieren, falls Daten vorhanden
+    predictor.fit_regressor(data, ret_col="fwd_ret")
 
     # Anzahl der real gelabelten Live-Snapshots direkt aus dem Store ablesen
     # (kein erneuter, teurer Aufbau des Historien-Datensatzes nötig).
@@ -425,6 +430,8 @@ def analyze(
     for ticker, row, scored_news, last_price in collected:
         X = pd.DataFrame([row])[FEATURE_COLUMNS]
         proba = float(predictor.predict_proba(X)[0])
+        er = predictor.predict_return(X)
+        expected_return = float(er[0]) if er is not None else None
 
         scored_sorted = sorted(scored_news, key=lambda kv: abs(kv[1]), reverse=True)
         headlines = [
@@ -456,6 +463,7 @@ def analyze(
                 rsi_14=row.get("rsi_14", 50.0),
                 momentum_5d=row.get("ret_5d", 0.0),
                 price_vs_high_20=row.get("price_vs_high_20", 1.0),
+                expected_return=expected_return,
                 top_headlines=headlines,
                 signal=_signal(proba),
                 action=rec.action,
