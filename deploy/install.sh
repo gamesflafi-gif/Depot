@@ -7,9 +7,11 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
 echo "[1/4] System-Pakete (python venv) installieren …"
+# sudo nur verwenden, wenn vorhanden (als root nicht nötig)
+SUDO="$(command -v sudo || true)"
 if command -v apt-get >/dev/null 2>&1; then
-  sudo apt-get update -y
-  sudo apt-get install -y python3 python3-venv python3-pip
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y python3 python3-venv python3-pip
 fi
 
 echo "[2/4] Virtuelle Umgebung anlegen …"
