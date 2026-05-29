@@ -105,6 +105,29 @@ def cmd_learn(cfg, args) -> None:
     print(f"✔ Neu trainiert – aktuelle Güte (AUC/Acc): {auc:.3f}")
 
 
+def cmd_simulate(cfg, args) -> None:
+    """Lernkurve: zeigt, wie die Güte mit mehr Trainingsdaten steigt."""
+    print("Simuliere Lernfortschritt (Training auf wachsenden Datenmengen) …\n")
+    curve = pipeline.learning_curve(cfg, steps=args.steps)
+    print(f"{'Stufe':28s} {'Samples':>8s} {'Acc':>6s} {'AUC':>6s} {'F1':>6s}")
+    print("-" * 58)
+    for entry in curve:
+        m = entry["metrics"]
+        print(
+            f"{entry['stage']:28s} {entry['n_samples']:8d} "
+            f"{m.get('accuracy', float('nan')):6.3f} "
+            f"{m.get('roc_auc', float('nan')):6.3f} "
+            f"{m.get('f1', float('nan')):6.3f}"
+        )
+    first = curve[0]["metrics"].get("roc_auc")
+    last = curve[-1]["metrics"].get("roc_auc")
+    if first is not None and last is not None:
+        delta = last - first
+        trend = "↑ besser" if delta > 0 else "↓ schlechter" if delta < 0 else "→ gleich"
+        print(f"\n  AUC von {first:.3f} → {last:.3f}  ({trend}, Δ {delta:+.3f})")
+    print("\n  → Die Lernhistorie wurde aktualisiert (siehe 'history' / Dashboard).")
+
+
 def cmd_backtest(cfg, args) -> None:
     print("Führe Walk-Forward-Backtest durch …")
     res = bt.run_backtest(cfg, prob_threshold=args.threshold)
@@ -155,6 +178,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("label", help="Fällige Snapshots labeln")
     sub.add_parser("learn", help="Voller Lernzyklus (label + snapshot + train)")
 
+    ps = sub.add_parser("simulate", help="Lernkurve: Güte vs. Datenmenge zeigen")
+    ps.add_argument("--steps", type=int, default=5, help="Anzahl Datenmengen-Stufen")
+
     pb = sub.add_parser("backtest", help="Strategie auf Historie testen")
     pb.add_argument("--threshold", type=float, default=0.55)
 
@@ -168,6 +194,7 @@ _COMMANDS = {
     "snapshot": cmd_snapshot,
     "label": cmd_label,
     "learn": cmd_learn,
+    "simulate": cmd_simulate,
     "backtest": cmd_backtest,
     "history": cmd_history,
 }

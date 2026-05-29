@@ -84,10 +84,13 @@ python -m stockai.cli analyze --headlines
 # 3) Einen kompletten Lernzyklus laufen lassen (labeln + snapshot + neu trainieren)
 python -m stockai.cli learn
 
-# 4) Strategie historisch testen
+# 4) Lernkurve: belegt, dass mehr Daten zu höherer Präzision führen
+python -m stockai.cli simulate
+
+# 5) Strategie historisch testen
 python -m stockai.cli backtest
 
-# 5) Lernfortschritt ansehen
+# 6) Lernfortschritt ansehen
 python -m stockai.cli history
 ```
 

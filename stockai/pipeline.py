@@ -194,7 +194,12 @@ def _combined_training_data(cfg: Config) -> pd.DataFrame:
     frames = [f for f in [history, labeled_live] if not f.empty]
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
+    combined = pd.concat(frames, ignore_index=True)
+    # Nach Datum sortieren, damit der zeitliche Train/Test-Split korrekt ist
+    # (sonst landen ganze Ticker im Test -> verzerrte Bewertung).
+    if "date" in combined.columns:
+        combined = combined.sort_values("date").reset_index(drop=True)
+    return combined
 
 
 def train(cfg: Config) -> TrainResult:
@@ -228,6 +233,53 @@ def train(cfg: Config) -> TrainResult:
         }
     )
     return result
+
+
+# --------------------------------------------------------------------------- #
+def learning_curve(cfg: Config, steps: int = 5) -> list[dict]:
+    """Belegt die Selbstverbesserung: trainiert auf wachsenden Datenmengen.
+
+    Auf einem festen, zeitlich späteren Holdout wird gemessen, wie die Güte mit
+    mehr Trainingsdaten steigt. Jeder Punkt wird in die Lernhistorie geschrieben,
+    sodass die steigende Präzision in CLI und Dashboard sichtbar wird.
+    """
+    data = _combined_training_data(cfg)
+    if data.empty:
+        raise RuntimeError("Keine Daten für die Lernkurve verfügbar.")
+    data = data.dropna(subset=FEATURE_COLUMNS + ["target"]).reset_index(drop=True)
+
+    holdout_start = int(len(data) * 0.8)
+    train_pool, holdout = data.iloc[:holdout_start], data.iloc[holdout_start:]
+    X_hold = holdout[FEATURE_COLUMNS].values
+    y_hold = holdout["target"].astype(int).values
+
+    model_store = ModelStore(cfg.model_dir)
+    curve: list[dict] = []
+    for frac in [(i + 1) / steps for i in range(steps)]:
+        n = max(50, int(len(train_pool) * frac))
+        subset = train_pool.iloc[:n]
+        predictor = Predictor(
+            feature_names=FEATURE_COLUMNS,
+            model_type=cfg.model.get("type", "gradient_boosting"),
+            random_state=int(cfg.model.get("random_state", 42)),
+        )
+        predictor.estimator.fit(subset[FEATURE_COLUMNS].values, subset["target"].astype(int).values)
+        predictor.is_fitted = True
+        metrics = predictor._evaluate(X_hold, y_hold)
+        entry = {
+            "model_type": predictor.model_type,
+            "n_samples": int(n),
+            "n_train": int(n),
+            "n_test": int(len(holdout)),
+            "stage": f"{int(frac * 100)}% der Trainingsdaten",
+            "metrics": metrics,
+        }
+        model_store.append_history(entry)
+        curve.append(entry)
+        # Das auf den meisten Daten trainierte Modell als finales speichern
+        if frac == 1.0:
+            model_store.save_model(predictor)
+    return curve
 
 
 # --------------------------------------------------------------------------- #

@@ -44,24 +44,35 @@ def _period_to_days(period: str) -> int:
 
 
 def demo_prices(ticker: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
-    """Erzeugt realistische synthetische OHLCV-Daten (Geometric Brownian Motion)."""
+    """Erzeugt synthetische OHLCV-Daten mit einem *lernbaren* Trend-Signal.
+
+    Im Gegensatz zu reinem Random-Walk besitzt die Serie eine persistente,
+    langsam wandernde Drift (Trend-/Momentum-Regime, AR(1)-Prozess). Dadurch
+    sagt das aktuelle Momentum die Folge-Rendite teilweise voraus – das Modell
+    kann also ein echtes Signal lernen und seine Präzision steigern.
+    """
     n = _period_to_days(period)
     rng = np.random.default_rng(_seed(ticker))
-    # leichter, ticker-spezifischer Drift + Volatilität
-    drift = rng.uniform(-0.0003, 0.0009)
-    vol = rng.uniform(0.012, 0.028)
-    rets = rng.normal(drift, vol, n)
+    base_vol = rng.uniform(0.012, 0.022)
+
+    # Versteckter Trendzustand: AR(1)-Drift mit hoher Persistenz -> Regime
+    drift = np.zeros(n)
+    d = rng.normal(0, 0.0008)
+    for i in range(n):
+        d = 0.97 * d + rng.normal(0, 0.0006)
+        drift[i] = d
+    rets = drift + rng.normal(0, base_vol, n)
     # gelegentliche "News-Schocks" für Realismus
-    shocks = rng.choice([0, 1], size=n, p=[0.97, 0.03]) * rng.normal(0, 0.05, n)
+    shocks = rng.choice([0, 1], size=n, p=[0.98, 0.02]) * rng.normal(0, 0.05, n)
     rets = rets + shocks
     start = rng.uniform(40, 400)
     close = start * np.cumprod(1 + rets)
 
     idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=n)
-    daily_range = np.abs(rng.normal(0, vol, n)) * close
+    daily_range = np.abs(rng.normal(0, base_vol, n)) * close
     df = pd.DataFrame(
         {
-            "Open": close * (1 + rng.normal(0, vol / 2, n)),
+            "Open": close * (1 + rng.normal(0, base_vol / 2, n)),
             "High": close + daily_range,
             "Low": close - daily_range,
             "Close": close,
@@ -73,14 +84,36 @@ def demo_prices(ticker: str, period: str = "2y", interval: str = "1d") -> pd.Dat
     return df
 
 
+def _recent_trend(ticker: str) -> float:
+    """Vorzeichen/Stärke des jüngsten Trends – steuert das News-Sentiment."""
+    df = demo_prices(ticker, period="3mo")
+    if len(df) < 10:
+        return 0.0
+    return float(df["Close"].iloc[-1] / df["Close"].iloc[-10] - 1.0)
+
+
 def demo_news(ticker: str, limit: int = 25) -> list[NewsItem]:
-    """Erzeugt eine gemischte Menge synthetischer Schlagzeilen."""
+    """Erzeugt Schlagzeilen, deren Sentiment zum aktuellen Trend passt.
+
+    So korreliert das News-Sentiment mit der Kursrichtung (wie in der Realität)
+    und liefert dem Modell ein zusätzliches, lernbares Signal.
+    """
     rng = np.random.default_rng(_seed(ticker) + 7)
-    n = min(limit, rng.integers(4, 9))
+    n = int(min(limit, rng.integers(4, 9)))
+    trend = _recent_trend(ticker)
+    # Wahrscheinlichkeiten je nach Trend gewichten (pos, neg, neutral)
+    if trend > 0.01:
+        probs = [0.6, 0.15, 0.25]
+    elif trend < -0.01:
+        probs = [0.15, 0.6, 0.25]
+    else:
+        probs = [0.34, 0.33, 0.33]
+    pools = [_POS_TEMPLATES, _NEG_TEMPLATES, _NEUTRAL_TEMPLATES]
+
     items: list[NewsItem] = []
-    pools = [(_POS_TEMPLATES, "pos"), (_NEG_TEMPLATES, "neg"), (_NEUTRAL_TEMPLATES, "neu")]
     for _ in range(n):
-        templates, _kind = pools[rng.integers(0, len(pools))]
+        kind = rng.choice([0, 1, 2], p=probs)
+        templates = pools[kind]
         title = templates[rng.integers(0, len(templates))].format(t=ticker)
         items.append(
             NewsItem(

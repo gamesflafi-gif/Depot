@@ -85,3 +85,29 @@ def test_advisor_avoid_on_low_prob():
         price_vs_high_20=0.9, macd_hist=0.0, sentiment_mean=0.0,
     )
     assert rec.action == "MEIDEN"
+
+
+def test_demo_pipeline_train_and_learning_curve(tmp_path):
+    """End-to-End im Demo-Modus (offline): trainieren + Lernkurve erzeugen."""
+    from stockai import pipeline
+    from stockai.config import load_config
+
+    cfg = load_config()
+    # Demo-Modus erzwingen und in Temp-Verzeichnisse schreiben
+    cfg.raw["data_source"] = "demo"
+    cfg.paths = {
+        "store_dir": str(tmp_path / "store"),
+        "model_dir": str(tmp_path / "models"),
+    }
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+
+    result = pipeline.train(cfg)
+    assert result.n_train > 0 and 0.0 <= result.metrics["accuracy"] <= 1.0
+
+    curve = pipeline.learning_curve(cfg, steps=3)
+    assert len(curve) == 3
+    assert all("metrics" in c for c in curve)
+    # Mit der größten Datenmenge wird ein Modell gespeichert -> analyse läuft
+    results = pipeline.analyze(cfg, retrain_if_missing=False)
+    assert len(results) == 3
+    assert all(0.0 <= r.profit_probability <= 1.0 for r in results)
