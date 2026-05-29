@@ -137,20 +137,30 @@ def _sentiment_features_from_mean(s: float, rng) -> dict:
 
 
 def demo_sentiment_history(ticker: str) -> pd.DataFrame:
-    """Historische, tagesgenaue Sentiment-Features (für das Modell-Training)."""
+    """Historische, tagesgenaue Sentiment-Features (für das Modell-Training).
+
+    Enthält auch die erweiterten News-Features: Sentiment-Trend (Veränderung),
+    News-Mengen-Spike (z-Score) und Schlagwort-Signal.
+    """
     idx, sent = _sentiment_mean_series(ticker)
     rng = np.random.default_rng(_seed(ticker) + 17)
     rows = [_sentiment_features_from_mean(float(s), rng) for s in sent]
     df = pd.DataFrame(rows, index=idx)
+    s = df["sent_mean"]
+    # Sentiment-Trend: Abweichung vom 5-Tage-Mittel
+    df["sent_trend"] = (s - s.rolling(5).mean()).fillna(0.0)
+    # News-Mengen-Spike: z-Score der News-Anzahl über 20 Tage
+    c = df["news_count"]
+    df["news_vol_z"] = ((c - c.rolling(20).mean()) / c.rolling(20).std()).fillna(0.0)
+    # Schlagwort-Signal: in der Demo folgt die Polarität dem Sentiment
+    df["kw_signal"] = s.clip(-1.0, 1.0)
     df.index.name = "Date"
     return df
 
 
 def demo_sentiment_today(ticker: str) -> dict:
     """Aktuelle Sentiment-Features (konsistent zur Historie)."""
-    _idx, sent = _sentiment_mean_series(ticker)
-    rng = np.random.default_rng(_seed(ticker) + 19)
-    return _sentiment_features_from_mean(float(sent[-1]), rng)
+    return demo_sentiment_history(ticker).iloc[-1].to_dict()
 
 
 def demo_news(ticker: str, limit: int = 25) -> list[NewsItem]:
