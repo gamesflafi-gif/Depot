@@ -83,8 +83,10 @@ def cmd_doctor(cfg, args) -> None:
             msg = str(getattr(exc, "code", exc))
             return f"NICHT erreichbar ({msg})"
 
+    print(f"  Kursquelle:            {cfg.raw.get('price_source', 'auto')}")
     print("\n  Erreichbarkeit der Datenquellen:")
     print(f"    Yahoo Finance:  {_reach('https://query1.finance.yahoo.com')}")
+    print(f"    Stooq (direkt): {_reach('https://stooq.com')}")
     print(f"    Google News:    {_reach('https://news.google.com')}")
     if key_set:
         print(f"    NewsAPI.org:    {_reach('https://newsapi.org')}")

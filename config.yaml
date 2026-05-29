@@ -8,6 +8,12 @@
 # Standard ist "demo", damit das Projekt überall sofort läuft.
 data_source: demo
 
+# Kursquelle im Live-Modus (anbieter-unabhängig, kein API-Key nötig):
+#   auto     -> erst yfinance, dann direkter Stooq-CSV-Download (Fallback)
+#   yfinance -> Yahoo Finance
+#   stooq    -> direkter CSV-Download von stooq.com
+price_source: auto
+
 # Welche Aktien werden beobachtet und analysiert?
 # Ein größeres Universum macht die Querschnitts-Features (relative Stärke)
 # deutlich aussagekräftiger – je mehr Werte, desto besser das Ranking.

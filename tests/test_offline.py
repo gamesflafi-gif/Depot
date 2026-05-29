@@ -128,6 +128,24 @@ def test_portfolio_allocation_and_cap():
     assert pf.allocations[0].ticker == "A"   # stärkstes Signal zuerst
 
 
+def test_stooq_csv_parser_and_symbol():
+    from stockai.data.stooq import parse_stooq_csv, _to_symbol
+
+    assert _to_symbol("AAPL") == "aapl.us"     # US-Werte bekommen .us
+    assert _to_symbol("VWCE.DE") == "vwce.de"  # Suffix bleibt erhalten
+    csv_text = (
+        "Date,Open,High,Low,Close,Volume\n"
+        "2024-01-02,100.0,102.0,99.0,101.5,1000000\n"
+        "2024-01-03,101.5,103.0,100.5,102.8,1200000\n"
+    )
+    df = parse_stooq_csv(csv_text)
+    assert list(df.columns) == ["Open", "High", "Low", "Close", "Volume"]
+    assert len(df) == 2
+    assert abs(df["Close"].iloc[-1] - 102.8) < 1e-9
+    # defektes CSV -> leerer DataFrame (kein Absturz)
+    assert parse_stooq_csv("kaputt\n1,2,3").empty
+
+
 def test_sector_cap_diversification():
     from stockai.portfolio import _apply_sector_cap
 

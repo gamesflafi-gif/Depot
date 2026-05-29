@@ -88,6 +88,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
+- **Anbieter-unabhängige Kursdaten:** kein Zwang zu einer einzelnen API – der
+  Live-Modus lädt Kurse über yfinance **oder** direkt als CSV von Stooq (ohne
+  Key) und fällt automatisch um (`price_source: auto`). News kommen direkt per
+  RSS. Damit hängt die KI nicht an einem einzigen Anbieter.
 - **Beste Modellwahl:** `type: auto` lässt mehrere Modelle (HistGradientBoosting,
   GradientBoosting, RandomForest, Logistic, Ensemble, **Stacking**) gegeneinander
   antreten und wählt automatisch das mit der besten kreuzvalidierten Güte.
@@ -205,6 +209,7 @@ Wichtigste Stellschrauben:
 | Schlüssel | Bedeutung |
 |-----------|-----------|
 | `data_source` | `demo` (offline, synthetisch) oder `live` (echte Daten) |
+| `price_source` | `auto` (yfinance + direkter Stooq-Fallback), `yfinance` oder `stooq` |
 | `tickers` | Liste der beobachteten Aktien |
 | `horizon_days` | Über wie viele Handelstage die Profitabilität vorhergesagt wird |
 | `profit_threshold` | Ab welcher Rendite es als „profitabel“ gilt |
