@@ -43,8 +43,32 @@ class Config:
         return p
 
 
+def load_dotenv(env_path: Path | None = None) -> None:
+    """Lädt Schlüssel=Wert-Paare aus einer ``.env``-Datei in die Umgebung.
+
+    Ohne Zusatz-Abhängigkeit. Bereits gesetzte Variablen werden nicht
+    überschrieben. So genügt es, Secrets (Telegram-Token, NewsAPI-Key …) in eine
+    ``.env`` im Projekt-Root zu schreiben.
+    """
+    path = env_path or (ROOT / ".env")
+    if not path.exists():
+        return
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        pass  # defekte .env darf das Programm nicht stoppen
+
+
 def load_config(path: str | os.PathLike | None = None) -> Config:
     """Liest die YAML-Konfiguration und liefert ein ``Config``-Objekt."""
+    load_dotenv()  # Secrets aus .env verfügbar machen (falls vorhanden)
     cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
     with open(cfg_path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}

@@ -244,7 +244,17 @@ Web-Session reicht dafür nicht):
 **Telegram einrichten (empfohlen fürs Handy):**
 1. In Telegram **@BotFather** öffnen → `/newbot` → du erhältst einen **Token**.
 2. Eigene **Chat-ID** ermitteln (z. B. über **@userinfobot**).
-3. Als Secrets setzen:
+3. Token + Chat-ID hinterlegen – **am einfachsten in einer Datei `.env`** im
+   Projekt-Root (wird automatisch geladen, ist per `.gitignore` geschützt):
+
+```ini
+# .env  (NICHT committen!)
+STOCKAI_TELEGRAM_TOKEN=123456:ABC…
+STOCKAI_TELEGRAM_CHAT_ID=987654321
+```
+
+Alternativ als echte Umgebungsvariablen (z. B. Environment-Secrets der
+Web-Umgebung oder in der Shell):
 
 ```bash
 export STOCKAI_TELEGRAM_TOKEN="123456:ABC…"
