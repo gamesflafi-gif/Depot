@@ -37,33 +37,40 @@ def _seed(ticker: str) -> int:
     return int(hashlib.sha256(ticker.encode()).hexdigest(), 16) % (2**32)
 
 
+# Länge der kanonischen Vollreihe (Business-Tage); alle Zeiträume werden als
+# Ausschnitt hieraus gebildet, damit sie konsistent zueinander sind.
+_CANONICAL_DAYS = 756  # ~3 Jahre
+
+
 def _period_to_days(period: str) -> int:
     period = period.strip().lower()
     mapping = {"1y": 252, "2y": 504, "5y": 1260, "6mo": 126, "3mo": 63, "max": 1260}
     return mapping.get(period, 504)
 
 
-def demo_prices(ticker: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
-    """Erzeugt synthetische OHLCV-Daten mit einem *lernbaren* Trend-Signal.
+def _canonical_series(ticker: str) -> pd.DataFrame:
+    """Erzeugt die vollständige, deterministische OHLCV-Reihe eines Tickers.
 
-    Im Gegensatz zu reinem Random-Walk besitzt die Serie eine persistente,
-    langsam wandernde Drift (Trend-/Momentum-Regime, AR(1)-Prozess). Dadurch
-    sagt das aktuelle Momentum die Folge-Rendite teilweise voraus – das Modell
-    kann also ein echtes Signal lernen und seine Präzision steigern.
+    Besitzt eine persistente, langsam wandernde Drift (AR(1)-Trend-Regime), sodass
+    das aktuelle Momentum die Folge-Rendite teilweise vorhersagt – das Modell kann
+    also ein echtes Signal lernen. Da immer dieselbe Reihe erzeugt wird, sind alle
+    Zeitfenster (z.B. "2y" und "3mo") konsistente Ausschnitte derselben Historie.
     """
-    n = _period_to_days(period)
+    n = _CANONICAL_DAYS
     rng = np.random.default_rng(_seed(ticker))
-    base_vol = rng.uniform(0.012, 0.022)
+    base_vol = rng.uniform(0.011, 0.016)
 
-    # Versteckter Trendzustand: AR(1)-Drift mit hoher Persistenz -> Regime
+    # AR(1)-Drift mit hoher Persistenz -> lernbare Trend-Regime. Die Drift wird
+    # begrenzt, damit die Kurse realistisch bleiben (keine Explosion).
     drift = np.zeros(n)
-    d = rng.normal(0, 0.0008)
+    d = rng.normal(0, 0.0012)
     for i in range(n):
-        d = 0.97 * d + rng.normal(0, 0.0006)
+        d = 0.985 * d + rng.normal(0, 0.0012)
+        d = float(np.clip(d, -0.007, 0.007))
         drift[i] = d
     rets = drift + rng.normal(0, base_vol, n)
     # gelegentliche "News-Schocks" für Realismus
-    shocks = rng.choice([0, 1], size=n, p=[0.98, 0.02]) * rng.normal(0, 0.05, n)
+    shocks = rng.choice([0, 1], size=n, p=[0.985, 0.015]) * rng.normal(0, 0.05, n)
     rets = rets + shocks
     start = rng.uniform(40, 400)
     close = start * np.cumprod(1 + rets)
@@ -82,6 +89,16 @@ def demo_prices(ticker: str, period: str = "2y", interval: str = "1d") -> pd.Dat
     )
     df.index.name = "Date"
     return df
+
+
+def demo_prices(ticker: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
+    """Liefert das angeforderte Zeitfenster der kanonischen Ticker-Reihe.
+
+    Alle Zeiträume sind Ausschnitte derselben Historie – dadurch passen
+    Snapshot-Kurs, späteres Label und News-Trend exakt zusammen.
+    """
+    n = _period_to_days(period)
+    return _canonical_series(ticker).iloc[-n:].copy()
 
 
 def _recent_trend(ticker: str) -> float:

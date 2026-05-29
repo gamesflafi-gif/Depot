@@ -41,7 +41,7 @@ def cmd_train(cfg, args) -> None:
 
 
 def cmd_analyze(cfg, args) -> None:
-    print("Analysiere Aktien (Kurse + Live-News) …\n")
+    print("Analysiere Aktien (Kurse + News) …\n")
     results = pipeline.analyze(cfg)
     if not results:
         print("Keine Ergebnisse (Netzwerk/Ticker prüfen).")

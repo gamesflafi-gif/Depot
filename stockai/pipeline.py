@@ -195,6 +195,11 @@ def _combined_training_data(cfg: Config) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     combined = pd.concat(frames, ignore_index=True)
+    # Sicherstellen, dass alle Feature-Spalten existieren (Randfall: leere
+    # Historie + Live-Zeilen ohne alle Spalten) -> sonst KeyError beim Training.
+    for col in FEATURE_COLUMNS:
+        if col not in combined.columns:
+            combined[col] = np.nan
     # Nach Datum sortieren, damit der zeitliche Train/Test-Split korrekt ist
     # (sonst landen ganze Ticker im Test -> verzerrte Bewertung).
     if "date" in combined.columns:
@@ -217,6 +222,15 @@ def train(cfg: Config) -> TrainResult:
         data, target_col="target", test_size=float(cfg.model.get("test_size", 0.2))
     )
 
+    # Anzahl der real gelabelten Live-Snapshots direkt aus dem Store ablesen
+    # (kein erneuter, teurer Aufbau des Historien-Datensatzes nötig).
+    store_df = FeatureStore(cfg.store_dir).load()
+    n_live_labeled = (
+        int(store_df["target"].notna().sum())
+        if not store_df.empty and "target" in store_df.columns
+        else 0
+    )
+
     model_store = ModelStore(cfg.model_dir)
     model_store.save_model(predictor)
     model_store.append_history(
@@ -225,9 +239,7 @@ def train(cfg: Config) -> TrainResult:
             "n_samples": int(len(data)),
             "n_train": result.n_train,
             "n_test": result.n_test,
-            "n_live_labeled": int(
-                len(data) - len(build_history_dataset(cfg))
-            ) if not data.empty else 0,
+            "n_live_labeled": n_live_labeled,
             "metrics": result.metrics,
             "top_features": dict(list(result.feature_importance.items())[:8]),
         }

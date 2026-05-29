@@ -87,6 +87,21 @@ def test_advisor_avoid_on_low_prob():
     assert rec.action == "MEIDEN"
 
 
+def test_demo_prices_periods_are_consistent():
+    """Verschiedene Zeiträume müssen Ausschnitte derselben Reihe sein."""
+    from stockai.data.demo import demo_prices
+
+    long = demo_prices("DEMO", period="2y")
+    short = demo_prices("DEMO", period="3mo")
+    assert len(short) < len(long)
+    # Das kurze Fenster ist exakt der Schwanz des langen Fensters
+    tail = long["Close"].iloc[-len(short):].values
+    assert np.allclose(tail, short["Close"].values)
+    # Determinismus über mehrere Aufrufe
+    assert np.allclose(demo_prices("DEMO", period="2y")["Close"].values,
+                       long["Close"].values)
+
+
 def test_portfolio_allocation_and_cap():
     from types import SimpleNamespace
     from stockai.portfolio import build_portfolio
