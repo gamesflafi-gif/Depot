@@ -85,6 +85,23 @@ def test_advisor_boom_signal():
     assert rec.action == "BOOM"
 
 
+def test_advisor_no_buy_on_negative_expected_return():
+    # Positives Wahrscheinlichkeits-Signal, aber negativ erwartete Rendite
+    rec = recommend(
+        profit_probability=0.66, rsi_14=55, momentum_5d=0.05,
+        price_vs_high_20=0.9, macd_hist=0.5, sentiment_mean=0.3,
+        expected_return=-0.02,
+    )
+    assert rec.action not in ("BOOM", "KAUFEN")
+    # Ohne (oder mit positiver) erwarteter Rendite bleibt es ein Kauf/Boom
+    rec2 = recommend(
+        profit_probability=0.66, rsi_14=55, momentum_5d=0.05,
+        price_vs_high_20=0.9, macd_hist=0.5, sentiment_mean=0.3,
+        expected_return=0.02,
+    )
+    assert rec2.action == "BOOM"
+
+
 def test_advisor_avoid_on_low_prob():
     rec = recommend(
         profit_probability=0.3, rsi_14=50, momentum_5d=0.0,

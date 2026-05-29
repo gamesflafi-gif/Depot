@@ -530,6 +530,7 @@ def analyze(
             price_vs_high_20=row.get("price_vs_high_20", 1.0),
             macd_hist=macd_hist,
             sentiment_mean=row.get("sent_mean", 0.0),
+            expected_return=expected_return,
         )
         results.append(
             TickerAnalysis(
