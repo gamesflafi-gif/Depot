@@ -18,6 +18,7 @@ sparplan.md
 
 # Logs & Caches
 *.log
+logs/
 .cache/
 .pytest_cache/
 

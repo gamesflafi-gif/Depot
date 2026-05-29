@@ -275,6 +275,10 @@ Markdown-Datei ab.
 > nicht möglich – die obigen Bausteine (Webhook + cron) machen es auf deinem
 > eigenen Rechner/Server möglich.
 
+**Komplette Schritt-für-Schritt-Anleitung für einen Mini-Server (≈5 €/Monat):
+siehe [DEPLOY.md](DEPLOY.md)** – inkl. fertiger Skripte (`deploy/install.sh`,
+`deploy/install_cron.sh`) und optionalem Docker (`docker compose up -d`).
+
 ### Diagnose
 
 ```bash
