@@ -5,8 +5,8 @@
 #           (benötigt Netzwerkzugriff auf finance.yahoo.com & news.google.com –
 #            in gesperrten Umgebungen ggf. die Netzwerk-Allowlist anpassen)
 #   demo  = synthetische Offline-Daten zum Ausprobieren der Lern-Logik
-# Standard ist "demo", damit das Projekt überall sofort läuft.
-data_source: demo
+# Live-Betrieb: echte Daten (benötigt Internet; auf dem Server vorhanden).
+data_source: live
 
 # Kursquelle im Live-Modus (anbieter-unabhängig, kein API-Key nötig):
 #   auto     -> erst yfinance, dann direkter Stooq-CSV-Download (Fallback)

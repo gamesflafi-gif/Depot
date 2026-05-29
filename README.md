@@ -248,10 +248,9 @@ die Hosts blockiert sind (Fehler „Host not in allowlist“), muss die Policy
 entsprechend angepasst werden. Doku:
 <https://code.claude.com/docs/en/claude-code-on-the-web>
 
-> Im aktuellen Standard ist `demo` aktiv, damit das Projekt überall sofort
-> lauffähig ist. Die Demo-Daten sind synthetisch, enthalten aber ein bewusst
-> eingebautes, lernbares Trend-/News-Signal – so ist die Selbstverbesserung
-> messbar (`simulate` / `backtest` zeigen einen positiven Mehrwert).
+> Standard ist `data_source: live` (echte Daten – benötigt Internet). Zum
+> Ausprobieren ohne Netzwerk auf `demo` umstellen oder `--source demo` nutzen;
+> die Demo-Daten sind synthetisch mit einem eingebauten Lern-Signal.
 
 ### Optional: NewsAPI-Key für mehr News
 
