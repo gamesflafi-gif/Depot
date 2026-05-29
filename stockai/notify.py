@@ -47,6 +47,13 @@ def render_savings_plan(plan) -> str:
         )
     if not plan.satellite_positions:
         lines.append("- (aktuell keine – defensiv im Core)")
+    if plan.crypto_positions:
+        lines += ["", "## Krypto (Beimischung, höheres Risiko)"]
+        for p in plan.crypto_positions:
+            lines.append(
+                f"- **{p.instrument}**: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
+                f"– P(Profit) {p.probability:.0%}"
+            )
     if plan.notes:
         lines += ["", "## Hinweise"]
         lines += [f"- {n}" for n in plan.notes]

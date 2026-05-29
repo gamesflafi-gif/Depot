@@ -39,6 +39,15 @@ def _seed(ticker: str) -> int:
     return int(hashlib.sha256(ticker.encode()).hexdigest(), 16) % (2**32)
 
 
+# Bekannte Krypto-Kürzel (für höhere Demo-Volatilität, deterministisch am Ticker).
+_CRYPTO_HINTS = {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "BNB", "DOT", "LTC", "AVAX"}
+
+
+def _is_crypto(ticker: str) -> bool:
+    t = ticker.strip().upper()
+    return t.endswith("-USD") or t.split("-")[0] in _CRYPTO_HINTS
+
+
 # Länge der kanonischen Vollreihe (Business-Tage); alle Zeiträume werden als
 # Ausschnitt hieraus gebildet, damit sie konsistent zueinander sind.
 _CANONICAL_DAYS = 2520  # ~10 Jahre
@@ -64,18 +73,23 @@ def _canonical_arrays(ticker: str) -> tuple:
     """
     n = _CANONICAL_DAYS
     rng = np.random.default_rng(_seed(ticker))
-    base_vol = rng.uniform(0.012, 0.018)
+    # Krypto: deutlich höhere Volatilität und stärkere Trend-Regime.
+    crypto = _is_crypto(ticker)
+    base_vol = rng.uniform(0.03, 0.05) if crypto else rng.uniform(0.012, 0.018)
+    dsig = 0.0018 if crypto else 0.0009
+    clip = 0.009 if crypto else 0.0045
+    shock_p = 0.03 if crypto else 0.015
 
     # Moderate, realistisch verrauschte Trend-Regime (kleiner Edge, kein
     # „sauberes" Signal). Die Drift ist begrenzt -> realistische Kurse.
     drift = np.zeros(n)
-    d = rng.normal(0, 0.0009)
+    d = rng.normal(0, dsig)
     for i in range(n):
-        d = 0.975 * d + rng.normal(0, 0.0009)
-        d = float(np.clip(d, -0.0045, 0.0045))
+        d = 0.975 * d + rng.normal(0, dsig)
+        d = float(np.clip(d, -clip, clip))
         drift[i] = d
     rets = drift + rng.normal(0, base_vol, n)
-    shocks = rng.choice([0, 1], size=n, p=[0.985, 0.015]) * rng.normal(0, 0.05, n)
+    shocks = rng.choice([0, 1], size=n, p=[1 - shock_p, shock_p]) * rng.normal(0, 0.08 if crypto else 0.05, n)
     rets = rets + shocks
     start = rng.uniform(40, 400)
     close = start * np.cumprod(1 + rets)

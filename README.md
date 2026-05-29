@@ -88,6 +88,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
+- **Mehrere Anlageklassen:** Aktien, **ETFs** und **Krypto** werden gemeinsam
+  analysiert (alles OHLCV). Krypto wird in der Demo volatiler modelliert und im
+  Sparplan als kleiner, risikoreicher Topf behandelt; yfinance (`BTC-USD`) und
+  Stooq (`btcusd`) liefern echte Krypto-Kurse.
 - **Anbieter-unabhängige Kursdaten:** kein Zwang zu einer einzelnen API – der
   Live-Modus lädt Kurse über yfinance **oder** direkt als CSV von Stooq (ohne
   Key) und fällt automatisch um (`price_source: auto`). News kommen direkt per
@@ -211,6 +215,8 @@ Wichtigste Stellschrauben:
 | `data_source` | `demo` (offline, synthetisch) oder `live` (echte Daten) |
 | `price_source` | `auto` (yfinance + direkter Stooq-Fallback), `yfinance` oder `stooq` |
 | `tickers` | Liste der beobachteten Aktien |
+| `etfs` | ETFs/Fonds (Core des Sparplans) |
+| `crypto` | Kryptowährungen (kleiner, risikoreicher Sparplan-Topf) |
 | `horizon_days` | Über wie viele Handelstage die Profitabilität vorhergesagt wird |
 | `profit_threshold` | Ab welcher Rendite es als „profitabel“ gilt |
 | `model.type` | `auto` (CV-Auswahl), `hist_gradient_boosting`, `gradient_boosting`, `random_forest`, `logistic`, `ensemble`, `sgd_online` |

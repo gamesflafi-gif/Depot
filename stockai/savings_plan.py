@@ -46,6 +46,10 @@ class SavingsPlan:
     def satellite_positions(self) -> list[PlanPosition]:
         return [p for p in self.positions if p.kind == "Aktie"]
 
+    @property
+    def crypto_positions(self) -> list[PlanPosition]:
+        return [p for p in self.positions if p.kind == "Krypto"]
+
 
 _BUY = {"BOOM", "KAUFEN"}
 
@@ -56,6 +60,8 @@ def build_savings_plan(
     core_share: float = 0.5,
     max_stock_weight: float = 0.15,
     max_stocks: int = 5,
+    crypto_share: float = 0.10,
+    max_crypto: int = 2,
 ) -> SavingsPlan:
     """Erstellt einen Sparplan aus dem aktuellen Analyse-Ranking.
 
@@ -64,13 +70,18 @@ def build_savings_plan(
         core_share: Anteil, der in breite ETFs (Core) fließt.
         max_stock_weight: maximaler Anteil einer Einzelaktie am Sparbetrag.
         max_stocks: maximale Anzahl Einzelaktien (Satelliten).
+        crypto_share: maximaler Anteil für Krypto (höheres Risiko -> klein).
+        max_crypto: maximale Anzahl Krypto-Positionen.
     """
     from stockai import pipeline
 
     etfs = list(cfg.etfs)
     stocks = list(cfg.tickers)
-    analyses = pipeline.analyze(cfg, universe=stocks + etfs)
+    cryptos = list(getattr(cfg, "crypto", []))
+    analyses = pipeline.analyze(cfg, universe_override=stocks + etfs + cryptos)
     by_ticker = {a.ticker: a for a in analyses}
+    # Krypto reduziert den für Aktien-Satelliten verfügbaren Anteil
+    crypto_share = crypto_share if cryptos else 0.0
 
     plan = SavingsPlan(monthly_amount=monthly_amount, core_share=core_share)
 
@@ -90,7 +101,7 @@ def build_savings_plan(
         core_share = 0.0
 
     # --- Satelliten: beste Aktien laut Modell ---------------------------- #
-    sat_budget_share = 1.0 - core_share
+    sat_budget_share = max(0.0, 1.0 - core_share - crypto_share)
     candidates = [
         by_ticker[t] for t in stocks
         if t in by_ticker and by_ticker[t].action in _BUY
@@ -136,6 +147,30 @@ def build_savings_plan(
             for p in plan.core_positions:
                 p.weight += extra
                 p.monthly = round(monthly_amount * p.weight, 2)
+
+    # --- Krypto-Topf: klein gehalten (höheres Risiko) -------------------- #
+    if crypto_share > 0:
+        crypto_cands = [
+            by_ticker[t] for t in cryptos
+            if t in by_ticker and by_ticker[t].action in _BUY
+        ]
+        crypto_cands.sort(key=lambda a: a.profit_probability, reverse=True)
+        crypto_cands = crypto_cands[:max_crypto]
+        if crypto_cands:
+            craw = {a.ticker: max(1e-6, (a.profit_probability - 0.5)) * max(0.1, a.confidence)
+                    for a in crypto_cands}
+            ctotal = sum(craw.values())
+            for a in crypto_cands:
+                w = (craw[a.ticker] / ctotal) * crypto_share
+                plan.positions.append(PlanPosition(
+                    instrument=a.ticker, kind="Krypto",
+                    monthly=round(monthly_amount * w, 2), weight=w,
+                    probability=a.profit_probability, action=a.action,
+                    reason=f"Krypto-Beimischung (höheres Risiko): "
+                           f"P(Profit)={a.profit_probability:.0%}",
+                ))
+        else:
+            plan.notes.append("Krypto: aktuell kein positives Signal – ausgelassen.")
 
     # Hinweis auf gemiedene Einzelaktien (ETFs bleiben bewusst Core/Cost-Averaging)
     avoid = [a.ticker for a in analyses

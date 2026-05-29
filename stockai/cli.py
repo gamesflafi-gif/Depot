@@ -255,14 +255,15 @@ def cmd_analyze(cfg, args) -> None:
         print("Keine Ergebnisse (Netzwerk/Ticker prüfen).")
         return
 
-    print(f"{'Ticker':7s} {'Kurs':>9s} {'P(Profit)':>10s} {'E[Rendite]':>11s} "
-          f"{'Aktion':>11s} {'RSI':>5s} {'Sentiment':>10s} {'News':>5s}")
-    print("-" * 82)
+    print(f"{'Ticker':7s} {'Typ':>7s} {'Kurs':>10s} {'P(Profit)':>10s} {'E[Rendite]':>11s} "
+          f"{'Aktion':>11s} {'RSI':>5s} {'Sentiment':>10s}")
+    print("-" * 84)
     for r in results:
         er = f"{r.expected_return:+.1%}" if r.expected_return is not None else "  –"
         print(
-            f"{r.ticker:7s} {r.last_price:9.2f} {r.profit_probability:10.1%} {er:>11s} "
-            f"{r.action:>11s} {r.rsi_14:5.0f} {r.sentiment_mean:+10.2f} {r.news_count:5d}"
+            f"{r.ticker:7s} {r.asset_class:>7s} {r.last_price:10.2f} "
+            f"{r.profit_probability:10.1%} {er:>11s} "
+            f"{r.action:>11s} {r.rsi_14:5.0f} {r.sentiment_mean:+10.2f}"
         )
 
     # Top-Empfehlungen ausführlich

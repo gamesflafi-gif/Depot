@@ -64,11 +64,11 @@ def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
     ``period`` überschreibt optional den Kurszeitraum (z.B. "10y" für eine
     lange Simulation), ohne die Trainingskonfiguration zu ändern.
     """
-    from stockai.pipeline import FEATURE_COLUMNS, add_market_features
+    from stockai.pipeline import FEATURE_COLUMNS, add_market_features, universe
 
     horizon = cfg.horizon_days
     rows: list[pd.DataFrame] = []
-    for ticker in cfg.tickers:
+    for ticker in universe(cfg):
         prices = (
             provider.get_prices_window(cfg, ticker, period)
             if period else provider.get_prices(cfg, ticker)

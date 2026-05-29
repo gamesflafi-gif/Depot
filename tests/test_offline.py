@@ -146,6 +146,39 @@ def test_stooq_csv_parser_and_symbol():
     assert parse_stooq_csv("kaputt\n1,2,3").empty
 
 
+def test_crypto_support():
+    """Krypto: höhere Demo-Volatilität, Anlageklasse, Sparplan-Topf."""
+    from stockai.data import demo
+    from stockai.data.stooq import _to_symbol
+    from stockai.config import load_config
+    from stockai import pipeline
+    from stockai.savings_plan import build_savings_plan
+
+    # Krypto-Demo ist deutlich volatiler als eine Aktie
+    vol_btc = demo.demo_prices("BTC", "1y")["Close"].pct_change().std()
+    vol_stk = demo.demo_prices("AAPL", "1y")["Close"].pct_change().std()
+    assert vol_btc > vol_stk
+
+    assert _to_symbol("BTC-USD") == "btcusd"   # Krypto-Symbol-Mapping
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB"]
+    cfg.etfs = ["WORLD"]
+    cfg.crypto = ["BTC", "ETH"]
+    assert pipeline.asset_class(cfg, "BTC") == "Krypto"
+    assert pipeline.asset_class(cfg, "WORLD") == "ETF"
+    assert pipeline.asset_class(cfg, "AAA") == "Aktie"
+    assert set(pipeline.universe(cfg)) == {"AAA", "BBB", "WORLD", "BTC", "ETH"}
+
+    plan = build_savings_plan(cfg, monthly_amount=100.0, core_share=0.5,
+                              crypto_share=0.1)
+    total = sum(p.monthly for p in plan.positions)
+    assert total <= 100.0 + 0.01
+    # Krypto-Anteil bleibt klein (<= 10% + Toleranz)
+    assert sum(p.monthly for p in plan.crypto_positions) <= 10.5
+
+
 def test_sector_cap_diversification():
     from stockai.portfolio import _apply_sector_cap
 
@@ -276,6 +309,8 @@ def test_demo_pipeline_train_and_learning_curve(tmp_path):
         "model_dir": str(tmp_path / "models"),
     }
     cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.etfs = []
+    cfg.crypto = []
 
     result = pipeline.train(cfg)
     assert result.n_train > 0 and 0.0 <= result.metrics["accuracy"] <= 1.0

@@ -43,6 +43,25 @@ FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
 KEY_COLS = ["ticker", "date"]
 
 
+def universe(cfg: Config) -> list[str]:
+    """Alle beobachteten Werte über die Anlageklassen hinweg (dedupliziert):
+    Aktien + ETFs + Krypto."""
+    seen: list[str] = []
+    for t in list(cfg.tickers) + list(cfg.etfs) + list(getattr(cfg, "crypto", [])):
+        if t not in seen:
+            seen.append(t)
+    return seen
+
+
+def asset_class(cfg: Config, ticker: str) -> str:
+    """Anlageklasse eines Tickers: 'Krypto', 'ETF' oder 'Aktie'."""
+    if ticker in getattr(cfg, "crypto", []):
+        return "Krypto"
+    if ticker in cfg.etfs:
+        return "ETF"
+    return "Aktie"
+
+
 def add_market_features(df: pd.DataFrame) -> pd.DataFrame:
     """Ergänzt Querschnitts-Features über alle Ticker je Datum.
 
@@ -72,6 +91,7 @@ class TickerAnalysis:
     profit_probability: float
     sentiment_mean: float
     news_count: int
+    asset_class: str = "Aktie"
     rsi_14: float = 50.0
     momentum_5d: float = 0.0
     price_vs_high_20: float = 1.0
@@ -98,7 +118,7 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
     Sentiment-Features werden hier neutral (0) gesetzt (siehe Modul-Doc).
     """
     frames: list[pd.DataFrame] = []
-    for ticker in cfg.tickers:
+    for ticker in universe(cfg):
         prices = provider.get_prices(cfg, ticker)
         if prices.empty or len(prices) < 60:
             log.warning("Überspringe %s (zu wenig Kurshistorie).", ticker)
@@ -180,7 +200,7 @@ def snapshot_live(cfg: Config) -> int:
     store = FeatureStore(cfg.store_dir)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows: list[dict] = []
-    for ticker in cfg.tickers:
+    for ticker in universe(cfg):
         result = _live_feature_row(cfg, ticker)
         if result is None:
             continue
@@ -396,13 +416,13 @@ def learning_curve(cfg: Config, steps: int = 5) -> list[dict]:
 
 # --------------------------------------------------------------------------- #
 def analyze(
-    cfg: Config, retrain_if_missing: bool = True, universe: list[str] | None = None
+    cfg: Config, retrain_if_missing: bool = True, universe_override: list[str] | None = None
 ) -> list[TickerAnalysis]:
     """Live-Analyse: berechnet je Ticker die Profitabilitäts-Wahrscheinlichkeit.
 
     Das Ranking zeigt, *wer* wahrscheinlich profitabel wird und *wohin*
-    (relativ) das Kapital tendiert. ``universe`` überschreibt optional die zu
-    bewertenden Ticker (z.B. Aktien + ETFs für den Sparplan).
+    (relativ) das Kapital tendiert. ``universe_override`` ersetzt optional die zu
+    bewertenden Ticker; Standard ist das gesamte Universum (Aktien+ETFs+Krypto).
     """
     model_store = ModelStore(cfg.model_dir)
     predictor = model_store.load_model()
@@ -416,7 +436,8 @@ def analyze(
     # 1. Durchgang: Features je Ticker sammeln
     collected: list[tuple[str, dict, list, float]] = []
     rows: list[dict] = []
-    for ticker in (universe if universe is not None else cfg.tickers):
+    tickers = universe_override if universe_override is not None else universe(cfg)
+    for ticker in tickers:
         live = _live_feature_row(cfg, ticker)
         if live is None:
             continue
@@ -459,6 +480,7 @@ def analyze(
                 ticker=ticker,
                 last_price=last_price,
                 profit_probability=proba,
+                asset_class=asset_class(cfg, ticker),
                 sentiment_mean=row.get("sent_mean", 0.0),
                 news_count=int(row.get("news_count", 0)),
                 rsi_14=row.get("rsi_14", 50.0),

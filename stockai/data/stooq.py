@@ -28,11 +28,16 @@ _PERIOD_DAYS = {
 
 
 def _to_symbol(ticker: str) -> str:
-    """Bildet einen Ticker auf das Stooq-Symbol ab (z.B. AAPL -> aapl.us)."""
+    """Bildet einen Ticker auf das Stooq-Symbol ab.
+
+    Beispiele: AAPL -> aapl.us, VWCE.DE -> vwce.de, BTC-USD -> btcusd.
+    """
     t = ticker.strip().lower()
-    if "." in t:          # bereits mit Börsensuffix, z.B. vwce.de
+    if t.endswith("-usd"):       # Krypto, z.B. btc-usd -> btcusd
+        return t.replace("-", "")
+    if "." in t:                 # bereits mit Börsensuffix
         return t
-    return f"{t}.us"      # US-Werte brauchen das .us-Suffix
+    return f"{t}.us"             # US-Werte brauchen das .us-Suffix
 
 
 def parse_stooq_csv(raw: str) -> pd.DataFrame:

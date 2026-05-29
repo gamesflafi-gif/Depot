@@ -78,6 +78,13 @@ etfs:
   - WORLD   # breiter Welt-ETF (Demo-Platzhalter)
   - SP500   # US-Leitindex (Demo-Platzhalter)
 
+# Kryptowährungen (höheres Risiko -> im Sparplan eigener, kleiner Topf).
+# Demo-Platzhalter; für echte Daten z.B.: BTC-USD, ETH-USD, SOL-USD (yfinance).
+crypto:
+  - BTC     # Bitcoin (Demo-Platzhalter)
+  - ETH     # Ethereum (Demo-Platzhalter)
+  - SOL     # Solana (Demo-Platzhalter)
+
 # Wie viel Kurs-Historie wird für Training/Features geladen?
 history_period: "2y"        # z.B. 1y, 2y, 5y, max
 history_interval: "1d"      # 1d = Tageskerzen
