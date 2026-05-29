@@ -64,8 +64,8 @@ def _run_analysis():
 
 
 # --- Hauptbereich --------------------------------------------------------- #
-tab_overview, tab_detail, tab_learning = st.tabs(
-    ["🎯 Empfehlungen", "🔍 Detail & News", "🧠 Lernfortschritt"]
+tab_overview, tab_detail, tab_portfolio, tab_learning = st.tabs(
+    ["🎯 Empfehlungen", "🔍 Detail & News", "💼 Portfolio", "🧠 Lernfortschritt"]
 )
 
 with tab_overview:
@@ -128,6 +128,47 @@ with tab_detail:
                         f"- [{h['sentiment']:+.2f}] [{h['title']}]({h['link']}) "
                         f"_( {h['source']} )_"
                     )
+
+with tab_portfolio:
+    from types import SimpleNamespace
+    from stockai.portfolio import build_portfolio
+
+    st.write("**Allokationsvorschlag** – wohin wie viel Kapital fließen sollte.")
+    capital = st.number_input("Verfügbares Kapital", min_value=100.0,
+                              value=10_000.0, step=500.0)
+    max_pos = st.slider("Max. Anteil je Position", 0.1, 1.0, 0.25, 0.05)
+    try:
+        results = _run_analysis()
+    except Exception:
+        results = []
+    if results:
+        pf = build_portfolio(
+            [SimpleNamespace(**r) for r in results],
+            capital=capital, max_position_pct=max_pos,
+        )
+        if pf.allocations:
+            alloc_df = pd.DataFrame([{
+                "Ticker": a.ticker, "Aktion": a.action, "Anteil": a.weight,
+                "Betrag": a.amount, "Stück": a.shares, "Kurs": a.last_price,
+            } for a in pf.allocations])
+            st.dataframe(
+                alloc_df.style.format({
+                    "Anteil": "{:.1%}", "Betrag": "{:,.2f}",
+                    "Stück": "{:.3f}", "Kurs": "{:.2f}",
+                }),
+                use_container_width=True, hide_index=True,
+            )
+            c1, c2 = st.columns(2)
+            c1.metric("Investiert", f"{pf.invested:,.2f}",
+                      f"{pf.invested / pf.capital:.0%}")
+            c2.metric("Cash", f"{pf.cash:,.2f}", f"{pf.cash / pf.capital:.0%}")
+            pie = px.pie(alloc_df, names="Ticker", values="Betrag",
+                         title="Kapitalverteilung")
+            st.plotly_chart(pie, use_container_width=True)
+        else:
+            st.info("Aktuell keine Kaufkandidaten – Empfehlung: abwarten.")
+        if pf.sells:
+            st.warning(f"Verkaufen/Meiden: {', '.join(pf.sells)}")
 
 with tab_learning:
     history = ModelStore(cfg.model_dir).load_history()

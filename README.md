@@ -38,6 +38,7 @@ stockai/
 │   ├── predictor.py       # lernendes ML-Modell + Bewertung
 │   └── store.py           # Feature-Store, Modellspeicher, Lernhistorie
 ├── advisor.py             # Entscheidungs-Schicht: BOOM/KAUFEN/HALTEN/VERKAUFEN
+├── portfolio.py           # Allokations-Engine (wohin wie viel Kapital)
 ├── pipeline.py            # Orchestrierung (train/analyze/learn/…)
 ├── backtest.py            # Walk-Forward-Backtest
 └── cli.py                 # Kommandozeilen-Interface
@@ -87,12 +88,18 @@ python -m stockai.cli learn
 # 4) Lernkurve: belegt, dass mehr Daten zu höherer Präzision führen
 python -m stockai.cli simulate
 
-# 5) Strategie historisch testen
+# 5) Konkreter Allokationsvorschlag (wohin wie viel Kapital)
+python -m stockai.cli portfolio --capital 10000
+
+# 6) Strategie historisch testen
 python -m stockai.cli backtest
 
-# 6) Lernfortschritt ansehen
+# 7) Lernfortschritt ansehen
 python -m stockai.cli history
 ```
+
+Nach `pip install -e .` steht der Befehl auch direkt als `stockai` zur Verfügung
+(z. B. `stockai analyze`, `stockai portfolio`).
 
 ## Dashboard
 
@@ -127,9 +134,25 @@ entsprechend angepasst werden. Doku:
 <https://code.claude.com/docs/en/claude-code-on-the-web>
 
 > Im aktuellen Standard ist `demo` aktiv, damit das Projekt überall sofort
-> lauffähig ist. Die Demo-Daten sind synthetisch (Random-Walk) und enthalten
-> bewusst kein „echtes“ Marktsignal – die Kennzahlen liegen daher nahe 0,5.
-> Mit echten Live-Daten zeigt das Modell reale Muster.
+> lauffähig ist. Die Demo-Daten sind synthetisch, enthalten aber ein bewusst
+> eingebautes, lernbares Trend-/News-Signal – so ist die Selbstverbesserung
+> messbar (`simulate` / `backtest` zeigen einen positiven Mehrwert).
+
+### Optional: NewsAPI-Key für mehr News
+
+Zusätzlich zu den RSS-Quellen kann NewsAPI.org genutzt werden. Einfach einen
+kostenlosen Key als Umgebungsvariable setzen – die Quelle wird dann automatisch
+mitgenutzt, andernfalls ohne Fehler übersprungen:
+
+```bash
+export STOCKAI_NEWSAPI_KEY="dein_key"
+```
+
+### Automatische Einrichtung (Claude Code on the Web)
+
+Ein SessionStart-Hook (`.claude/settings.json` → `.claude/hooks/setup.sh`)
+installiert die Abhängigkeiten beim Start einer Web-Session automatisch, sodass
+Tests, CLI und Dashboard sofort lauffähig sind.
 
 ---
 

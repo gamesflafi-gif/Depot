@@ -87,6 +87,41 @@ def test_advisor_avoid_on_low_prob():
     assert rec.action == "MEIDEN"
 
 
+def test_portfolio_allocation_and_cap():
+    from types import SimpleNamespace
+    from stockai.portfolio import build_portfolio
+
+    analyses = [
+        SimpleNamespace(ticker="A", action="BOOM", profit_probability=0.8,
+                        confidence=0.8, last_price=100.0),
+        SimpleNamespace(ticker="B", action="KAUFEN", profit_probability=0.6,
+                        confidence=0.6, last_price=50.0),
+        SimpleNamespace(ticker="C", action="VERKAUFEN", profit_probability=0.3,
+                        confidence=0.7, last_price=20.0),
+    ]
+    pf = build_portfolio(analyses, capital=10_000.0, max_position_pct=0.5)
+    tickers = {a.ticker for a in pf.allocations}
+    assert tickers == {"A", "B"}            # nur Kaufkandidaten
+    assert "C" in pf.sells                   # Verkaufssignal erfasst
+    assert all(a.weight <= 0.5 + 1e-6 for a in pf.allocations)  # Cap eingehalten
+    assert abs(pf.invested + pf.cash - pf.capital) < 1e-6        # Kapital erhalten
+    assert pf.allocations[0].ticker == "A"   # stärkstes Signal zuerst
+
+
+def test_portfolio_no_candidates():
+    from types import SimpleNamespace
+    from stockai.portfolio import build_portfolio
+
+    analyses = [
+        SimpleNamespace(ticker="X", action="MEIDEN", profit_probability=0.3,
+                        confidence=0.6, last_price=10.0),
+    ]
+    pf = build_portfolio(analyses, capital=5_000.0)
+    assert pf.allocations == []
+    assert pf.cash == 5_000.0
+    assert "X" in pf.sells
+
+
 def test_demo_pipeline_train_and_learning_curve(tmp_path):
     """End-to-End im Demo-Modus (offline): trainieren + Lernkurve erzeugen."""
     from stockai import pipeline

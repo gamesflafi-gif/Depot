@@ -128,6 +128,37 @@ def cmd_simulate(cfg, args) -> None:
     print("\n  → Die Lernhistorie wurde aktualisiert (siehe 'history' / Dashboard).")
 
 
+def cmd_portfolio(cfg, args) -> None:
+    """Konkreter Allokationsvorschlag auf Basis der Analyse."""
+    from stockai.portfolio import build_portfolio
+
+    print(f"Erstelle Portfolio-Vorschlag für {args.capital:,.0f} Kapital …\n")
+    analyses = pipeline.analyze(cfg)
+    if not analyses:
+        print("Keine Analyse-Ergebnisse (Netzwerk/Ticker prüfen).")
+        return
+    pf = build_portfolio(
+        analyses, capital=args.capital, max_position_pct=args.max_position
+    )
+    if not pf.allocations:
+        print("Aktuell keine Kaufkandidaten – Empfehlung: investiert nicht / abwarten.")
+    else:
+        print(f"{'Ticker':7s} {'Aktion':>8s} {'Anteil':>8s} {'Betrag':>12s} "
+              f"{'Stück':>10s} {'Kurs':>9s}")
+        print("-" * 62)
+        for a in pf.allocations:
+            print(
+                f"{a.ticker:7s} {a.action:>8s} {a.weight:8.1%} {a.amount:12,.2f} "
+                f"{a.shares:10.3f} {a.last_price:9.2f}"
+            )
+        print("-" * 62)
+        print(f"{'Investiert':7s} {'':>8s} {pf.invested / pf.capital:8.1%} "
+              f"{pf.invested:12,.2f}")
+        print(f"{'Cash':7s} {'':>8s} {pf.cash / pf.capital:8.1%} {pf.cash:12,.2f}")
+    if pf.sells:
+        print(f"\n  Verkaufen/Meiden: {', '.join(pf.sells)}")
+
+
 def cmd_backtest(cfg, args) -> None:
     print("Führe Walk-Forward-Backtest durch …")
     res = bt.run_backtest(cfg, prob_threshold=args.threshold)
@@ -181,6 +212,11 @@ def build_parser() -> argparse.ArgumentParser:
     ps = sub.add_parser("simulate", help="Lernkurve: Güte vs. Datenmenge zeigen")
     ps.add_argument("--steps", type=int, default=5, help="Anzahl Datenmengen-Stufen")
 
+    pp = sub.add_parser("portfolio", help="Allokationsvorschlag (wohin wie viel)")
+    pp.add_argument("--capital", type=float, default=10_000.0, help="Gesamtkapital")
+    pp.add_argument("--max-position", type=float, default=0.25,
+                    help="Max. Anteil je Position (0..1)")
+
     pb = sub.add_parser("backtest", help="Strategie auf Historie testen")
     pb.add_argument("--threshold", type=float, default=0.55)
 
@@ -195,6 +231,7 @@ _COMMANDS = {
     "label": cmd_label,
     "learn": cmd_learn,
     "simulate": cmd_simulate,
+    "portfolio": cmd_portfolio,
     "backtest": cmd_backtest,
     "history": cmd_history,
 }
