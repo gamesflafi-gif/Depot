@@ -19,6 +19,10 @@ messbar besser.
 > ⚠️ **Keine Anlageberatung.** Dieses Projekt ist ein Lern-/Analysewerkzeug.
 > Entscheidungen über echtes Geld triffst du selbst und auf eigenes Risiko.
 
+> 🚀 **Du willst es einfach live laufen lassen?** Die komplette
+> Schritt-für-Schritt-Anleitung (Server kaufen → installieren → Telegram →
+> Automatik) steht in **[ANLEITUNG.md](ANLEITUNG.md)**.
+
 ---
 
 ## Architektur
