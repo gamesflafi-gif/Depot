@@ -195,6 +195,28 @@ def test_briefing_and_moves(tmp_path):
     assert br2.new_buys or br2.prob_moves
 
 
+def test_top_report(tmp_path):
+    """Wöchentlicher Top-N-Überblick (beide Richtungen)."""
+    from stockai import briefing as bf
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+    cfg.etfs = []
+    cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    top, bottom = bf.build_top(cfg, n=3)
+    assert len(top) == 3 and len(bottom) == 3
+    # Top sind nach Wahrscheinlichkeit sortiert (höchste zuerst)
+    assert top[0].profit_probability >= top[-1].profit_probability
+    assert top[0].profit_probability >= bottom[0].profit_probability
+    report = bf.render_top(top, bottom, 3)
+    assert "Top 3 Chancen" in report and "Top 3 Risiken" in report
+
+
 def test_crypto_support():
     """Krypto: höhere Demo-Volatilität, Anlageklasse, Sparplan-Topf."""
     from stockai.data import demo

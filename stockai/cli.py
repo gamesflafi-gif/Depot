@@ -427,6 +427,21 @@ def cmd_briefing(cfg, args) -> None:
               ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
+def cmd_top(cfg, args) -> None:
+    """Wöchentlicher Top-N-Überblick in beide Richtungen; optional per Telegram."""
+    from stockai import briefing as bf
+    from stockai import notify
+
+    print(f"Erstelle Top-{args.n}-Überblick …\n")
+    top, bottom = bf.build_top(cfg, n=args.n)
+    report = bf.render_top(top, bottom, args.n)
+    print(report)
+    if args.notify:
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
+
+
 def cmd_sparplan(cfg, args) -> None:
     """Erstellt einen Core-Satellite-Sparplan aus den aktuellen Analysen."""
     from stockai.savings_plan import build_savings_plan
@@ -544,6 +559,10 @@ def build_parser() -> argparse.ArgumentParser:
     pbf.add_argument("--top-n", type=int, default=5)
     pbf.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
 
+    pt = sub.add_parser("top", help="Top-N in beide Richtungen (z.B. wöchentlich)")
+    pt.add_argument("--n", type=int, default=5)
+    pt.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
+
     psp = sub.add_parser("sparplan", help="Sparplan (ETF-Core + beste Aktien) erstellen")
     psp.add_argument("--monthly", type=float, default=100.0, help="Sparbetrag €/Monat")
     psp.add_argument("--core-share", type=float, default=0.5,
@@ -590,6 +609,7 @@ _COMMANDS = {
     "simulate": cmd_simulate,
     "portfolio": cmd_portfolio,
     "briefing": cmd_briefing,
+    "top": cmd_top,
     "sparplan": cmd_sparplan,
     "strategy": cmd_strategy,
     "backtest": cmd_backtest,
