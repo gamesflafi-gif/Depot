@@ -31,13 +31,53 @@ def _setup_logging(verbose: bool) -> None:
 def cmd_train(cfg, args) -> None:
     print("Trainiere Modell auf historischen Kursen + gesammelten Lerndaten …")
     result = pipeline.train(cfg)
+    model = ModelStore(cfg.model_dir).load_model()
+    mtype = model.model_type if model else cfg.model.get("type")
+    calib = " (kalibriert)" if model and model.calibrate else ""
     print(f"\n✔ Training abgeschlossen ({result.n_train} Train / {result.n_test} Test)")
-    print("  Out-of-Sample-Metriken:")
+    print(f"  Gewähltes Modell: {mtype}{calib}")
+    cv = result.cv_metrics
+    if cv:
+        print("  Kreuzvalidierung (zeitlich, ehrliche Präzisionsschätzung):")
+        print(f"    ROC-AUC : {cv.get('cv_roc_auc_mean', float('nan')):.3f} "
+              f"± {cv.get('cv_roc_auc_std', float('nan')):.3f}")
+        print(f"    Accuracy: {cv.get('cv_accuracy_mean', float('nan')):.3f} "
+              f"± {cv.get('cv_accuracy_std', float('nan')):.3f}  "
+              f"({cv.get('cv_folds', 0)} Folds)")
+    print("  Finale Out-of-Sample-Metriken:")
     for k, v in result.metrics.items():
         print(f"    {k:10s}: {v:.3f}")
     print("\n  Wichtigste Merkmale:")
     for name, imp in list(result.feature_importance.items())[:8]:
         print(f"    {name:18s}: {imp:.3f}")
+
+
+def cmd_evaluate(cfg, args) -> None:
+    """Vergleicht mehrere Modelltypen per Zeitreihen-Kreuzvalidierung."""
+    from stockai.model.predictor import AUTO_CANDIDATES, Predictor
+
+    print("Vergleiche Modelle per zeitlicher Kreuzvalidierung …\n")
+    data = pipeline._combined_training_data(cfg)
+    if data.empty:
+        print("Keine Daten verfügbar.")
+        return
+    print(f"{'Modell':24s} {'AUC':>14s} {'Accuracy':>14s} {'F1':>7s}")
+    print("-" * 62)
+    rows = []
+    for mtype in AUTO_CANDIDATES + ["ensemble"]:
+        cv = Predictor(pipeline.FEATURE_COLUMNS, model_type=mtype,
+                       random_state=int(cfg.model.get("random_state", 42))).cross_validate(data)
+        if not cv:
+            continue
+        rows.append((mtype, cv))
+        print(f"{mtype:24s} "
+              f"{cv.get('cv_roc_auc_mean', float('nan')):.3f}±{cv.get('cv_roc_auc_std', 0):.3f}  "
+              f"{cv.get('cv_accuracy_mean', float('nan')):.3f}±{cv.get('cv_accuracy_std', 0):.3f}  "
+              f"{cv.get('cv_f1_mean', float('nan')):6.3f}")
+    if rows:
+        best = max(rows, key=lambda r: (r[1].get('cv_roc_auc_mean') or 0))
+        print(f"\n  Beste mittlere CV-AUC: {best[0]} "
+              f"({best[1].get('cv_roc_auc_mean', float('nan')):.3f})")
 
 
 def cmd_analyze(cfg, args) -> None:
@@ -229,6 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("train", help="Modell (neu) trainieren")
+    sub.add_parser("evaluate", help="Modelltypen per Kreuzvalidierung vergleichen")
 
     pa = sub.add_parser("analyze", help="Live-Analyse + Empfehlungen")
     pa.add_argument("--headlines", action="store_true", help="Schlagzeilen anzeigen")
@@ -260,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 _COMMANDS = {
     "train": cmd_train,
+    "evaluate": cmd_evaluate,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,
     "label": cmd_label,

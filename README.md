@@ -63,6 +63,26 @@ Mit jedem Zyklus wächst die Erfahrung – das News-Signal gewinnt an Gewicht un
 die Vorhersagen werden präziser. Der Verlauf ist über `history` bzw. im
 Dashboard-Tab „Lernfortschritt“ sichtbar.
 
+### Wie wird die Präzision maximiert – und ehrlich gemessen?
+
+- **Viele Signale:** 18 technische Indikatoren (Renditen über mehrere Horizonte,
+  RSI, MACD inkl. Histogramm, gleitende Durchschnitte, Bollinger %B, ATR,
+  Stochastik, Volumen-z-Score …) plus News-Sentiment.
+- **Beste Modellwahl:** `type: auto` lässt mehrere Modelle (HistGradientBoosting,
+  GradientBoosting, RandomForest, Logistic, Ensemble) gegeneinander antreten und
+  wählt automatisch das mit der besten kreuzvalidierten Güte.
+- **Kalibrierte Wahrscheinlichkeiten:** Mit `calibrate: true` werden die
+  P(Profit)-Werte isotonisch kalibriert – „70 %" heißt dann wirklich ~70 %.
+- **Ehrliche Validierung:** Bewertung per **zeitlicher Kreuzvalidierung**
+  (`TimeSeriesSplit`) – das Modell sieht beim Testen nie die Zukunft. `train`
+  zeigt AUC/Accuracy als Mittelwert ± Streuung, `evaluate` vergleicht alle Modelle.
+
+> 🔬 **Realistische Erwartung:** Aktienmärkte sind nahezu effizient – kein
+> seriöses Modell „besiegt" sie zuverlässig. Ziel dieses Projekts ist die
+> methodisch sauberste, am rigorosesten **validierte** Vorhersage, die einen
+> kleinen, ehrlich gemessenen Mehrwert anstrebt – nicht das Versprechen
+> garantierter Gewinne.
+
 ---
 
 ## Installation
@@ -82,6 +102,9 @@ python -m stockai.cli train
 
 # 2) Aktien analysieren + Empfehlungen erhalten
 python -m stockai.cli analyze --headlines
+
+# 2b) Modelltypen per Kreuzvalidierung vergleichen
+python -m stockai.cli evaluate
 
 # 3) Einen kompletten Lernzyklus laufen lassen (labeln + snapshot + neu trainieren)
 python -m stockai.cli learn
@@ -128,7 +151,8 @@ Wichtigste Stellschrauben:
 | `tickers` | Liste der beobachteten Aktien |
 | `horizon_days` | Über wie viele Handelstage die Profitabilität vorhergesagt wird |
 | `profit_threshold` | Ab welcher Rendite es als „profitabel“ gilt |
-| `model.type` | `gradient_boosting`, `logistic` oder `sgd_online` (inkrementelles Lernen) |
+| `model.type` | `auto` (CV-Auswahl), `hist_gradient_boosting`, `gradient_boosting`, `random_forest`, `logistic`, `ensemble`, `sgd_online` |
+| `model.calibrate` | `true` für kalibrierte, verlässlichere P(Profit)-Wahrscheinlichkeiten |
 
 ### Live-Daten aktivieren
 

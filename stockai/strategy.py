@@ -95,6 +95,12 @@ def run_strategy_backtest(
         raise RuntimeError("Keine Daten für den Strategie-Backtest verfügbar.")
 
     horizon = cfg.horizon_days
+    # Modelltyp einmal auflösen (auto -> konkret), damit alle Rebalancings das
+    # gleiche, beste Modell nutzen statt bei jedem Schritt neu zu suchen.
+    from stockai.pipeline import resolve_model_type
+
+    model_type, _ = resolve_model_type(cfg, panel, feature_names=TECHNICAL_FEATURES)
+
     all_dates = np.sort(panel["date"].unique())
     start_idx = int(len(all_dates) * train_frac)
     # Nicht überlappende Rebalancing-Termine im Abstand des Horizonts
@@ -115,7 +121,7 @@ def run_strategy_backtest(
 
         predictor = Predictor(
             feature_names=TECHNICAL_FEATURES,
-            model_type=cfg.model.get("type", "gradient_boosting"),
+            model_type=model_type,
             random_state=int(cfg.model.get("random_state", 42)),
         )
         predictor.estimator.fit(

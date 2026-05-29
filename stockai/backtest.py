@@ -35,9 +35,12 @@ def run_backtest(cfg: Config, prob_threshold: float = 0.55, train_frac: float = 
     split = int(len(data) * train_frac)
     train_df, test_df = data.iloc[:split], data.iloc[split:]
 
+    from stockai.pipeline import resolve_model_type
+
+    model_type, _ = resolve_model_type(cfg, data)
     predictor = Predictor(
         feature_names=FEATURE_COLUMNS,
-        model_type=cfg.model.get("type", "gradient_boosting"),
+        model_type=model_type,
         random_state=int(cfg.model.get("random_state", 42)),
     )
     # Auf dem frühen Teil trainieren (interner Split nur zur Kontrolle)

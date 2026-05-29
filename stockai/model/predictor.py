@@ -19,7 +19,13 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import (
+    GradientBoostingClassifier,
+    HistGradientBoostingClassifier,
+    RandomForestClassifier,
+    VotingClassifier,
+)
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.metrics import (
     accuracy_score,
@@ -28,9 +34,12 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+
+# Modelltypen, die bei ``type: auto`` gegeneinander antreten.
+AUTO_CANDIDATES = ["hist_gradient_boosting", "gradient_boosting", "random_forest", "logistic"]
 
 
 @dataclass
@@ -39,11 +48,22 @@ class TrainResult:
     n_train: int
     n_test: int
     feature_importance: dict[str, float] = field(default_factory=dict)
+    cv_metrics: dict[str, float] = field(default_factory=dict)
 
 
 def _build_estimator(model_type: str, random_state: int):
     if model_type == "gradient_boosting":
         return GradientBoostingClassifier(random_state=random_state)
+    if model_type == "hist_gradient_boosting":
+        return HistGradientBoostingClassifier(
+            random_state=random_state, learning_rate=0.06, max_iter=300,
+            l2_regularization=1.0,
+        )
+    if model_type == "random_forest":
+        return RandomForestClassifier(
+            n_estimators=300, max_depth=8, min_samples_leaf=20,
+            random_state=random_state, n_jobs=-1,
+        )
     if model_type == "logistic":
         return Pipeline(
             [
@@ -65,6 +85,19 @@ def _build_estimator(model_type: str, random_state: int):
                 ),
             ]
         )
+    if model_type == "ensemble":
+        return VotingClassifier(
+            estimators=[
+                ("hgb", HistGradientBoostingClassifier(
+                    random_state=random_state, learning_rate=0.06, max_iter=300)),
+                ("rf", RandomForestClassifier(
+                    n_estimators=300, max_depth=8, min_samples_leaf=20,
+                    random_state=random_state, n_jobs=-1)),
+                ("lr", Pipeline([("scaler", StandardScaler()),
+                                 ("clf", LogisticRegression(max_iter=1000))])),
+            ],
+            voting="soft",
+        )
     raise ValueError(f"Unbekannter Modelltyp: {model_type}")
 
 
@@ -76,12 +109,66 @@ class Predictor:
         feature_names: list[str],
         model_type: str = "gradient_boosting",
         random_state: int = 42,
+        calibrate: bool = False,
     ) -> None:
         self.feature_names = feature_names
         self.model_type = model_type
         self.random_state = random_state
-        self.estimator: Any = _build_estimator(model_type, random_state)
+        self.calibrate = calibrate and model_type != "sgd_online"
+        self.base_estimator: Any = _build_estimator(model_type, random_state)
+        # Kalibrierte Wahrscheinlichkeiten (verlässlichere P(Profit)) via
+        # isotonischer Regression auf zeitlich sauberen CV-Folds.
+        if self.calibrate:
+            self.estimator: Any = CalibratedClassifierCV(
+                self.base_estimator, method="isotonic", cv=TimeSeriesSplit(n_splits=3)
+            )
+        else:
+            self.estimator = self.base_estimator
         self.is_fitted = False
+
+    # ------------------------------------------------------------------ #
+    def cross_validate(
+        self, df: pd.DataFrame, target_col: str = "target", n_splits: int = 5
+    ) -> dict[str, float]:
+        """Ehrliche Präzisionsschätzung per zeitlicher Kreuzvalidierung.
+
+        Trainiert auf wachsenden Vergangenheitsfenstern und bewertet jeweils auf
+        dem darauffolgenden Block (``TimeSeriesSplit``). Liefert Mittelwert und
+        Streuung der Out-of-Sample-Metriken – kein Blick in die Zukunft.
+        """
+        data = df.dropna(subset=self.feature_names + [target_col]).copy()
+        if "date" in data.columns:
+            data = data.sort_values("date")
+        X = data[self.feature_names].values
+        y = data[target_col].astype(int).values
+        if len(data) < (n_splits + 1) * 10 or len(np.unique(y)) < 2:
+            return {}
+
+        accs, aucs, f1s = [], [], []
+        for tr_idx, te_idx in TimeSeriesSplit(n_splits=n_splits).split(X):
+            if len(np.unique(y[tr_idx])) < 2:
+                continue
+            est = _build_estimator(self.model_type, self.random_state)
+            est.fit(X[tr_idx], y[tr_idx])
+            preds = est.predict(X[te_idx])
+            accs.append(accuracy_score(y[te_idx], preds))
+            f1s.append(f1_score(y[te_idx], preds, zero_division=0))
+            try:
+                proba = est.predict_proba(X[te_idx])[:, 1]
+                if len(np.unique(y[te_idx])) > 1:
+                    aucs.append(roc_auc_score(y[te_idx], proba))
+            except Exception:
+                pass
+        if not accs:
+            return {}
+        return {
+            "cv_accuracy_mean": float(np.mean(accs)),
+            "cv_accuracy_std": float(np.std(accs)),
+            "cv_roc_auc_mean": float(np.mean(aucs)) if aucs else float("nan"),
+            "cv_roc_auc_std": float(np.std(aucs)) if aucs else float("nan"),
+            "cv_f1_mean": float(np.mean(f1s)),
+            "cv_folds": len(accs),
+        }
 
     # ------------------------------------------------------------------ #
     def train(
@@ -171,17 +258,36 @@ class Predictor:
             pass
         return metrics
 
+    def _importance_from(self, est) -> np.ndarray | None:
+        """Versucht, Feature-Wichtigkeiten aus einem Schätzer zu lesen."""
+        if hasattr(est, "feature_importances_"):
+            return np.asarray(est.feature_importances_, dtype=float)
+        if hasattr(est, "named_steps") and hasattr(est.named_steps.get("clf"), "coef_"):
+            return np.abs(est.named_steps["clf"].coef_[0])
+        if hasattr(est, "coef_"):
+            return np.abs(est.coef_[0])
+        return None
+
     def _feature_importance(self) -> dict[str, float]:
         est = self.estimator
-        if hasattr(est, "feature_importances_"):
-            vals = est.feature_importances_
-        elif hasattr(est, "named_steps") and hasattr(
-            est.named_steps.get("clf"), "coef_"
-        ):
-            vals = np.abs(est.named_steps["clf"].coef_[0])
-        elif hasattr(est, "coef_"):
-            vals = np.abs(est.coef_[0])
-        else:
+        vals = self._importance_from(est)
+        # Kalibriertes Modell: an die zugrunde liegenden Schätzer herangehen
+        if vals is None and hasattr(est, "calibrated_classifiers_"):
+            per = []
+            for cc in est.calibrated_classifiers_:
+                base = getattr(cc, "estimator", None)
+                iv = self._importance_from(base) if base is not None else None
+                if iv is not None:
+                    per.append(iv)
+            if per:
+                vals = np.mean(per, axis=0)
+        # Voting-Ensemble: Mittel über die Teil-Schätzer
+        if vals is None and hasattr(est, "estimators_"):
+            per = [self._importance_from(e) for e in est.estimators_]
+            per = [p for p in per if p is not None]
+            if per:
+                vals = np.mean(per, axis=0)
+        if vals is None or len(vals) != len(self.feature_names):
             return {}
         total = float(np.sum(vals)) or 1.0
         return {

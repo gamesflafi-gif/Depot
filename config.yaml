@@ -32,8 +32,13 @@ news_lookback_days: 7       # Wie alt dürfen News für das Live-Sentiment sein?
 
 # Modell / Lernen
 model:
-  type: "gradient_boosting" # gradient_boosting | logistic | sgd_online
-  test_size: 0.2            # Anteil der Daten für die Out-of-Sample-Bewertung
+  # Modelltyp:
+  #   auto                    -> wählt per Kreuzvalidierung automatisch das beste
+  #   hist_gradient_boosting  -> schnelles, starkes Baummodell (Standard)
+  #   gradient_boosting | random_forest | logistic | ensemble | sgd_online
+  type: "auto"
+  calibrate: true           # kalibrierte, verlässlichere P(Profit)-Wahrscheinlichkeiten
+  test_size: 0.2            # Anteil der Daten für die finale Out-of-Sample-Bewertung
   random_state: 42
 
 # Pfade (relativ zum Projekt-Root)

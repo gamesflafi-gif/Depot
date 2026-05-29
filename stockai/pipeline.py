@@ -207,20 +207,48 @@ def _combined_training_data(cfg: Config) -> pd.DataFrame:
     return combined
 
 
+def resolve_model_type(
+    cfg: Config, data: pd.DataFrame, feature_names: list[str] | None = None
+) -> tuple[str, list | None]:
+    """Löst ``type: auto`` zu einem konkreten Modelltyp auf (per CV).
+
+    Returns (model_type, ranking_oder_None).
+    """
+    model_type = cfg.model.get("type", "gradient_boosting")
+    if model_type != "auto":
+        return model_type, None
+    from stockai.model.selection import select_best_model
+
+    sel = select_best_model(
+        data, feature_names or FEATURE_COLUMNS,
+        random_state=int(cfg.model.get("random_state", 42)),
+    )
+    return sel.best_type, sel.ranking
+
+
 def train(cfg: Config) -> TrainResult:
     """Trainiert das Modell neu und protokolliert die Güte in der Lernhistorie."""
     data = _combined_training_data(cfg)
     if data.empty:
         raise RuntimeError("Keine Trainingsdaten verfügbar (Netzwerk/Ticker prüfen).")
 
+    random_state = int(cfg.model.get("random_state", 42))
+    model_type, selected_via = resolve_model_type(cfg, data)
+    if selected_via is not None:
+        log.info("Auto-Auswahl: %s (Ranking: %s)", model_type, selected_via)
+
     predictor = Predictor(
         feature_names=FEATURE_COLUMNS,
-        model_type=cfg.model.get("type", "gradient_boosting"),
-        random_state=int(cfg.model.get("random_state", 42)),
+        model_type=model_type,
+        random_state=random_state,
+        calibrate=bool(cfg.model.get("calibrate", False)),
     )
+    # Ehrliche Präzisionsschätzung per Zeitreihen-CV (vor dem finalen Fit)
+    cv_metrics = predictor.cross_validate(data, target_col="target")
     result = predictor.train(
         data, target_col="target", test_size=float(cfg.model.get("test_size", 0.2))
     )
+    result.cv_metrics = cv_metrics
 
     # Anzahl der real gelabelten Live-Snapshots direkt aus dem Store ablesen
     # (kein erneuter, teurer Aufbau des Historien-Datensatzes nötig).
@@ -236,11 +264,14 @@ def train(cfg: Config) -> TrainResult:
     model_store.append_history(
         {
             "model_type": predictor.model_type,
+            "calibrated": predictor.calibrate,
             "n_samples": int(len(data)),
             "n_train": result.n_train,
             "n_test": result.n_test,
             "n_live_labeled": n_live_labeled,
             "metrics": result.metrics,
+            "cv_metrics": result.cv_metrics,
+            "selected_via": selected_via,
             "top_features": dict(list(result.feature_importance.items())[:8]),
         }
     )
@@ -265,6 +296,10 @@ def learning_curve(cfg: Config, steps: int = 5) -> list[dict]:
     X_hold = holdout[FEATURE_COLUMNS].values
     y_hold = holdout["target"].astype(int).values
 
+    # Modelltyp einmal auflösen (auto), damit alle Stufen vergleichbar sind
+    model_type, _ = resolve_model_type(cfg, data)
+    calibrate = bool(cfg.model.get("calibrate", False))
+
     model_store = ModelStore(cfg.model_dir)
     curve: list[dict] = []
     for frac in [(i + 1) / steps for i in range(steps)]:
@@ -272,8 +307,9 @@ def learning_curve(cfg: Config, steps: int = 5) -> list[dict]:
         subset = train_pool.iloc[:n]
         predictor = Predictor(
             feature_names=FEATURE_COLUMNS,
-            model_type=cfg.model.get("type", "gradient_boosting"),
+            model_type=model_type,
             random_state=int(cfg.model.get("random_state", 42)),
+            calibrate=calibrate,
         )
         predictor.estimator.fit(subset[FEATURE_COLUMNS].values, subset["target"].astype(int).values)
         predictor.is_fitted = True
