@@ -12,6 +12,9 @@ data/models/
 *.joblib
 data/store/*.csv
 
+# Generierte Charts/Artefakte
+*.png
+
 # Logs & Caches
 *.log
 .cache/

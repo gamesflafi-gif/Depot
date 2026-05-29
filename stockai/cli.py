@@ -159,6 +159,34 @@ def cmd_portfolio(cfg, args) -> None:
         print(f"\n  Verkaufen/Meiden: {', '.join(pf.sells)}")
 
 
+def cmd_strategy(cfg, args) -> None:
+    """Walk-Forward-Strategie-Backtest mit P&L, Sharpe und Equity-Kurve."""
+    from stockai import strategy as strat
+
+    print("Simuliere die Strategie über die Historie (Walk-Forward) …\n")
+    res = strat.run_strategy_backtest(
+        cfg, prob_threshold=args.threshold, top_k=args.top_k
+    )
+    m, b = res.metrics, res.benchmark_metrics
+    print(f"  Rebalancings:        {res.n_rebalances}")
+    print(f"  {'':22s}{'KI-Strategie':>14s}{'Buy & Hold':>14s}")
+    print("  " + "-" * 50)
+    print(f"  {'Gesamtrendite':22s}{m['total_return']:13.1%}{b['total_return']:14.1%}")
+    print(f"  {'Sharpe-Ratio':22s}{m['sharpe']:13.2f}{b['sharpe']:14.2f}")
+    print(f"  {'Max. Drawdown':22s}{m['max_drawdown']:13.1%}{b['max_drawdown']:14.1%}")
+    print(f"  {'Trefferquote':22s}{m['win_rate']:13.1%}{b['win_rate']:14.1%}")
+
+    edge = m["total_return"] - b["total_return"]
+    if edge > 0:
+        print(f"\n  → Die KI-Strategie schlägt Buy & Hold um {edge:+.1%}.")
+    else:
+        print(f"\n  → Die KI-Strategie liegt {edge:+.1%} hinter Buy & Hold.")
+
+    if not args.no_chart:
+        path = strat.plot_equity_curve(res, args.out)
+        print(f"\n  Equity-Kurve gespeichert: {path}")
+
+
 def cmd_backtest(cfg, args) -> None:
     print("Führe Walk-Forward-Backtest durch …")
     res = bt.run_backtest(cfg, prob_threshold=args.threshold)
@@ -217,7 +245,13 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--max-position", type=float, default=0.25,
                     help="Max. Anteil je Position (0..1)")
 
-    pb = sub.add_parser("backtest", help="Strategie auf Historie testen")
+    pst = sub.add_parser("strategy", help="P&L-Backtest + Equity-Kurve vs. Buy&Hold")
+    pst.add_argument("--threshold", type=float, default=0.55)
+    pst.add_argument("--top-k", type=int, default=3, help="Max. Positionen je Rebalancing")
+    pst.add_argument("--out", default="equity_curve.png", help="Pfad für den Chart")
+    pst.add_argument("--no-chart", action="store_true", help="Keinen Chart erzeugen")
+
+    pb = sub.add_parser("backtest", help="Signalgüte auf Historie testen (Edge)")
     pb.add_argument("--threshold", type=float, default=0.55)
 
     sub.add_parser("history", help="Lernfortschritt anzeigen")
@@ -232,6 +266,7 @@ _COMMANDS = {
     "learn": cmd_learn,
     "simulate": cmd_simulate,
     "portfolio": cmd_portfolio,
+    "strategy": cmd_strategy,
     "backtest": cmd_backtest,
     "history": cmd_history,
 }

@@ -40,7 +40,8 @@ stockai/
 ├── advisor.py             # Entscheidungs-Schicht: BOOM/KAUFEN/HALTEN/VERKAUFEN
 ├── portfolio.py           # Allokations-Engine (wohin wie viel Kapital)
 ├── pipeline.py            # Orchestrierung (train/analyze/learn/…)
-├── backtest.py            # Walk-Forward-Backtest
+├── backtest.py            # Signalgüte-Backtest (Edge)
+├── strategy.py            # P&L-Strategie-Backtest (Equity, Sharpe, Drawdown)
 └── cli.py                 # Kommandozeilen-Interface
 dashboard/app.py           # Streamlit-Dashboard
 tests/                     # Offline-Tests (kein Netzwerk nötig)
@@ -91,10 +92,13 @@ python -m stockai.cli simulate
 # 5) Konkreter Allokationsvorschlag (wohin wie viel Kapital)
 python -m stockai.cli portfolio --capital 10000
 
-# 6) Strategie historisch testen
+# 6) Signalgüte historisch testen (Edge gegenüber Zufall)
 python -m stockai.cli backtest
 
-# 7) Lernfortschritt ansehen
+# 7) P&L-Strategie-Backtest mit Equity-Kurve vs. Buy & Hold
+python -m stockai.cli strategy --top-k 3        # erzeugt equity_curve.png
+
+# 8) Lernfortschritt ansehen
 python -m stockai.cli history
 ```
 
@@ -108,7 +112,9 @@ streamlit run dashboard/app.py
 ```
 
 Tabs: **Empfehlungen** (Ranking + Chart), **Detail & News** (Begründungen,
-Schlagzeilen, Timing) und **Lernfortschritt** (Güte über die Trainingsläufe).
+Schlagzeilen, Timing), **Portfolio** (Allokation + Kapital-Pie),
+**Strategie-Backtest** (Equity-Kurve vs. Buy & Hold, Sharpe, Drawdown) und
+**Lernfortschritt** (Güte über die Trainingsläufe).
 
 ---
 

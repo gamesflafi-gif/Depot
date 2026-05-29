@@ -64,8 +64,9 @@ def _run_analysis():
 
 
 # --- Hauptbereich --------------------------------------------------------- #
-tab_overview, tab_detail, tab_portfolio, tab_learning = st.tabs(
-    ["🎯 Empfehlungen", "🔍 Detail & News", "💼 Portfolio", "🧠 Lernfortschritt"]
+tab_overview, tab_detail, tab_portfolio, tab_strategy, tab_learning = st.tabs(
+    ["🎯 Empfehlungen", "🔍 Detail & News", "💼 Portfolio",
+     "📉 Strategie-Backtest", "🧠 Lernfortschritt"]
 )
 
 with tab_overview:
@@ -169,6 +170,40 @@ with tab_portfolio:
             st.info("Aktuell keine Kaufkandidaten – Empfehlung: abwarten.")
         if pf.sells:
             st.warning(f"Verkaufen/Meiden: {', '.join(pf.sells)}")
+
+with tab_strategy:
+    st.write("**Walk-Forward-Backtest** – wäre man der KI gefolgt, vs. Buy & Hold.")
+    c1, c2 = st.columns(2)
+    thr = c1.slider("Kauf-Schwelle P(Profit)", 0.5, 0.8, 0.55, 0.01)
+    topk = c2.slider("Max. Positionen je Rebalancing", 1, len(cfg.tickers), 3)
+    if st.button("Backtest starten", type="primary"):
+        from stockai import strategy as _strat
+        with st.spinner("Simuliere (Training an jedem Rebalancing-Termin) …"):
+            try:
+                res = _strat.run_strategy_backtest(cfg, prob_threshold=thr, top_k=topk)
+            except Exception as exc:
+                st.error(f"Backtest fehlgeschlagen: {exc}")
+                res = None
+        if res is not None:
+            eq = pd.DataFrame({
+                "Datum": pd.to_datetime(res.dates),
+                "KI-Strategie": res.strategy_equity,
+                "Buy & Hold": res.benchmark_equity,
+            }).melt("Datum", var_name="Serie", value_name="Kapital")
+            fig = px.line(eq, x="Datum", y="Kapital", color="Serie",
+                          title="Kapitalentwicklung (Start = 1.0)")
+            st.plotly_chart(fig, use_container_width=True)
+            m, b = res.metrics, res.benchmark_metrics
+            kpi = pd.DataFrame({
+                "Kennzahl": ["Gesamtrendite", "Sharpe-Ratio", "Max. Drawdown", "Trefferquote"],
+                "KI-Strategie": [f"{m['total_return']:.1%}", f"{m['sharpe']:.2f}",
+                                 f"{m['max_drawdown']:.1%}", f"{m['win_rate']:.1%}"],
+                "Buy & Hold": [f"{b['total_return']:.1%}", f"{b['sharpe']:.2f}",
+                               f"{b['max_drawdown']:.1%}", f"{b['win_rate']:.1%}"],
+            })
+            st.dataframe(kpi, use_container_width=True, hide_index=True)
+            st.caption(f"{res.n_rebalances} Rebalancings. Demo-Daten dienen nur "
+                       "der Veranschaulichung – keine reale Performance.")
 
 with tab_learning:
     history = ModelStore(cfg.model_dir).load_history()

@@ -137,6 +137,29 @@ def test_portfolio_no_candidates():
     assert "X" in pf.sells
 
 
+def test_strategy_backtest_demo(tmp_path):
+    """Walk-Forward-Strategie-Backtest im Demo-Modus (schnelles Modell)."""
+    from stockai import strategy
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.model = {"type": "logistic", "test_size": 0.2, "random_state": 42}
+
+    res = strategy.run_strategy_backtest(cfg, prob_threshold=0.5, top_k=2)
+    assert res.n_rebalances > 0
+    assert len(res.strategy_equity) == res.n_rebalances
+    assert len(res.benchmark_equity) == res.n_rebalances
+    for key in ("total_return", "sharpe", "max_drawdown", "win_rate"):
+        assert key in res.metrics
+    assert res.metrics["max_drawdown"] <= 0.0
+
+    out = tmp_path / "equity.png"
+    path = strategy.plot_equity_curve(res, str(out))
+    assert out.exists() and path == str(out)
+
+
 def test_demo_pipeline_train_and_learning_curve(tmp_path):
     """End-to-End im Demo-Modus (offline): trainieren + Lernkurve erzeugen."""
     from stockai import pipeline
