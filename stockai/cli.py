@@ -296,18 +296,32 @@ def cmd_strategy(cfg, args) -> None:
     """Walk-Forward-Strategie-Backtest mit P&L, Sharpe und Equity-Kurve."""
     from stockai import strategy as strat
 
+    period = getattr(args, "period", None)
+    capital = getattr(args, "capital", 1.0)
     print("Simuliere die Strategie über die Historie (Walk-Forward) …\n")
     res = strat.run_strategy_backtest(
-        cfg, prob_threshold=args.threshold, top_k=args.top_k
+        cfg, prob_threshold=args.threshold, top_k=args.top_k,
+        period=period, initial_capital=capital,
+        retrain_every=getattr(args, "retrain_every", 1),
+        train_frac=getattr(args, "train_frac", 0.4),
     )
     m, b = res.metrics, res.benchmark_metrics
-    print(f"  Rebalancings:        {res.n_rebalances}")
+    print(f"  Zeitraum:            ~{res.years:.1f} Jahre, {res.n_rebalances} Rebalancings")
     print(f"  {'':22s}{'KI-Strategie':>14s}{'Buy & Hold':>14s}")
     print("  " + "-" * 50)
     print(f"  {'Gesamtrendite':22s}{m['total_return']:13.1%}{b['total_return']:14.1%}")
+    print(f"  {'Ø Rendite p.a. (CAGR)':22s}{res.cagr:13.1%}{'':>14s}")
     print(f"  {'Sharpe-Ratio':22s}{m['sharpe']:13.2f}{b['sharpe']:14.2f}")
     print(f"  {'Max. Drawdown':22s}{m['max_drawdown']:13.1%}{b['max_drawdown']:14.1%}")
     print(f"  {'Trefferquote':22s}{m['win_rate']:13.1%}{b['win_rate']:14.1%}")
+
+    if capital and capital != 1.0:
+        cur = "€"
+        print(f"\n  Startkapital:        {capital:,.2f}{cur}")
+        print(f"  Endwert KI:          {res.final_value:,.2f}{cur}  "
+              f"(Gewinn/Verlust {res.final_value - capital:+,.2f}{cur})")
+        print(f"  Endwert Buy & Hold:  {res.benchmark_value:,.2f}{cur}  "
+              f"(Gewinn/Verlust {res.benchmark_value - capital:+,.2f}{cur})")
 
     edge = m["total_return"] - b["total_return"]
     if edge > 0:
@@ -389,6 +403,13 @@ def build_parser() -> argparse.ArgumentParser:
     pst = sub.add_parser("strategy", help="P&L-Backtest + Equity-Kurve vs. Buy&Hold")
     pst.add_argument("--threshold", type=float, default=0.55)
     pst.add_argument("--top-k", type=int, default=3, help="Max. Positionen je Rebalancing")
+    pst.add_argument("--capital", type=float, default=1.0, help="Startkapital in € (z.B. 500)")
+    pst.add_argument("--period", default=None,
+                     help="Zeitraum, z.B. 10y (überschreibt history_period)")
+    pst.add_argument("--retrain-every", type=int, default=1,
+                     help="Modell nur alle N Rebalancings neu trainieren (schneller)")
+    pst.add_argument("--train-frac", type=float, default=0.4,
+                     help="Anteil der Historie als Anfangs-Training (Rest wird gehandelt)")
     pst.add_argument("--out", default="equity_curve.png", help="Pfad für den Chart")
     pst.add_argument("--no-chart", action="store_true", help="Keinen Chart erzeugen")
 

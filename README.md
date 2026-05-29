@@ -90,10 +90,12 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   die Wahrscheinlichkeiten gut **kalibriert** sind (vorhergesagt ≈ tatsächlich).
 
 > 🔬 **Realistische Erwartung:** Aktienmärkte sind nahezu effizient – kein
-> seriöses Modell „besiegt" sie zuverlässig. Ziel dieses Projekts ist die
-> methodisch sauberste, am rigorosesten **validierte** Vorhersage, die einen
-> kleinen, ehrlich gemessenen Mehrwert anstrebt – nicht das Versprechen
-> garantierter Gewinne.
+> seriöses Modell „besiegt" sie zuverlässig. Gute echte Modelle erreichen
+> **~52–56 %** Trefferquote (nicht 90 %!); die Demo ist bewusst auf dieses
+> realistische Niveau eingestellt. Ziel ist die methodisch sauberste, am
+> rigorosesten **validierte** Vorhersage mit kleinem, ehrlich gemessenem
+> Mehrwert – kein Versprechen garantierter Gewinne. Die €-Beträge im
+> Planspiel sind Demo-Artefakte und keine erzielbare reale Rendite.
 
 ---
 
@@ -138,6 +140,9 @@ python -m stockai.cli backtest
 
 # 7) P&L-Strategie-Backtest mit Equity-Kurve vs. Buy & Hold
 python -m stockai.cli strategy --top-k 3        # erzeugt equity_curve.png
+
+# 7b) Planspiel: 500 € über 10 Jahre durchspielen (Demo)
+python -m stockai.cli strategy --capital 500 --period 10y --train-frac 0.15 --retrain-every 5
 
 # 8) Lernfortschritt ansehen
 python -m stockai.cli history

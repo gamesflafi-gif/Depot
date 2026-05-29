@@ -186,13 +186,18 @@ def test_strategy_backtest_demo(tmp_path):
     cfg.tickers = ["AAA", "BBB", "CCC"]
     cfg.model = {"type": "logistic", "test_size": 0.2, "random_state": 42}
 
-    res = strategy.run_strategy_backtest(cfg, prob_threshold=0.5, top_k=2)
+    res = strategy.run_strategy_backtest(cfg, prob_threshold=0.5, top_k=2,
+                                         initial_capital=500.0)
     assert res.n_rebalances > 0
     assert len(res.strategy_equity) == res.n_rebalances
     assert len(res.benchmark_equity) == res.n_rebalances
     for key in ("total_return", "sharpe", "max_drawdown", "win_rate"):
         assert key in res.metrics
     assert res.metrics["max_drawdown"] <= 0.0
+    # €-Auswertung & Zeitspanne
+    assert res.initial_capital == 500.0
+    assert res.final_value == 500.0 * res.strategy_equity[-1]
+    assert res.years > 0.0
 
     out = tmp_path / "equity.png"
     path = strategy.plot_equity_curve(res, str(out))

@@ -41,12 +41,15 @@ def _seed(ticker: str) -> int:
 
 # Länge der kanonischen Vollreihe (Business-Tage); alle Zeiträume werden als
 # Ausschnitt hieraus gebildet, damit sie konsistent zueinander sind.
-_CANONICAL_DAYS = 756  # ~3 Jahre
+_CANONICAL_DAYS = 2520  # ~10 Jahre
 
 
 def _period_to_days(period: str) -> int:
     period = period.strip().lower()
-    mapping = {"1y": 252, "2y": 504, "5y": 1260, "6mo": 126, "3mo": 63, "max": 1260}
+    mapping = {
+        "3mo": 63, "6mo": 126, "1y": 252, "2y": 504, "3y": 756,
+        "5y": 1260, "10y": 2520, "max": _CANONICAL_DAYS,
+    }
     return mapping.get(period, 504)
 
 
@@ -61,13 +64,15 @@ def _canonical_arrays(ticker: str) -> tuple:
     """
     n = _CANONICAL_DAYS
     rng = np.random.default_rng(_seed(ticker))
-    base_vol = rng.uniform(0.011, 0.016)
+    base_vol = rng.uniform(0.012, 0.018)
 
+    # Moderate, realistisch verrauschte Trend-Regime (kleiner Edge, kein
+    # „sauberes" Signal). Die Drift ist begrenzt -> realistische Kurse.
     drift = np.zeros(n)
-    d = rng.normal(0, 0.0012)
+    d = rng.normal(0, 0.0009)
     for i in range(n):
-        d = 0.985 * d + rng.normal(0, 0.0012)
-        d = float(np.clip(d, -0.007, 0.007))
+        d = 0.975 * d + rng.normal(0, 0.0009)
+        d = float(np.clip(d, -0.0045, 0.0045))
         drift[i] = d
     rets = drift + rng.normal(0, base_vol, n)
     shocks = rng.choice([0, 1], size=n, p=[0.985, 0.015]) * rng.normal(0, 0.05, n)
@@ -113,7 +118,7 @@ def _sentiment_mean_series(ticker: str) -> tuple:
     rng = np.random.default_rng(_seed(ticker) + 13)
     # tanh-Mapping der Drift auf [-1,1] + Rauschen -> realistisches, verrauschtes
     # aber vorhersagekräftiges News-Signal
-    sent = np.tanh(drift * 90.0) + rng.normal(0, 0.18, len(drift))
+    sent = np.tanh(drift * 35.0) + rng.normal(0, 0.30, len(drift))
     sent = np.clip(sent, -1.0, 1.0)
     return idx, sent
 

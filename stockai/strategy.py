@@ -38,17 +38,41 @@ class StrategyResult:
     benchmark_metrics: dict[str, float]
     n_rebalances: int
     trades: list[dict] = field(default_factory=list)
+    initial_capital: float = 1.0
+    years: float = 0.0
+
+    @property
+    def final_value(self) -> float:
+        return self.initial_capital * (self.strategy_equity[-1] if self.strategy_equity else 1.0)
+
+    @property
+    def benchmark_value(self) -> float:
+        return self.initial_capital * (self.benchmark_equity[-1] if self.benchmark_equity else 1.0)
+
+    @property
+    def cagr(self) -> float:
+        """Durchschnittliche jährliche Wachstumsrate der Strategie."""
+        if self.years <= 0 or not self.strategy_equity:
+            return 0.0
+        return self.strategy_equity[-1] ** (1.0 / self.years) - 1.0
 
 
 # --------------------------------------------------------------------------- #
-def _build_panel(cfg: Config) -> pd.DataFrame:
-    """Long-Panel: je (Datum, Ticker) Features (inkl. News) + reale Folge-Rendite."""
+def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
+    """Long-Panel: je (Datum, Ticker) Features (inkl. News) + reale Folge-Rendite.
+
+    ``period`` überschreibt optional den Kurszeitraum (z.B. "10y" für eine
+    lange Simulation), ohne die Trainingskonfiguration zu ändern.
+    """
     from stockai.pipeline import FEATURE_COLUMNS, add_market_features
 
     horizon = cfg.horizon_days
     rows: list[pd.DataFrame] = []
     for ticker in cfg.tickers:
-        prices = provider.get_prices(cfg, ticker)
+        prices = (
+            provider.get_prices_window(cfg, ticker, period)
+            if period else provider.get_prices(cfg, ticker)
+        )
         if prices.empty or len(prices) < 80:
             continue
         feat = add_technical_features(prices)
@@ -102,18 +126,27 @@ def run_strategy_backtest(
     prob_threshold: float = 0.55,
     top_k: int = 3,
     train_frac: float = 0.4,
+    period: str | None = None,
+    initial_capital: float = 1.0,
+    retrain_every: int = 1,
 ) -> StrategyResult:
-    """Führt den Walk-Forward-Strategie-Backtest aus."""
-    panel = _build_panel(cfg)
+    """Führt den Walk-Forward-Strategie-Backtest aus.
+
+    ``retrain_every`` steuert, wie oft das Modell neu trainiert wird (1 = bei
+    jedem Rebalancing). Größere Werte beschleunigen lange Simulationen deutlich
+    und entsprechen dem realistischen Vorgehen, nicht ständig neu zu trainieren.
+    """
+    panel = _build_panel(cfg, period=period)
     if panel.empty:
         raise RuntimeError("Keine Daten für den Strategie-Backtest verfügbar.")
 
     horizon = cfg.horizon_days
-    # Modelltyp einmal auflösen (auto -> konkret), damit alle Rebalancings das
-    # gleiche, beste Modell nutzen statt bei jedem Schritt neu zu suchen.
     from stockai.pipeline import FEATURE_COLUMNS, resolve_model_type
 
-    model_type, _ = resolve_model_type(cfg, panel, feature_names=FEATURE_COLUMNS)
+    # Modelltyp einmal auflösen (auto -> konkret). Für lange Reihen genügt zur
+    # Auswahl ein jüngerer Ausschnitt -> schnell.
+    sel_panel = panel.tail(4000) if len(panel) > 4000 else panel
+    model_type, _ = resolve_model_type(cfg, sel_panel, feature_names=FEATURE_COLUMNS)
 
     all_dates = np.sort(panel["date"].unique())
     start_idx = int(len(all_dates) * train_frac)
@@ -124,6 +157,8 @@ def run_strategy_backtest(
     bench_returns: list[float] = []
     used_dates: list[str] = []
     trades: list[dict] = []
+    predictor = None
+    steps_since_fit = 0
 
     for t in rebal_dates:
         train = panel[panel["date"] <= (t - np.timedelta64(horizon, "D"))]
@@ -133,15 +168,19 @@ def run_strategy_backtest(
         if train["target"].nunique() < 2:
             continue
 
-        predictor = Predictor(
-            feature_names=FEATURE_COLUMNS,
-            model_type=model_type,
-            random_state=int(cfg.model.get("random_state", 42)),
-        )
-        predictor.estimator.fit(
-            train[FEATURE_COLUMNS].values, train["target"].astype(int).values
-        )
-        predictor.is_fitted = True
+        # Nur periodisch neu trainieren (oder beim ersten Mal)
+        if predictor is None or steps_since_fit >= retrain_every:
+            predictor = Predictor(
+                feature_names=FEATURE_COLUMNS,
+                model_type=model_type,
+                random_state=int(cfg.model.get("random_state", 42)),
+            )
+            predictor.estimator.fit(
+                train[FEATURE_COLUMNS].values, train["target"].astype(int).values
+            )
+            predictor.is_fitted = True
+            steps_since_fit = 0
+        steps_since_fit += 1
 
         proba = predictor.predict_proba(today)
         today = today.assign(proba=proba)
@@ -175,6 +214,11 @@ def run_strategy_backtest(
     bench_metrics = _annualized(bench_arr, ppy)
     bench_metrics["max_drawdown"] = _max_drawdown(bench_equity)
 
+    # Zeitspanne der Simulation in Jahren
+    d0 = pd.Timestamp(used_dates[0])
+    d1 = pd.Timestamp(used_dates[-1])
+    years = max((d1 - d0).days / 365.25, len(strat_returns) * horizon / 365.25)
+
     return StrategyResult(
         dates=used_dates,
         strategy_equity=strat_equity,
@@ -183,6 +227,8 @@ def run_strategy_backtest(
         benchmark_metrics=bench_metrics,
         n_rebalances=len(strat_returns),
         trades=trades,
+        initial_capital=initial_capital,
+        years=years,
     )
 
 
