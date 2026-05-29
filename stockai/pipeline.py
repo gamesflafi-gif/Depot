@@ -39,8 +39,59 @@ log = logging.getLogger(__name__)
 # ("wohin rotiert das Geld" – relative Stärke + Rang gegenüber den Peers).
 MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_rank"]
 
-FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
+# Muster-Gedächtnis: erwartete Folge-Rendite für den aktuellen, wiederkehrenden
+# Kurs-Zustand – die KI „merkt sich", was nach ähnlichen Mustern passierte.
+PATTERN_FEATURES = ["pattern_mem"]
+
+FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES + PATTERN_FEATURES
 KEY_COLS = ["ticker", "date"]
+
+
+def pattern_memory(prices: pd.DataFrame, horizon: int) -> pd.Series:
+    """Kausales Muster-Gedächtnis je Handelstag.
+
+    Der aktuelle Zustand wird grob klassifiziert (Momentum-Vorzeichen × RSI-Zone).
+    Der Wert ist die **durchschnittliche Folge-Rendite**, die in der Vergangenheit
+    auf *denselben* Zustand folgte – es werden nur bereits bekannte (vergangene)
+    Ergebnisse genutzt (kein Blick in die Zukunft). So erkennt das Modell
+    wiederkehrende Kursmuster und nutzt deren historischen Ausgang.
+    """
+    from collections import defaultdict
+
+    cl = prices["Close"]
+    n = len(cl)
+    out = np.full(n, np.nan)
+    if n < 40:
+        return pd.Series(out, index=prices.index)
+
+    ret5 = cl.pct_change(5).values
+    delta = cl.diff()
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    rs = gain / loss.replace(0, np.nan)
+    rsi = (100 - 100 / (1 + rs)).values
+    fwd = (cl.shift(-horizon) / cl - 1).values
+
+    def state_of(i: int):
+        if np.isnan(ret5[i]) or np.isnan(rsi[i]):
+            return None
+        mom = 1 if ret5[i] > 0 else (-1 if ret5[i] < 0 else 0)
+        zone = 0 if rsi[i] < 30 else (2 if rsi[i] > 70 else 1)
+        return mom * 10 + zone
+
+    mem_sum: dict = defaultdict(float)
+    mem_cnt: dict = defaultdict(int)
+    for t in range(n):
+        j = t - horizon                      # Ergebnis von Tag j ist an Tag j+h bekannt
+        if j >= 0 and not np.isnan(fwd[j]):
+            sj = state_of(j)
+            if sj is not None:
+                mem_sum[sj] += fwd[j]
+                mem_cnt[sj] += 1
+        st = state_of(t)
+        if st is not None and mem_cnt[st] > 0:
+            out[t] = mem_sum[st] / mem_cnt[st]
+    return pd.Series(out, index=prices.index)
 
 
 def universe(cfg: Config) -> list[str]:
@@ -129,6 +180,8 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         )
         # Stetige Folge-Rendite als Ziel für das Expected-Return-Modell
         feat["fwd_ret"] = prices["Close"].shift(-cfg.horizon_days) / prices["Close"] - 1.0
+        # Muster-Gedächtnis (wiederkehrende Kurs-Zustände)
+        feat["pattern_mem"] = pattern_memory(prices, cfg.horizon_days).values
         # News-Sentiment je Tag einfügen, damit das Modell daraus lernt.
         # Verfügbar (z.B. Demo) -> echte Reihe; sonst neutral (0).
         sent_hist = provider.get_sentiment_history(cfg, ticker)
@@ -172,6 +225,9 @@ def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | No
 
     row: dict[str, float] = {f: float(feat[f]) for f in TECHNICAL_FEATURES}
     row.update({k: float(v) for k, v in sent_features.items()})
+    # Muster-Gedächtnis für den aktuellen (letzten) Tag
+    pm = pattern_memory(prices, cfg.horizon_days).iloc[-1]
+    row["pattern_mem"] = float(pm) if pm == pm else 0.0  # NaN -> 0
     return row, scored_news, last_price
 
 
