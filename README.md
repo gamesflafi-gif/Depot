@@ -88,6 +88,12 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 - **Recommendation-Scorecard:** `scorecard` bewertet per Walk-Forward, wie
   treffsicher die Empfehlungen je Aktion (BOOM/KAUFEN/VERKAUFEN …) waren und ob
   die Wahrscheinlichkeiten gut **kalibriert** sind (vorhergesagt ≈ tatsächlich).
+- **News-Ablation:** `ablation` misst den tatsächlichen Beitrag der News
+  (Technik vs. News vs. kombiniert) – statt zu behaupten, dass News helfen,
+  wird es nachgewiesen. (News tragen real meist einen *kleinen* Mehrwert, da
+  vieles bereits eingepreist ist.)
+- **Parameter-Sweep:** `sweep` testet die Strategie über ein Raster aus
+  Kauf-Schwelle × Positionsanzahl und zeigt die robusteste Einstellung.
 
 > 🔬 **Realistische Erwartung:** Aktienmärkte sind nahezu effizient – kein
 > seriöses Modell „besiegt" sie zuverlässig. Gute echte Modelle erreichen
@@ -119,6 +125,12 @@ python -m stockai.cli analyze --headlines
 
 # 2b) Modelltypen per Kreuzvalidierung vergleichen
 python -m stockai.cli evaluate
+
+# 2b2) Beitrag der News messen (Technik vs. News vs. kombiniert)
+python -m stockai.cli ablation
+
+# 2b3) Mehr Backtesting: Raster aus Schwelle × Top-K
+python -m stockai.cli sweep --period 5y
 
 # 2c) Hyperparameter optimieren (werden beim nächsten train angewandt)
 python -m stockai.cli tune

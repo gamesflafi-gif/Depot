@@ -145,6 +145,71 @@ def cmd_scorecard(cfg, args) -> None:
         print(f"  {c['bin']:12s}{c['count']:8d}{c['predicted']:14.1%}{c['actual']:13.1%}")
 
 
+def cmd_ablation(cfg, args) -> None:
+    """Misst den Beitrag der News: Technik vs. News vs. kombiniert (CV-AUC)."""
+    from stockai.features.technical import TECHNICAL_FEATURES
+    from stockai.features.sentiment import SENTIMENT_FEATURES
+    from stockai.model.predictor import Predictor
+
+    data = pipeline._combined_training_data(cfg)
+    if data.empty:
+        print("Keine Daten verfügbar.")
+        return
+    model_type, _ = pipeline.resolve_model_type(cfg, data)
+    rs = int(cfg.model.get("random_state", 42))
+    groups = {
+        "Nur Technik + Markt": TECHNICAL_FEATURES + pipeline.MARKET_FEATURES,
+        "Nur News-Sentiment": SENTIMENT_FEATURES,
+        "Kombiniert (alle)": pipeline.FEATURE_COLUMNS,
+    }
+    print(f"News-Ablation (Modell: {model_type}, Zeitreihen-CV)\n")
+    print(f"  {'Feature-Set':24s}{'CV ROC-AUC':>14s}{'CV Accuracy':>14s}")
+    print("  " + "-" * 52)
+    aucs = {}
+    for name, feats in groups.items():
+        cv = Predictor(feats, model_type=model_type, random_state=rs).cross_validate(data)
+        auc = cv.get("cv_roc_auc_mean", float("nan"))
+        acc = cv.get("cv_accuracy_mean", float("nan"))
+        aucs[name] = auc
+        print(f"  {name:24s}{auc:14.3f}{acc:14.3f}")
+    tech = aucs.get("Nur Technik + Markt")
+    comb = aucs.get("Kombiniert (alle)")
+    if tech == tech and comb == comb:
+        delta = comb - tech
+        print(f"\n  → News-Beitrag zur Genauigkeit: {delta:+.3f} AUC "
+              f"({'hilft' if delta > 0 else 'kein Mehrwert'}).")
+
+
+def cmd_sweep(cfg, args) -> None:
+    """Mehr Backtesting: Strategie über ein Raster aus Schwelle × Positionen."""
+    from stockai import strategy as strat
+
+    period = args.period
+    print(f"Parameter-Sweep (Walk-Forward, retrain_every={args.retrain_every})…\n")
+    print(f"  {'Schwelle':>9s}{'Top-K':>7s}{'Gesamt':>11s}{'CAGR':>9s}"
+          f"{'Sharpe':>8s}{'MaxDD':>9s}")
+    print("  " + "-" * 53)
+    best = None
+    for thr in args.thresholds:
+        for k in args.top_k:
+            try:
+                res = strat.run_strategy_backtest(
+                    cfg, prob_threshold=thr, top_k=k, period=period,
+                    retrain_every=args.retrain_every, train_frac=args.train_frac,
+                )
+            except Exception as exc:
+                print(f"  {thr:9.2f}{k:7d}   Fehler: {exc}")
+                continue
+            m = res.metrics
+            print(f"  {thr:9.2f}{k:7d}{m['total_return']:11.1%}{res.cagr:9.1%}"
+                  f"{m['sharpe']:8.2f}{m['max_drawdown']:9.1%}")
+            score = m["sharpe"]
+            if best is None or score > best[0]:
+                best = (score, thr, k)
+    if best:
+        print(f"\n  → Beste Sharpe-Ratio bei Schwelle {best[1]:.2f}, Top-{best[2]}.")
+
+
 def cmd_evaluate(cfg, args) -> None:
     """Vergleicht mehrere Modelltypen per Zeitreihen-Kreuzvalidierung."""
     from stockai.model.predictor import AUTO_CANDIDATES, Predictor
@@ -380,7 +445,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="Konfiguration & Datenquellen-Erreichbarkeit prüfen")
     sub.add_parser("train", help="Modell (neu) trainieren")
     sub.add_parser("evaluate", help="Modelltypen per Kreuzvalidierung vergleichen")
+    sub.add_parser("ablation", help="Beitrag der News messen (Technik vs. News vs. beides)")
     sub.add_parser("tune", help="Hyperparameter optimieren (und speichern)")
+
+    psw = sub.add_parser("sweep", help="Mehr Backtesting: Raster aus Schwelle × Top-K")
+    psw.add_argument("--thresholds", type=float, nargs="+", default=[0.52, 0.55, 0.60])
+    psw.add_argument("--top-k", type=int, nargs="+", default=[2, 3, 5])
+    psw.add_argument("--period", default=None, help="Zeitraum, z.B. 5y/10y")
+    psw.add_argument("--retrain-every", type=int, default=5)
+    psw.add_argument("--train-frac", type=float, default=0.3)
 
     psc = sub.add_parser("scorecard", help="Treffsicherheit der Empfehlungen bewerten")
     psc.add_argument("--threshold", type=float, default=0.55)
@@ -424,6 +497,8 @@ _COMMANDS = {
     "doctor": cmd_doctor,
     "train": cmd_train,
     "evaluate": cmd_evaluate,
+    "ablation": cmd_ablation,
+    "sweep": cmd_sweep,
     "tune": cmd_tune,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
