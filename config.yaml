@@ -9,6 +9,8 @@
 data_source: demo
 
 # Welche Aktien werden beobachtet und analysiert?
+# Ein größeres Universum macht die Querschnitts-Features (relative Stärke)
+# deutlich aussagekräftiger – je mehr Werte, desto besser das Ranking.
 tickers:
   - AAPL   # Apple
   - MSFT   # Microsoft
@@ -17,6 +19,23 @@ tickers:
   - AMZN   # Amazon
   - TSLA   # Tesla
   - META   # Meta
+  - AVGO   # Broadcom
+  - AMD    # AMD
+  - NFLX   # Netflix
+  - CRM    # Salesforce
+  - ORCL   # Oracle
+  - ADBE   # Adobe
+  - INTC   # Intel
+  - QCOM   # Qualcomm
+  - JPM    # JPMorgan
+  - V      # Visa
+  - MA     # Mastercard
+  - JNJ    # Johnson & Johnson
+  - WMT    # Walmart
+  - XOM    # ExxonMobil
+  - KO     # Coca-Cola
+  - DIS    # Disney
+  - BA     # Boeing
 
 # ETFs/Fonds für den "Core" des Sparplans (breiter gestreut, geringeres Risiko).
 # Im Demo-Modus sind das synthetische Platzhalter; für echte Daten z.B.:

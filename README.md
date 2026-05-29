@@ -77,7 +77,13 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   rotiert das Geld") und **News-Sentiment als gelerntes Merkmal**.
 - **News fließen ins Lernen ein:** Das Modell wird auf tagesgenauem Sentiment
   mit-trainiert (im Demo-Modus an das Trend-Regime gekoppelt), nicht nur als
-  Anzeige – News-Features gehören dadurch zu den einflussreichsten Merkmalen.
+  Anzeige. Zusätzlich tiefere News-Features: **Sentiment-Trend**, **News-Mengen-
+  Spike** und **Schlagwort-Signal** (Earnings/Upgrade/Lawsuit …) – News gehören
+  dadurch zu den einflussreichsten Merkmalen.
+- **Expected-Return-Modell:** Neben „steigt ja/nein" schätzt ein Regressor die
+  **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
+- **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
+  Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
 - **Beste Modellwahl:** `type: auto` lässt mehrere Modelle (HistGradientBoosting,
   GradientBoosting, RandomForest, Logistic, Ensemble) gegeneinander antreten und
   wählt automatisch das mit der besten kreuzvalidierten Güte.
