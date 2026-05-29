@@ -197,6 +197,19 @@ mitgenutzt, andernfalls ohne Fehler übersprungen:
 export STOCKAI_NEWSAPI_KEY="dein_key"
 ```
 
+> 🔐 **Sicherheit:** Den Key niemals in `config.yaml` oder ins Repo committen.
+> Als Umgebungsvariable bzw. (in Claude Code on the Web) als Environment-Secret
+> hinterlegen. `newsapi.org` muss zudem von der Netzwerk-Policy erlaubt sein.
+
+### Diagnose
+
+```bash
+python -m stockai.cli doctor
+```
+
+Prüft die Konfiguration und ob die Live-Datenquellen (Yahoo, Google, NewsAPI)
+erreichbar sind – ideal, um ein Live-Setup zu verifizieren.
+
 ### Automatische Einrichtung (Claude Code on the Web)
 
 Ein SessionStart-Hook (`.claude/settings.json` → `.claude/hooks/setup.sh`)

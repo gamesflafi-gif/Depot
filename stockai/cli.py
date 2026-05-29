@@ -52,6 +52,46 @@ def cmd_train(cfg, args) -> None:
         print(f"    {name:18s}: {imp:.3f}")
 
 
+def cmd_doctor(cfg, args) -> None:
+    """Diagnose: Konfiguration + Erreichbarkeit der Live-Datenquellen prüfen."""
+    import os
+    import urllib.request
+
+    print("Diagnose der Aktien-KI\n" + "=" * 40)
+    source = cfg.raw.get("data_source", "live")
+    print(f"  Datenquelle (config):  {source}")
+    print(f"  Ticker:                {', '.join(cfg.tickers)}")
+    print(f"  Modelltyp:             {cfg.model.get('type')} "
+          f"(calibrate={cfg.model.get('calibrate', False)})")
+    key_set = bool(os.environ.get("STOCKAI_NEWSAPI_KEY"))
+    print(f"  NewsAPI-Key gesetzt:   {'ja' if key_set else 'nein'}")
+
+    def _reach(url: str) -> str:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "stockai-doctor"})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                return f"erreichbar (HTTP {r.status})"
+        except Exception as exc:
+            msg = str(getattr(exc, "code", exc))
+            return f"NICHT erreichbar ({msg})"
+
+    print("\n  Erreichbarkeit der Datenquellen:")
+    print(f"    Yahoo Finance:  {_reach('https://query1.finance.yahoo.com')}")
+    print(f"    Google News:    {_reach('https://news.google.com')}")
+    if key_set:
+        print(f"    NewsAPI.org:    {_reach('https://newsapi.org')}")
+
+    print("\n  Empfehlung:")
+    if source == "demo":
+        print("    • Demo-Modus aktiv – läuft offline. Für echte Daten in")
+        print("      config.yaml 'data_source: live' setzen (Netzwerk nötig).")
+    else:
+        print("    • Live-Modus aktiv. Sind Hosts oben NICHT erreichbar, muss die")
+        print("      Netzwerk-Policy der Umgebung diese freigeben.")
+    if not key_set:
+        print("    • Optional mehr News: export STOCKAI_NEWSAPI_KEY=… (newsapi.org)")
+
+
 def cmd_tune(cfg, args) -> None:
     """Sucht die besten Hyperparameter (Zeitreihen-CV) und speichert sie."""
     from stockai.model.tuning import tune_model
@@ -321,6 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-v", "--verbose", action="store_true", help="Ausführliche Logs")
     sub = p.add_subparsers(dest="command", required=True)
 
+    sub.add_parser("doctor", help="Konfiguration & Datenquellen-Erreichbarkeit prüfen")
     sub.add_parser("train", help="Modell (neu) trainieren")
     sub.add_parser("evaluate", help="Modelltypen per Kreuzvalidierung vergleichen")
     sub.add_parser("tune", help="Hyperparameter optimieren (und speichern)")
@@ -357,6 +398,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 _COMMANDS = {
+    "doctor": cmd_doctor,
     "train": cmd_train,
     "evaluate": cmd_evaluate,
     "tune": cmd_tune,
