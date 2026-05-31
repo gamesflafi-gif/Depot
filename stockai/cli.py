@@ -429,6 +429,14 @@ def cmd_briefing(cfg, args) -> None:
               ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
+def cmd_bot(cfg, args) -> None:
+    """Startet den interaktiven Telegram-Bot (läuft dauerhaft)."""
+    from stockai.telegram_bot import run_bot
+
+    print("Starte Telegram-Bot (Polling). Beenden mit Strg+C.")
+    run_bot(cfg)
+
+
 def cmd_top(cfg, args) -> None:
     """Wöchentlicher Top-N-Überblick in beide Richtungen; optional per Telegram."""
     from stockai import briefing as bf
@@ -561,6 +569,8 @@ def build_parser() -> argparse.ArgumentParser:
     pbf.add_argument("--top-n", type=int, default=5)
     pbf.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
 
+    sub.add_parser("bot", help="Interaktiven Telegram-Bot starten (dauerhaft)")
+
     pt = sub.add_parser("top", help="Top-N in beide Richtungen (z.B. wöchentlich)")
     pt.add_argument("--n", type=int, default=5)
     pt.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
@@ -613,6 +623,7 @@ _COMMANDS = {
     "simulate": cmd_simulate,
     "portfolio": cmd_portfolio,
     "briefing": cmd_briefing,
+    "bot": cmd_bot,
     "top": cmd_top,
     "sparplan": cmd_sparplan,
     "strategy": cmd_strategy,

@@ -196,6 +196,19 @@ def test_briefing_and_moves(tmp_path):
     assert br2.new_buys or br2.prob_moves
 
 
+def test_telegram_bot_commands():
+    """Befehlsverarbeitung des Bots (ohne Netzwerk)."""
+    from stockai.telegram_bot import handle_command
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    assert "Befehle" in handle_command(cfg, "/help")
+    assert "Befehle" in handle_command(cfg, "/start")
+    assert "Symbol" in handle_command(cfg, "/analyse")          # ohne Argument
+    assert "Unbekannt" in handle_command(cfg, "/quatsch")
+
+
 def test_top_report(tmp_path):
     """Wöchentlicher Top-N-Überblick (beide Richtungen)."""
     from stockai import briefing as bf
