@@ -63,7 +63,7 @@ def test_predictor_trains_and_predicts():
     df["pattern_mem"] = 0.0
     df["analog_mem"] = 0.0
     df["ticker_bias"] = 0.5
-    df = df.dropna(subset=FEATURE_COLUMNS + ["target"])
+    df = df.dropna(subset=[c for c in FEATURE_COLUMNS if c in df.columns] + ["target"])
     pred = Predictor(FEATURE_COLUMNS, model_type="logistic")
     result = pred.train(df, test_size=0.2)
     assert 0.0 <= result.metrics["accuracy"] <= 1.0
@@ -209,6 +209,23 @@ def test_live_quote_parsing():
     assert qf and abs(qf.price - 187.2) < 1e-6 and qf.change_pct == -1.3
     assert live.parse_finnhub({"c": 0}, "AAPL") is None   # ungültig
     assert live.parse_binance({}, "X") is None
+
+
+def test_intraday_parsers():
+    """Intraday-Parser (Binance/Twelve Data) – offline."""
+    from stockai.data import intraday
+    assert intraday.is_intraday("15m") and not intraday.is_intraday("1d")
+    kl = [[1700000000000, "100", "101", "99", "100.5", "12.3", 0, 0, 0, 0, 0, 0],
+          [1700000900000, "100.5", "102", "100", "101.8", "8.1", 0, 0, 0, 0, 0, 0]]
+    df = intraday.parse_binance_klines(kl)
+    assert list(df.columns) == ["Open", "High", "Low", "Close", "Volume"]
+    assert len(df) == 2 and abs(df["Close"].iloc[-1] - 101.8) < 1e-6
+    td = {"status": "ok", "values": [
+        {"datetime": "2024-01-02 15:30:00", "open": "1", "high": "2", "low": "0.5",
+         "close": "1.5", "volume": "1000"}]}
+    d2 = intraday.parse_twelvedata(td)
+    assert len(d2) == 1 and abs(d2["Close"].iloc[-1] - 1.5) < 1e-6
+    assert intraday.parse_twelvedata({"status": "error"}).empty
 
 
 def test_telegram_bot_commands():

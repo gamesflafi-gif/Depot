@@ -99,9 +99,12 @@ def cmd_doctor(cfg, args) -> None:
             return f"NICHT erreichbar ({msg})"
 
     print(f"  Kursquelle:            {cfg.raw.get('price_source', 'auto')}")
-    from stockai.data.live import finnhub_configured
-    print(f"  Live-Kurse:            Krypto via Binance (frei), "
-          f"Aktien via Finnhub {'(Key gesetzt)' if finnhub_configured() else '(kein Key)'}")
+    import os as _os
+    td = bool(_os.environ.get("STOCKAI_TWELVEDATA_KEY"))
+    fh = bool(_os.environ.get("STOCKAI_FINNHUB_KEY"))
+    stock_src = "Twelve Data" if td else ("Finnhub" if fh else "kein Key")
+    print(f"  Bar-Intervall (config):{cfg.history_interval:>8s}")
+    print(f"  Live/Intraday-Aktien:  {stock_src}   (Krypto: Binance, frei)")
     print("\n  Erreichbarkeit der Datenquellen:")
     print(f"    Yahoo Finance:  {_reach('https://query1.finance.yahoo.com')}")
     print(f"    Stooq (direkt): {_reach('https://stooq.com')}")

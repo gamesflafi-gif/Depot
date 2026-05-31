@@ -15,15 +15,34 @@ from __future__ import annotations
 
 import pandas as pd
 
+import os
+
 from stockai.config import Config
-from stockai.data import demo, news as news_mod, prices as prices_mod, stooq
+from stockai.data import demo, intraday, news as news_mod, prices as prices_mod, stooq
+from stockai.data.live import is_crypto, to_binance_symbol
 from stockai.data.news import NewsItem
+
+_TWELVEDATA_KEY_ENV = "STOCKAI_TWELVEDATA_KEY"
+
+
+def _fetch_intraday(ticker: str, interval: str, bars: int = 1500):
+    """Intraday-Bars: Krypto via Binance (frei), Aktien via Twelve Data (Key)."""
+    if is_crypto(ticker):
+        return intraday.fetch_binance_klines(to_binance_symbol(ticker), interval, limit=min(bars, 1000))
+    key = os.environ.get(_TWELVEDATA_KEY_ENV)
+    if not key:
+        return prices_mod.fetch_prices(ticker, "5d", "1d").iloc[:0]  # leer -> Ticker wird übersprungen
+    return intraday.fetch_twelvedata(ticker, interval, bars, key)
 
 
 def _fetch_live_prices(cfg: Config, ticker: str, period: str) -> pd.DataFrame:
     """Lädt echte Kurse gemäß ``price_source`` mit automatischem Fallback."""
     source = str(cfg.raw.get("price_source", "auto")).lower()
     interval = cfg.history_interval
+
+    # Intraday-Modus (z.B. 15m): andere Quellen als bei Tagesdaten
+    if intraday.is_intraday(interval):
+        return _fetch_intraday(ticker, interval)
 
     def yf():
         return prices_mod.fetch_prices(ticker, period, interval)
