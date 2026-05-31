@@ -120,6 +120,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   `history_interval: 15m` (o.ä.) trainiert das Modell auf **Intraday-Bars**
   (Krypto via Binance-Klines, Aktien via Alpaca/Twelve Data). `horizon` zählt
   dann in Bars.
+- **Intervall-Vergleich (ehrlich):** `compare --intervals 1d 15m` baut für jedes
+  Bar-Intervall denselben Datensatz und bewertet ihn per Zeitreihen-CV –
+  datenbasierte Antwort, ob Intraday beim eigenen Setup wirklich präziser ist.
 - **Live-Alerts & Monitor:** `alerts` meldet starke Kursbewegungen, `monitor`
   überwacht near-realtime in einer Schleife; Bot-Befehl `/alerts`. Per Cron
   z. B. alle 15 Min während des US-Handels.

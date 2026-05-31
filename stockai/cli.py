@@ -52,6 +52,29 @@ def cmd_train(cfg, args) -> None:
         print(f"    {name:18s}: {imp:.3f}")
 
 
+def cmd_compare(cfg, args) -> None:
+    """Vergleicht Bar-Intervalle (z.B. Tagesdaten vs. Intraday) per CV."""
+    from stockai.compare import compare_intervals
+
+    print(f"Vergleiche Intervalle {args.intervals} (ehrliche Zeitreihen-CV) …\n")
+    rows = compare_intervals(cfg, args.intervals)
+    print(f"  {'Intervall':12s}{'Samples':>9s}{'CV-AUC':>9s}{'CV-Acc':>9s}")
+    print("  " + "-" * 39)
+    valid = []
+    for r in rows:
+        auc = r.get("auc", float("nan"))
+        print(f"  {r['interval']:12s}{r['n']:9d}{auc:9.3f}{r.get('acc', float('nan')):9.3f}"
+              + ("  ⚠ " + r["error"][:40] if r.get("error") else ""))
+        if auc == auc:
+            valid.append((r["interval"], auc))
+    if len(valid) >= 2:
+        best = max(valid, key=lambda t: t[1])
+        print(f"\n  → Beste CV-AUC: {best[0]} ({best[1]:.3f}). "
+              "Höhere AUC = präzisere Vorhersage.")
+    else:
+        print("\n  Zu wenige auswertbare Intervalle (Datenquelle/Keys prüfen).")
+
+
 def cmd_alerts(cfg, args) -> None:
     """Prüft Live-Kurse auf starke Bewegungen; optional per Telegram."""
     from stockai import alerts as al
@@ -646,6 +669,10 @@ def build_parser() -> argparse.ArgumentParser:
     pl = sub.add_parser("live", help="Aktuelle Live-Kurse (Krypto frei, Aktien via Key)")
     pl.add_argument("symbols", nargs="*", help="Symbole (leer = alle aus config)")
 
+    pc = sub.add_parser("compare", help="Bar-Intervalle vergleichen (Tagesdaten vs. Intraday)")
+    pc.add_argument("--intervals", nargs="+", default=["1d", "15m"],
+                    help="zu vergleichende Intervalle (z.B. 1d 1h 15m)")
+
     pa = sub.add_parser("alerts", help="Live-Alerts: starke Bewegungen melden")
     pa.add_argument("--move-pct", type=float, default=3.0, help="Schwelle in %")
     pa.add_argument("--notify", action="store_true")
@@ -735,6 +762,7 @@ def build_parser() -> argparse.ArgumentParser:
 _COMMANDS = {
     "doctor": cmd_doctor,
     "live": cmd_live,
+    "compare": cmd_compare,
     "alerts": cmd_alerts,
     "monitor": cmd_monitor,
     "train": cmd_train,

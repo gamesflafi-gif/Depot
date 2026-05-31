@@ -228,6 +228,22 @@ def test_intraday_parsers():
     assert intraday.parse_twelvedata({"status": "error"}).empty
 
 
+def test_compare_intervals_demo():
+    from stockai.compare import compare_intervals
+    from stockai.config import load_config
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]
+    cfg.etfs = []
+    cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    rows = compare_intervals(cfg, ["1d", "1h"])
+    assert len(rows) == 2
+    assert all("auc" in r and "n" in r for r in rows)
+    # Demo ignoriert das Intervall -> beide haben Daten
+    assert rows[0]["n"] > 0
+
+
 def test_alpaca_parsers():
     from stockai.data import alpaca
     df = alpaca.parse_bars({"bars": [
