@@ -57,7 +57,7 @@ def render_savings_plan(plan) -> str:
     if plan.notes:
         lines += ["", "## Hinweise"]
         lines += [f"- {n}" for n in plan.notes]
-    lines += ["", "_Demo/Analyse – keine Anlageberatung._"]
+    lines += ["", "_Keine Anlageberatung._"]
     return "\n".join(lines)
 
 

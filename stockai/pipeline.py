@@ -39,8 +39,142 @@ log = logging.getLogger(__name__)
 # ("wohin rotiert das Geld" – relative Stärke + Rang gegenüber den Peers).
 MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_rank"]
 
-FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
+# Muster-Gedächtnis: erwartete Folge-Rendite für den aktuellen, wiederkehrenden
+# Kurs-Zustand + Analog-Mustererkennung (ähnliche historische Kursverläufe).
+PATTERN_FEATURES = ["pattern_mem", "analog_mem"]
+
+# Individuelles "Eigenprofil" je Wert: wie sich genau dieser Titel bisher
+# verhalten hat (kausale, historische Profitrate) – Individualität pro Aktie.
+INDIVIDUAL_FEATURES = ["ticker_bias"]
+
+FEATURE_COLUMNS = (
+    TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
+    + PATTERN_FEATURES + INDIVIDUAL_FEATURES
+)
 KEY_COLS = ["ticker", "date"]
+
+
+def ticker_bias(prices: pd.DataFrame, horizon: int, threshold: float = 0.0) -> pd.Series:
+    """Individuelles Eigenprofil eines Wertes (kausale historische Profitrate).
+
+    Anteil der bisherigen Tage, an denen der Titel über den Horizont profitabel
+    war – nur aus bereits bekannten (vergangenen) Ergebnissen gebildet. So lernt
+    das Modell die *individuelle* Tendenz jedes Wertes, ohne in die Zukunft zu
+    schauen.
+    """
+    cl = prices["Close"]
+    n = len(cl)
+    out = np.full(n, np.nan)
+    fwd = (cl.shift(-horizon) / cl - 1)
+    tgt = np.where(fwd.isna().values, np.nan, (fwd.values > threshold).astype(float))
+    s = 0.0
+    c = 0
+    for t in range(n):
+        j = t - horizon                      # Ergebnis von Tag j ist an Tag j+h bekannt
+        if j >= 0 and not np.isnan(tgt[j]):
+            s += tgt[j]
+            c += 1
+        if c > 0:
+            out[t] = s / c
+    return pd.Series(out, index=prices.index)
+
+
+def pattern_memory(prices: pd.DataFrame, horizon: int) -> pd.Series:
+    """Kausales Muster-Gedächtnis je Handelstag.
+
+    Der aktuelle Zustand wird grob klassifiziert (Momentum-Vorzeichen × RSI-Zone).
+    Der Wert ist die **durchschnittliche Folge-Rendite**, die in der Vergangenheit
+    auf *denselben* Zustand folgte – es werden nur bereits bekannte (vergangene)
+    Ergebnisse genutzt (kein Blick in die Zukunft). So erkennt das Modell
+    wiederkehrende Kursmuster und nutzt deren historischen Ausgang.
+    """
+    from collections import defaultdict
+
+    cl = prices["Close"]
+    n = len(cl)
+    out = np.full(n, np.nan)
+    if n < 40:
+        return pd.Series(out, index=prices.index)
+
+    ret5 = cl.pct_change(5).values
+    delta = cl.diff()
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+    rs = gain / loss.replace(0, np.nan)
+    rsi = (100 - 100 / (1 + rs)).values
+    fwd = (cl.shift(-horizon) / cl - 1).values
+
+    def state_of(i: int):
+        if np.isnan(ret5[i]) or np.isnan(rsi[i]):
+            return None
+        mom = 1 if ret5[i] > 0 else (-1 if ret5[i] < 0 else 0)
+        zone = 0 if rsi[i] < 30 else (2 if rsi[i] > 70 else 1)
+        return mom * 10 + zone
+
+    mem_sum: dict = defaultdict(float)
+    mem_cnt: dict = defaultdict(int)
+    for t in range(n):
+        j = t - horizon                      # Ergebnis von Tag j ist an Tag j+h bekannt
+        if j >= 0 and not np.isnan(fwd[j]):
+            sj = state_of(j)
+            if sj is not None:
+                mem_sum[sj] += fwd[j]
+                mem_cnt[sj] += 1
+        st = state_of(t)
+        if st is not None and mem_cnt[st] > 0:
+            out[t] = mem_sum[st] / mem_cnt[st]
+    return pd.Series(out, index=prices.index)
+
+
+def analog_memory(
+    prices: pd.DataFrame, horizon: int, window: int = 8, k: int = 20,
+    max_hist: int = 756,
+) -> pd.Series:
+    """Analog-Mustererkennung: ähnliche historische Kursverläufe finden & merken.
+
+    Für jeden Tag wird die *Form* der jüngsten ``window`` Tagesrenditen
+    (z-normiert, also skalenunabhängig) mit allen früheren Fenstern verglichen.
+    Aus den ``k`` ähnlichsten **vergangenen** Mustern wird die durchschnittliche
+    Folge-Rendite gebildet – „als der Kurs zuletzt so aussah, ging es danach im
+    Schnitt um X%". Kausal: nur Fenster, deren Ausgang bereits bekannt ist.
+    """
+    close = prices["Close"]
+    n = len(close)
+    out = np.full(n, np.nan)
+    if n < window + horizon + 30:
+        return pd.Series(out, index=prices.index)
+
+    r = close.pct_change().values
+    fwd = (close.shift(-horizon) / close - 1).values
+
+    # Z-normierte Form-Fenster je Endindex i
+    W = np.full((n, window), np.nan, dtype=float)
+    for i in range(window - 1, n):
+        seg = r[i - window + 1:i + 1]
+        if np.isnan(seg).any():
+            continue
+        sd = seg.std()
+        W[i] = (seg - seg.mean()) / sd if sd > 1e-9 else 0.0
+
+    for t in range(window - 1, n):
+        if np.isnan(W[t]).any():
+            continue
+        hi = t - horizon                     # nur Muster mit bekanntem Ausgang
+        lo = max(window - 1, hi - max_hist + 1)
+        if hi < lo:
+            continue
+        cand = W[lo:hi + 1]
+        cf = fwd[lo:hi + 1]
+        valid = ~np.isnan(cand).any(axis=1) & ~np.isnan(cf)
+        if valid.sum() < 5:
+            continue
+        cw = cand[valid]
+        cfv = cf[valid]
+        dist = ((cw - W[t]) ** 2).sum(axis=1)
+        kk = min(k, len(dist))
+        idx = np.argpartition(dist, kk - 1)[:kk]
+        out[t] = float(np.mean(cfv[idx]))
+    return pd.Series(out, index=prices.index)
 
 
 def universe(cfg: Config) -> list[str]:
@@ -129,6 +263,10 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         )
         # Stetige Folge-Rendite als Ziel für das Expected-Return-Modell
         feat["fwd_ret"] = prices["Close"].shift(-cfg.horizon_days) / prices["Close"] - 1.0
+        # Muster-Gedächtnis (wiederkehrende Kurs-Zustände) + Analog-Muster
+        feat["pattern_mem"] = pattern_memory(prices, cfg.horizon_days).values
+        feat["analog_mem"] = analog_memory(prices, cfg.horizon_days).values
+        feat["ticker_bias"] = ticker_bias(prices, cfg.horizon_days, cfg.profit_threshold).values
         # News-Sentiment je Tag einfügen, damit das Modell daraus lernt.
         # Verfügbar (z.B. Demo) -> echte Reihe; sonst neutral (0).
         sent_hist = provider.get_sentiment_history(cfg, ticker)
@@ -172,6 +310,13 @@ def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | No
 
     row: dict[str, float] = {f: float(feat[f]) for f in TECHNICAL_FEATURES}
     row.update({k: float(v) for k, v in sent_features.items()})
+    # Muster-Gedächtnis + Analog-Muster für den aktuellen (letzten) Tag
+    pm = pattern_memory(prices, cfg.horizon_days).iloc[-1]
+    row["pattern_mem"] = float(pm) if pm == pm else 0.0  # NaN -> 0
+    am = analog_memory(prices, cfg.horizon_days).iloc[-1]
+    row["analog_mem"] = float(am) if am == am else 0.0
+    tb = ticker_bias(prices, cfg.horizon_days, cfg.profit_threshold).iloc[-1]
+    row["ticker_bias"] = float(tb) if tb == tb else 0.5
     return row, scored_news, last_price
 
 
@@ -296,6 +441,10 @@ def resolve_model_type(
     model_type = cfg.model.get("type", "gradient_boosting")
     if model_type != "auto":
         return model_type, None
+    # Von 'evolve' gewählter Champion hat Vorrang (Selbst-Weiterentwicklung)
+    preferred = ModelStore(cfg.model_dir).load_preferred_model()
+    if preferred:
+        return preferred, None
     from stockai.model.selection import select_best_model
 
     sel = select_best_model(
@@ -474,6 +623,7 @@ def analyze(
             price_vs_high_20=row.get("price_vs_high_20", 1.0),
             macd_hist=macd_hist,
             sentiment_mean=row.get("sent_mean", 0.0),
+            expected_return=expected_return,
         )
         results.append(
             TickerAnalysis(

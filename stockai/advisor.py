@@ -29,6 +29,7 @@ def recommend(
     price_vs_high_20: float,
     macd_hist: float,
     sentiment_mean: float,
+    expected_return: float | None = None,
 ) -> Recommendation:
     """Leitet eine Handlungsempfehlung ab.
 
@@ -40,6 +41,9 @@ def recommend(
         price_vs_high_20: Kurs relativ zum 20-Tage-Hoch (1.0 = am Hoch).
         macd_hist: MACD minus Signallinie (> 0 = Aufwärtsmomentum).
         sentiment_mean: durchschnittliches News-Sentiment (-1..1).
+        expected_return: optionale erwartete Folge-Rendite (vom Regressor).
+            Ist sie klar negativ, wird trotz positiver Wahrscheinlichkeit kein
+            Kaufsignal gegeben (Konsistenz beider Modelle).
     """
     reasons: list[str] = []
 
@@ -71,8 +75,12 @@ def recommend(
     momentum_up = macd_hist > 0 and momentum_5d > 0.01
     positive_news = sentiment_mean > 0.15
     not_overheated = rsi_14 < 68
+    # Kein Kauf, wenn die erwartete Rendite klar negativ ist (Modell-Konsens)
+    er_negative = expected_return is not None and expected_return < -0.005
+    if er_negative:
+        reasons.append(f"Erwartete Rendite {expected_return:+.1%} negativ → kein Kauf")
 
-    if strong_signal and momentum_up and not_overheated:
+    if strong_signal and momentum_up and not_overheated and not er_negative:
         if positive_news:
             reasons.append(f"Positives News-Sentiment ({sentiment_mean:+.2f})")
         reasons.append(f"Modell: {profit_probability:.0%} Profit-Wahrscheinlichkeit")
@@ -84,7 +92,7 @@ def recommend(
             timing="Früh im Trend – Einstieg/Aufstockung sinnvoll, solange RSI < 70.",
         )
 
-    if profit_probability >= 0.55 and not_overheated:
+    if profit_probability >= 0.55 and not_overheated and not er_negative:
         reasons.append(f"Modell: {profit_probability:.0%} Profit-Wahrscheinlichkeit")
         return Recommendation(
             action="KAUFEN",

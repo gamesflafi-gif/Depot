@@ -86,8 +86,23 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   dadurch zu den einflussreichsten Merkmalen.
 - **Expected-Return-Modell:** Neben „steigt ja/nein" schätzt ein Regressor die
   **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
+- **Wiederkehrende Muster & Saisonalität:** Kalendereffekte (Wochentag/Monat),
+  ein **kausales Muster-Gedächtnis** (Folge-Rendite je Kurs-Zustand) und eine
+  **Analog-Mustererkennung**: Die KI vergleicht die *Form* der jüngsten
+  Kursbewegung mit allen früheren Verläufen und merkt sich, was nach den
+  ähnlichsten historischen Mustern im Schnitt passierte.
+- **Individualität je Wert:** ein kausales Eigenprofil (`ticker_bias`) lernt die
+  historische Tendenz *jedes einzelnen* Titels.
+- **Selbst-Weiterentwicklung:** `evolve` vergleicht regelmäßig alle Modelle,
+  wählt den besten, tunt ihn und übernimmt ihn als „Champion" (`preferred_model`).
+  Wöchentlich automatisiert – die KI verbessert ihre eigene Konfiguration mit
+  wachsender Datenbasis.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
+- **Interaktiver Telegram-Bot:** `bot` startet einen Bot, dem du direkt
+  schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`.
+  Reagiert nur auf die eigene Chat-ID. Dauerbetrieb via `deploy/install_bot.sh`
+  (systemd-Dienst).
 - **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und
   Verkaufssignale zusammen und meldet gezielt **Veränderungen seit dem letzten
   Lauf** (neue Kauf-/Verkaufssignale, große Wahrscheinlichkeits-Sprünge) – ideal
@@ -245,10 +260,9 @@ die Hosts blockiert sind (Fehler „Host not in allowlist“), muss die Policy
 entsprechend angepasst werden. Doku:
 <https://code.claude.com/docs/en/claude-code-on-the-web>
 
-> Im aktuellen Standard ist `demo` aktiv, damit das Projekt überall sofort
-> lauffähig ist. Die Demo-Daten sind synthetisch, enthalten aber ein bewusst
-> eingebautes, lernbares Trend-/News-Signal – so ist die Selbstverbesserung
-> messbar (`simulate` / `backtest` zeigen einen positiven Mehrwert).
+> Standard ist `data_source: live` (echte Daten – benötigt Internet). Zum
+> Ausprobieren ohne Netzwerk auf `demo` umstellen oder `--source demo` nutzen;
+> die Demo-Daten sind synthetisch mit einem eingebauten Lern-Signal.
 
 ### Optional: NewsAPI-Key für mehr News
 

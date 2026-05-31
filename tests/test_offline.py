@@ -60,6 +60,9 @@ def test_predictor_trains_and_predicts():
     df["rel_strength_20d"] = 0.0
     df["xs_mom_rank"] = 0.5
     df["xs_sent_rank"] = 0.5
+    df["pattern_mem"] = 0.0
+    df["analog_mem"] = 0.0
+    df["ticker_bias"] = 0.5
     df = df.dropna(subset=FEATURE_COLUMNS + ["target"])
     pred = Predictor(FEATURE_COLUMNS, model_type="logistic")
     result = pred.train(df, test_size=0.2)
@@ -82,6 +85,23 @@ def test_advisor_boom_signal():
         price_vs_high_20=0.9, macd_hist=0.5, sentiment_mean=0.3,
     )
     assert rec.action == "BOOM"
+
+
+def test_advisor_no_buy_on_negative_expected_return():
+    # Positives Wahrscheinlichkeits-Signal, aber negativ erwartete Rendite
+    rec = recommend(
+        profit_probability=0.66, rsi_14=55, momentum_5d=0.05,
+        price_vs_high_20=0.9, macd_hist=0.5, sentiment_mean=0.3,
+        expected_return=-0.02,
+    )
+    assert rec.action not in ("BOOM", "KAUFEN")
+    # Ohne (oder mit positiver) erwarteter Rendite bleibt es ein Kauf/Boom
+    rec2 = recommend(
+        profit_probability=0.66, rsi_14=55, momentum_5d=0.05,
+        price_vs_high_20=0.9, macd_hist=0.5, sentiment_mean=0.3,
+        expected_return=0.02,
+    )
+    assert rec2.action == "BOOM"
 
 
 def test_advisor_avoid_on_low_prob():
@@ -175,6 +195,61 @@ def test_briefing_and_moves(tmp_path):
     br2 = bf.build_briefing(cfg)
     assert br2.has_changes is True
     assert br2.new_buys or br2.prob_moves
+
+
+def test_telegram_bot_commands():
+    """Befehlsverarbeitung des Bots (ohne Netzwerk)."""
+    from stockai.telegram_bot import handle_command
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    assert "Befehle" in handle_command(cfg, "/help")
+    assert "Befehle" in handle_command(cfg, "/start")
+    assert "Symbol" in handle_command(cfg, "/analyse")          # ohne Argument
+    assert "Unbekannt" in handle_command(cfg, "/quatsch")
+
+
+def test_ticker_bias_causal():
+    """Individuelles Eigenprofil: kausal (nur Vergangenheit), Werte in [0,1]."""
+    from stockai import pipeline
+    df = _synthetic_prices(seed=3)
+    s = pipeline.ticker_bias(df, horizon=5, threshold=0.0)
+    valid = s.dropna()
+    assert len(valid) > 0
+    assert valid.min() >= 0.0 and valid.max() <= 1.0
+    # erste Werte sind NaN (noch keine bekannten Ergebnisse)
+    assert s.iloc[0] != s.iloc[0]  # NaN
+
+
+def test_preferred_model_roundtrip(tmp_path):
+    from stockai.model.store import ModelStore
+    ms = ModelStore(tmp_path)
+    assert ms.load_preferred_model() is None
+    ms.save_preferred_model("stacking")
+    assert ms.load_preferred_model() == "stacking"
+
+
+def test_top_report(tmp_path):
+    """Wöchentlicher Top-N-Überblick (beide Richtungen)."""
+    from stockai import briefing as bf
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+    cfg.etfs = []
+    cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    top, bottom = bf.build_top(cfg, n=3)
+    assert len(top) == 3 and len(bottom) == 3
+    # Top sind nach Wahrscheinlichkeit sortiert (höchste zuerst)
+    assert top[0].profit_probability >= top[-1].profit_probability
+    assert top[0].profit_probability >= bottom[0].profit_probability
+    report = bf.render_top(top, bottom, 3)
+    assert "Top 3 Chancen" in report and "Top 3 Risiken" in report
 
 
 def test_crypto_support():
@@ -325,6 +400,11 @@ def test_strategy_backtest_demo(tmp_path):
     out = tmp_path / "equity.png"
     path = strategy.plot_equity_curve(res, str(out))
     assert out.exists() and path == str(out)
+
+    # Mit Transaktionskosten ist die Gesamtrendite niedriger (ehrlicher)
+    res_cost = strategy.run_strategy_backtest(cfg, prob_threshold=0.5, top_k=2,
+                                              initial_capital=500.0, cost_bps=50.0)
+    assert res_cost.metrics["total_return"] <= res.metrics["total_return"] + 1e-9
 
 
 def test_demo_pipeline_train_and_learning_curve(tmp_path):

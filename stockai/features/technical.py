@@ -28,6 +28,8 @@ TECHNICAL_FEATURES: list[str] = [
     "bb_pctb",
     "atr_pct",
     "stoch_k",
+    "dow",
+    "month",
 ]
 
 
@@ -104,5 +106,10 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     low14 = low.rolling(14).min()
     high14 = high.rolling(14).max()
     out["stoch_k"] = (close - low14) / (high14 - low14).replace(0, np.nan) * 100
+
+    # Saisonalität: wiederkehrende Kalendereffekte (Wochentag, Monat)
+    idx = pd.DatetimeIndex(out.index)
+    out["dow"] = idx.dayofweek.astype(float)      # 0=Mo … 4=Fr
+    out["month"] = idx.month.astype(float)        # 1..12
 
     return out

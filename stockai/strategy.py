@@ -64,7 +64,10 @@ def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
     ``period`` überschreibt optional den Kurszeitraum (z.B. "10y" für eine
     lange Simulation), ohne die Trainingskonfiguration zu ändern.
     """
-    from stockai.pipeline import FEATURE_COLUMNS, add_market_features, universe
+    from stockai.pipeline import (
+        FEATURE_COLUMNS, add_market_features, analog_memory, pattern_memory,
+        ticker_bias, universe,
+    )
 
     horizon = cfg.horizon_days
     rows: list[pd.DataFrame] = []
@@ -78,6 +81,9 @@ def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
         feat = add_technical_features(prices)
         feat["fwd_ret"] = prices["Close"].shift(-horizon) / prices["Close"] - 1.0
         feat["target"] = (feat["fwd_ret"] > cfg.profit_threshold).astype("float")
+        feat["pattern_mem"] = pattern_memory(prices, horizon).values
+        feat["analog_mem"] = analog_memory(prices, horizon).values
+        feat["ticker_bias"] = ticker_bias(prices, horizon, cfg.profit_threshold).values
         # News-Sentiment je Tag (sofern verfügbar) -> News im Backtest nutzen
         sent_hist = provider.get_sentiment_history(cfg, ticker)
         if sent_hist is not None and not sent_hist.empty:
@@ -129,12 +135,17 @@ def run_strategy_backtest(
     period: str | None = None,
     initial_capital: float = 1.0,
     retrain_every: int = 1,
+    cost_bps: float = 10.0,
 ) -> StrategyResult:
     """Führt den Walk-Forward-Strategie-Backtest aus.
 
     ``retrain_every`` steuert, wie oft das Modell neu trainiert wird (1 = bei
     jedem Rebalancing). Größere Werte beschleunigen lange Simulationen deutlich
     und entsprechen dem realistischen Vorgehen, nicht ständig neu zu trainieren.
+
+    ``cost_bps`` sind die Transaktionskosten je Einheit Umschichtung in
+    Basispunkten (10 = 0,1 %). So ist die Strategie-Rendite **netto** nach
+    Gebühren/Spread – ehrlicher, gerade bei häufigem Rebalancing.
     """
     panel = _build_panel(cfg, period=period)
     if panel.empty:
@@ -159,6 +170,9 @@ def run_strategy_backtest(
     trades: list[dict] = []
     predictor = None
     steps_since_fit = 0
+    prev_weights: dict[str, float] = {}
+    cost_rate = cost_bps / 10000.0
+    total_cost = 0.0
 
     for t in rebal_dates:
         train = panel[panel["date"] <= (t - np.timedelta64(horizon, "D"))]
@@ -188,6 +202,21 @@ def run_strategy_backtest(
 
         strat_ret = float(picks["fwd_ret"].mean()) if not picks.empty else 0.0
         bench_ret = float(today["fwd_ret"].mean())
+
+        # Transaktionskosten über die Umschichtung (Turnover) gegenüber der
+        # vorigen Positionierung -> Netto-Rendite.
+        names = picks["ticker"].tolist()
+        w = 1.0 / len(names) if names else 0.0
+        new_weights = {t: w for t in names}
+        turnover = 0.5 * sum(
+            abs(new_weights.get(s, 0.0) - prev_weights.get(s, 0.0))
+            for s in set(new_weights) | set(prev_weights)
+        )
+        cost = cost_rate * turnover
+        total_cost += cost
+        prev_weights = new_weights
+        strat_ret -= cost
+
         strat_returns.append(strat_ret)
         bench_returns.append(bench_ret)
         used_dates.append(pd.Timestamp(t).strftime("%Y-%m-%d"))

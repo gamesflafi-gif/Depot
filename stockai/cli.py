@@ -382,9 +382,11 @@ def cmd_strategy(cfg, args) -> None:
         period=period, initial_capital=capital,
         retrain_every=getattr(args, "retrain_every", 1),
         train_frac=getattr(args, "train_frac", 0.4),
+        cost_bps=getattr(args, "cost_bps", 10.0),
     )
     m, b = res.metrics, res.benchmark_metrics
-    print(f"  Zeitraum:            ~{res.years:.1f} Jahre, {res.n_rebalances} Rebalancings")
+    print(f"  Zeitraum:            ~{res.years:.1f} Jahre, {res.n_rebalances} Rebalancings "
+          f"(netto, Kosten {getattr(args, 'cost_bps', 10.0):.0f} bps)")
     print(f"  {'':22s}{'KI-Strategie':>14s}{'Buy & Hold':>14s}")
     print("  " + "-" * 50)
     print(f"  {'Gesamtrendite':22s}{m['total_return']:13.1%}{b['total_return']:14.1%}")
@@ -420,6 +422,76 @@ def cmd_briefing(cfg, args) -> None:
     print("Erstelle Briefing (Analyse + Veränderungen) …\n")
     br = bf.build_briefing(cfg, top_n=args.top_n)
     report = bf.render_briefing(br, cfg)
+    print(report)
+    if args.notify:
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
+
+
+def cmd_evolve(cfg, args) -> None:
+    """Selbst-Weiterentwicklung: Modelle vergleichen, bestes tunen & übernehmen."""
+    from stockai.model.predictor import AUTO_CANDIDATES, Predictor
+    from stockai.model.tuning import tune_model
+
+    data = pipeline._combined_training_data(cfg)
+    if data.empty:
+        print("Keine Daten verfügbar.")
+        return
+    rs = int(cfg.model.get("random_state", 42))
+
+    print("Vergleiche Modelle (Zeitreihen-CV) …")
+    scored = []
+    for mtype in AUTO_CANDIDATES + ["ensemble", "stacking"]:
+        cv = Predictor(pipeline.FEATURE_COLUMNS, model_type=mtype,
+                       random_state=rs).cross_validate(data)
+        auc = cv.get("cv_roc_auc_mean")
+        if auc is not None and auc == auc:
+            scored.append((mtype, float(auc)))
+            print(f"  {mtype:24s} AUC {auc:.3f}")
+    if not scored:
+        print("Zu wenige Daten für eine Auswertung.")
+        return
+    scored.sort(key=lambda t: t[1], reverse=True)
+    best_type, best_auc = scored[0]
+    print(f"\n  → Bestes Modell: {best_type} (AUC {best_auc:.3f})")
+
+    # Bestes Modell tunen und Parameter persistieren
+    print("  Optimiere Hyperparameter des besten Modells …")
+    res = tune_model(data, pipeline.FEATURE_COLUMNS, best_type, random_state=rs)
+    store = ModelStore(cfg.model_dir)
+    if res.best_params:
+        store.save_tuned_params(best_type, res.best_params, res.best_score)
+        print(f"  Beste Parameter (CV-AUC {res.best_score:.3f}): {res.best_params}")
+    # Gewähltes Modell als bevorzugt speichern + finales Training
+    store.save_preferred_model(best_type)
+    result = pipeline.train(cfg)
+    store.append_history({
+        "event": "evolve", "chosen_model": best_type,
+        "candidate_ranking": scored,
+        "metrics": result.metrics, "cv_metrics": result.cv_metrics,
+    })
+    auc = result.metrics.get("roc_auc", result.metrics.get("accuracy"))
+    print(f"\n  ✔ Neu trainiert & übernommen (finale Güte ~{auc:.3f}).")
+    print("  Die KI hat ihre Konfiguration selbst verbessert.")
+
+
+def cmd_bot(cfg, args) -> None:
+    """Startet den interaktiven Telegram-Bot (läuft dauerhaft)."""
+    from stockai.telegram_bot import run_bot
+
+    print("Starte Telegram-Bot (Polling). Beenden mit Strg+C.")
+    run_bot(cfg)
+
+
+def cmd_top(cfg, args) -> None:
+    """Wöchentlicher Top-N-Überblick in beide Richtungen; optional per Telegram."""
+    from stockai import briefing as bf
+    from stockai import notify
+
+    print(f"Erstelle Top-{args.n}-Überblick …\n")
+    top, bottom = bf.build_top(cfg, n=args.n)
+    report = bf.render_top(top, bottom, args.n)
     print(report)
     if args.notify:
         ok, channel = notify.notify(report)
@@ -544,6 +616,13 @@ def build_parser() -> argparse.ArgumentParser:
     pbf.add_argument("--top-n", type=int, default=5)
     pbf.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
 
+    sub.add_parser("bot", help="Interaktiven Telegram-Bot starten (dauerhaft)")
+    sub.add_parser("evolve", help="Selbst-Weiterentwicklung: bestes Modell wählen & tunen")
+
+    pt = sub.add_parser("top", help="Top-N in beide Richtungen (z.B. wöchentlich)")
+    pt.add_argument("--n", type=int, default=5)
+    pt.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
+
     psp = sub.add_parser("sparplan", help="Sparplan (ETF-Core + beste Aktien) erstellen")
     psp.add_argument("--monthly", type=float, default=100.0, help="Sparbetrag €/Monat")
     psp.add_argument("--core-share", type=float, default=0.5,
@@ -565,6 +644,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Modell nur alle N Rebalancings neu trainieren (schneller)")
     pst.add_argument("--train-frac", type=float, default=0.4,
                      help="Anteil der Historie als Anfangs-Training (Rest wird gehandelt)")
+    pst.add_argument("--cost-bps", type=float, default=10.0,
+                     help="Transaktionskosten je Umschichtung in Basispunkten (10 = 0,1%)")
     pst.add_argument("--out", default="equity_curve.png", help="Pfad für den Chart")
     pst.add_argument("--no-chart", action="store_true", help="Keinen Chart erzeugen")
 
@@ -590,6 +671,9 @@ _COMMANDS = {
     "simulate": cmd_simulate,
     "portfolio": cmd_portfolio,
     "briefing": cmd_briefing,
+    "bot": cmd_bot,
+    "evolve": cmd_evolve,
+    "top": cmd_top,
     "sparplan": cmd_sparplan,
     "strategy": cmd_strategy,
     "backtest": cmd_backtest,

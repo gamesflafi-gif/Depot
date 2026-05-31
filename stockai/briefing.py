@@ -117,3 +117,34 @@ def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
 
     lines.append("\n_Keine Anlageberatung._")
     return "\n".join(lines)
+
+
+def build_top(cfg: Config, n: int = 5):
+    """Liefert (top_n, bottom_n) Werte nach Profit-Wahrscheinlichkeit."""
+    from stockai import pipeline
+
+    analyses = pipeline.analyze(cfg)
+    ranked = sorted(analyses, key=lambda a: a.profit_probability, reverse=True)
+    top = ranked[:n]
+    bottom = list(reversed(ranked[-n:])) if len(ranked) >= n else list(reversed(ranked))
+    return top, bottom
+
+
+def render_top(top: list, bottom: list, n: int = 5) -> str:
+    """Wöchentlicher Überblick: Top-N Chancen und Top-N Risiken."""
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    lines = [f"# 📅 Wochen-Überblick – Top {n} in beide Richtungen ({ts})"]
+
+    lines.append(f"\n## 🚀 Top {n} Chancen (höchste Profit-Wahrscheinlichkeit)")
+    for a in top:
+        er = f", E[Rendite] {a.expected_return:+.1%}" if a.expected_return is not None else ""
+        lines.append(f"- **{a.ticker}** [{a.asset_class}] {a.action} – "
+                     f"P {a.profit_probability:.0%}{er}")
+
+    lines.append(f"\n## 🔻 Top {n} Risiken (schwächste Werte)")
+    for a in bottom:
+        lines.append(f"- **{a.ticker}** [{a.asset_class}] {a.action} – "
+                     f"P {a.profit_probability:.0%}")
+
+    lines.append("\n_Keine Anlageberatung._")
+    return "\n".join(lines)

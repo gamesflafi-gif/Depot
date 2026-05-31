@@ -75,6 +75,23 @@ class ModelStore:
             data = json.load(fh)
         return data.get("params", {}) if data.get("model_type") == model_type else {}
 
+    # --- bevorzugtes Modell (von 'evolve' gewählter Champion) ----------- #
+    @property
+    def preferred_path(self) -> Path:
+        return self.model_dir / "preferred_model.json"
+
+    def save_preferred_model(self, model_type: str) -> None:
+        with open(self.preferred_path, "w", encoding="utf-8") as fh:
+            json.dump({"model_type": model_type}, fh, indent=2)
+
+    def load_preferred_model(self) -> str | None:
+        if not self.preferred_path.exists():
+            return None
+        try:
+            return json.load(open(self.preferred_path, encoding="utf-8")).get("model_type")
+        except Exception:
+            return None
+
     def load_model(self) -> Predictor | None:
         if self.model_path.exists():
             return joblib.load(self.model_path)
