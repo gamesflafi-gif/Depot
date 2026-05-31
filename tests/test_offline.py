@@ -62,6 +62,7 @@ def test_predictor_trains_and_predicts():
     df["xs_sent_rank"] = 0.5
     df["pattern_mem"] = 0.0
     df["analog_mem"] = 0.0
+    df["ticker_bias"] = 0.5
     df = df.dropna(subset=FEATURE_COLUMNS + ["target"])
     pred = Predictor(FEATURE_COLUMNS, model_type="logistic")
     result = pred.train(df, test_size=0.2)
@@ -207,6 +208,26 @@ def test_telegram_bot_commands():
     assert "Befehle" in handle_command(cfg, "/start")
     assert "Symbol" in handle_command(cfg, "/analyse")          # ohne Argument
     assert "Unbekannt" in handle_command(cfg, "/quatsch")
+
+
+def test_ticker_bias_causal():
+    """Individuelles Eigenprofil: kausal (nur Vergangenheit), Werte in [0,1]."""
+    from stockai import pipeline
+    df = _synthetic_prices(seed=3)
+    s = pipeline.ticker_bias(df, horizon=5, threshold=0.0)
+    valid = s.dropna()
+    assert len(valid) > 0
+    assert valid.min() >= 0.0 and valid.max() <= 1.0
+    # erste Werte sind NaN (noch keine bekannten Ergebnisse)
+    assert s.iloc[0] != s.iloc[0]  # NaN
+
+
+def test_preferred_model_roundtrip(tmp_path):
+    from stockai.model.store import ModelStore
+    ms = ModelStore(tmp_path)
+    assert ms.load_preferred_model() is None
+    ms.save_preferred_model("stacking")
+    assert ms.load_preferred_model() == "stacking"
 
 
 def test_top_report(tmp_path):

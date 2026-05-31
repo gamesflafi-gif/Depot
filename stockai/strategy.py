@@ -65,7 +65,8 @@ def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
     lange Simulation), ohne die Trainingskonfiguration zu ändern.
     """
     from stockai.pipeline import (
-        FEATURE_COLUMNS, add_market_features, analog_memory, pattern_memory, universe,
+        FEATURE_COLUMNS, add_market_features, analog_memory, pattern_memory,
+        ticker_bias, universe,
     )
 
     horizon = cfg.horizon_days
@@ -82,6 +83,7 @@ def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
         feat["target"] = (feat["fwd_ret"] > cfg.profit_threshold).astype("float")
         feat["pattern_mem"] = pattern_memory(prices, horizon).values
         feat["analog_mem"] = analog_memory(prices, horizon).values
+        feat["ticker_bias"] = ticker_bias(prices, horizon, cfg.profit_threshold).values
         # News-Sentiment je Tag (sofern verfügbar) -> News im Backtest nutzen
         sent_hist = provider.get_sentiment_history(cfg, ticker)
         if sent_hist is not None and not sent_hist.empty:

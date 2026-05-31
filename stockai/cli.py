@@ -429,6 +429,53 @@ def cmd_briefing(cfg, args) -> None:
               ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
+def cmd_evolve(cfg, args) -> None:
+    """Selbst-Weiterentwicklung: Modelle vergleichen, bestes tunen & übernehmen."""
+    from stockai.model.predictor import AUTO_CANDIDATES, Predictor
+    from stockai.model.tuning import tune_model
+
+    data = pipeline._combined_training_data(cfg)
+    if data.empty:
+        print("Keine Daten verfügbar.")
+        return
+    rs = int(cfg.model.get("random_state", 42))
+
+    print("Vergleiche Modelle (Zeitreihen-CV) …")
+    scored = []
+    for mtype in AUTO_CANDIDATES + ["ensemble", "stacking"]:
+        cv = Predictor(pipeline.FEATURE_COLUMNS, model_type=mtype,
+                       random_state=rs).cross_validate(data)
+        auc = cv.get("cv_roc_auc_mean")
+        if auc is not None and auc == auc:
+            scored.append((mtype, float(auc)))
+            print(f"  {mtype:24s} AUC {auc:.3f}")
+    if not scored:
+        print("Zu wenige Daten für eine Auswertung.")
+        return
+    scored.sort(key=lambda t: t[1], reverse=True)
+    best_type, best_auc = scored[0]
+    print(f"\n  → Bestes Modell: {best_type} (AUC {best_auc:.3f})")
+
+    # Bestes Modell tunen und Parameter persistieren
+    print("  Optimiere Hyperparameter des besten Modells …")
+    res = tune_model(data, pipeline.FEATURE_COLUMNS, best_type, random_state=rs)
+    store = ModelStore(cfg.model_dir)
+    if res.best_params:
+        store.save_tuned_params(best_type, res.best_params, res.best_score)
+        print(f"  Beste Parameter (CV-AUC {res.best_score:.3f}): {res.best_params}")
+    # Gewähltes Modell als bevorzugt speichern + finales Training
+    store.save_preferred_model(best_type)
+    result = pipeline.train(cfg)
+    store.append_history({
+        "event": "evolve", "chosen_model": best_type,
+        "candidate_ranking": scored,
+        "metrics": result.metrics, "cv_metrics": result.cv_metrics,
+    })
+    auc = result.metrics.get("roc_auc", result.metrics.get("accuracy"))
+    print(f"\n  ✔ Neu trainiert & übernommen (finale Güte ~{auc:.3f}).")
+    print("  Die KI hat ihre Konfiguration selbst verbessert.")
+
+
 def cmd_bot(cfg, args) -> None:
     """Startet den interaktiven Telegram-Bot (läuft dauerhaft)."""
     from stockai.telegram_bot import run_bot
@@ -570,6 +617,7 @@ def build_parser() -> argparse.ArgumentParser:
     pbf.add_argument("--notify", action="store_true", help="per Telegram/Webhook senden")
 
     sub.add_parser("bot", help="Interaktiven Telegram-Bot starten (dauerhaft)")
+    sub.add_parser("evolve", help="Selbst-Weiterentwicklung: bestes Modell wählen & tunen")
 
     pt = sub.add_parser("top", help="Top-N in beide Richtungen (z.B. wöchentlich)")
     pt.add_argument("--n", type=int, default=5)
@@ -624,6 +672,7 @@ _COMMANDS = {
     "portfolio": cmd_portfolio,
     "briefing": cmd_briefing,
     "bot": cmd_bot,
+    "evolve": cmd_evolve,
     "top": cmd_top,
     "sparplan": cmd_sparplan,
     "strategy": cmd_strategy,

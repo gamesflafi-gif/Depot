@@ -43,8 +43,40 @@ MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_ran
 # Kurs-Zustand + Analog-Mustererkennung (ähnliche historische Kursverläufe).
 PATTERN_FEATURES = ["pattern_mem", "analog_mem"]
 
-FEATURE_COLUMNS = TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES + PATTERN_FEATURES
+# Individuelles "Eigenprofil" je Wert: wie sich genau dieser Titel bisher
+# verhalten hat (kausale, historische Profitrate) – Individualität pro Aktie.
+INDIVIDUAL_FEATURES = ["ticker_bias"]
+
+FEATURE_COLUMNS = (
+    TECHNICAL_FEATURES + MARKET_FEATURES + SENTIMENT_FEATURES
+    + PATTERN_FEATURES + INDIVIDUAL_FEATURES
+)
 KEY_COLS = ["ticker", "date"]
+
+
+def ticker_bias(prices: pd.DataFrame, horizon: int, threshold: float = 0.0) -> pd.Series:
+    """Individuelles Eigenprofil eines Wertes (kausale historische Profitrate).
+
+    Anteil der bisherigen Tage, an denen der Titel über den Horizont profitabel
+    war – nur aus bereits bekannten (vergangenen) Ergebnissen gebildet. So lernt
+    das Modell die *individuelle* Tendenz jedes Wertes, ohne in die Zukunft zu
+    schauen.
+    """
+    cl = prices["Close"]
+    n = len(cl)
+    out = np.full(n, np.nan)
+    fwd = (cl.shift(-horizon) / cl - 1)
+    tgt = np.where(fwd.isna().values, np.nan, (fwd.values > threshold).astype(float))
+    s = 0.0
+    c = 0
+    for t in range(n):
+        j = t - horizon                      # Ergebnis von Tag j ist an Tag j+h bekannt
+        if j >= 0 and not np.isnan(tgt[j]):
+            s += tgt[j]
+            c += 1
+        if c > 0:
+            out[t] = s / c
+    return pd.Series(out, index=prices.index)
 
 
 def pattern_memory(prices: pd.DataFrame, horizon: int) -> pd.Series:
@@ -234,6 +266,7 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         # Muster-Gedächtnis (wiederkehrende Kurs-Zustände) + Analog-Muster
         feat["pattern_mem"] = pattern_memory(prices, cfg.horizon_days).values
         feat["analog_mem"] = analog_memory(prices, cfg.horizon_days).values
+        feat["ticker_bias"] = ticker_bias(prices, cfg.horizon_days, cfg.profit_threshold).values
         # News-Sentiment je Tag einfügen, damit das Modell daraus lernt.
         # Verfügbar (z.B. Demo) -> echte Reihe; sonst neutral (0).
         sent_hist = provider.get_sentiment_history(cfg, ticker)
@@ -282,6 +315,8 @@ def _live_feature_row(cfg: Config, ticker: str) -> tuple[dict, list, float] | No
     row["pattern_mem"] = float(pm) if pm == pm else 0.0  # NaN -> 0
     am = analog_memory(prices, cfg.horizon_days).iloc[-1]
     row["analog_mem"] = float(am) if am == am else 0.0
+    tb = ticker_bias(prices, cfg.horizon_days, cfg.profit_threshold).iloc[-1]
+    row["ticker_bias"] = float(tb) if tb == tb else 0.5
     return row, scored_news, last_price
 
 
@@ -406,6 +441,10 @@ def resolve_model_type(
     model_type = cfg.model.get("type", "gradient_boosting")
     if model_type != "auto":
         return model_type, None
+    # Von 'evolve' gewählter Champion hat Vorrang (Selbst-Weiterentwicklung)
+    preferred = ModelStore(cfg.model_dir).load_preferred_model()
+    if preferred:
+        return preferred, None
     from stockai.model.selection import select_best_model
 
     sel = select_best_model(

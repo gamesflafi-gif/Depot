@@ -91,6 +91,12 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   **Analog-Mustererkennung**: Die KI vergleicht die *Form* der jüngsten
   Kursbewegung mit allen früheren Verläufen und merkt sich, was nach den
   ähnlichsten historischen Mustern im Schnitt passierte.
+- **Individualität je Wert:** ein kausales Eigenprofil (`ticker_bias`) lernt die
+  historische Tendenz *jedes einzelnen* Titels.
+- **Selbst-Weiterentwicklung:** `evolve` vergleicht regelmäßig alle Modelle,
+  wählt den besten, tunt ihn und übernimmt ihn als „Champion" (`preferred_model`).
+  Wöchentlich automatisiert – die KI verbessert ihre eigene Konfiguration mit
+  wachsender Datenbasis.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
 - **Interaktiver Telegram-Bot:** `bot` startet einen Bot, dem du direkt
