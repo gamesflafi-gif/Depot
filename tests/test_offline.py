@@ -60,6 +60,8 @@ def test_predictor_trains_and_predicts():
     df["rel_strength_20d"] = 0.0
     df["xs_mom_rank"] = 0.5
     df["xs_sent_rank"] = 0.5
+    df["mkt_trend"] = df["dist_sma50"]
+    df["mkt_vol"] = df["vol_20d"]
     df["pattern_mem"] = 0.0
     df["analog_mem"] = 0.0
     df["ticker_bias"] = 0.5
@@ -356,6 +358,18 @@ def test_crypto_support():
     assert total <= 100.0 + 0.01
     # Krypto-Anteil bleibt klein (<= 10% + Toleranz)
     assert sum(p.monthly for p in plan.crypto_positions) <= 10.5
+
+
+def test_market_regime():
+    from types import SimpleNamespace
+    from stockai.briefing import market_regime
+    bull = [SimpleNamespace(momentum_5d=0.03, rsi_14=60, profit_probability=0.6)
+            for _ in range(5)]
+    bear = [SimpleNamespace(momentum_5d=-0.03, rsi_14=40, profit_probability=0.4)
+            for _ in range(5)]
+    assert "bullisch" in market_regime(bull)
+    assert "bärisch" in market_regime(bear)
+    assert market_regime([]) == "unbekannt"
 
 
 def test_sector_cap_diversification():

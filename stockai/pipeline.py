@@ -36,8 +36,9 @@ from stockai.model.store import FeatureStore, ModelStore
 log = logging.getLogger(__name__)
 
 # Markt-/Querschnitts-Features: Kontext über alle Ticker hinweg
-# ("wohin rotiert das Geld" – relative Stärke + Rang gegenüber den Peers).
-MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_rank"]
+# ("wohin rotiert das Geld" + Markt-Regime: Trend & Volatilitätslage).
+MARKET_FEATURES = ["mkt_ret_5d", "rel_strength_20d", "xs_mom_rank", "xs_sent_rank",
+                   "mkt_trend", "mkt_vol"]
 
 # Muster-Gedächtnis: erwartete Folge-Rendite für den aktuellen, wiederkehrenden
 # Kurs-Zustand + Analog-Mustererkennung (ähnliche historische Kursverläufe).
@@ -214,6 +215,10 @@ def add_market_features(df: pd.DataFrame) -> pd.DataFrame:
         df["xs_sent_rank"] = 0.5
     # Einzel-Ticker / fehlende Werte -> neutraler Rang
     df[["xs_mom_rank", "xs_sent_rank"]] = df[["xs_mom_rank", "xs_sent_rank"]].fillna(0.5)
+    # Markt-Regime: breiter Trend (Abstand zur SMA50) + Volatilitätslage je Datum
+    df["mkt_trend"] = g["dist_sma50"].transform("mean") if "dist_sma50" in df else 0.0
+    df["mkt_vol"] = g["vol_20d"].transform("mean") if "vol_20d" in df else 0.0
+    df[["mkt_trend", "mkt_vol"]] = df[["mkt_trend", "mkt_vol"]].fillna(0.0)
     return df
 
 
@@ -334,11 +339,15 @@ def _augment_with_market(rows: list[dict]) -> None:
     n = len(rows)
     mom = pd.Series([r.get("ret_20d", 0.0) for r in rows]).rank(pct=True)
     sent = pd.Series([r.get("sent_mean", 0.0) for r in rows]).rank(pct=True)
+    mkt_trend = float(np.mean([r.get("dist_sma50", 0.0) for r in rows]))
+    mkt_vol = float(np.mean([r.get("vol_20d", 0.0) for r in rows]))
     for i, r in enumerate(rows):
         r["mkt_ret_5d"] = mkt5
         r["rel_strength_20d"] = float(r.get("ret_20d", 0.0) - mkt20)
         r["xs_mom_rank"] = float(mom.iloc[i]) if n > 1 else 0.5
         r["xs_sent_rank"] = float(sent.iloc[i]) if n > 1 else 0.5
+        r["mkt_trend"] = mkt_trend
+        r["mkt_vol"] = mkt_vol
 
 
 def snapshot_live(cfg: Config) -> int:

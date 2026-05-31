@@ -120,6 +120,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   `history_interval: 15m` (o.ä.) trainiert das Modell auf **Intraday-Bars**
   (Krypto via Binance-Klines, Aktien via Alpaca/Twelve Data). `horizon` zählt
   dann in Bars.
+- **Markt-Regime:** Kontext-Features `mkt_trend`/`mkt_vol` (breiter Markttrend &
+  Volatilitätslage) lassen das Modell in Bullen-/Bärenphasen unterschiedlich
+  agieren; das Briefing zeigt die **Marktlage** (bullisch/neutral/bärisch).
 - **Intervall-Vergleich (ehrlich):** `compare --intervals 1d 15m` baut für jedes
   Bar-Intervall denselben Datensatz und bewertet ihn per Zeitreihen-CV –
   datenbasierte Antwort, ob Intraday beim eigenen Setup wirklich präziser ist.
