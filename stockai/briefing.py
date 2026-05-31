@@ -34,6 +34,22 @@ class Briefing:
     new_sells: list = field(default_factory=list)
     prob_moves: list = field(default_factory=list)    # (ticker, old, new)
     has_changes: bool = False
+    regime: str = ""
+
+
+def market_regime(analyses) -> str:
+    """Grobe Marktlage aus den Analysen: bullisch / neutral / bärisch."""
+    if not analyses:
+        return "unbekannt"
+    import statistics
+    mom = statistics.mean(a.momentum_5d for a in analyses)
+    rsi = statistics.mean(a.rsi_14 for a in analyses)
+    up = sum(1 for a in analyses if a.profit_probability >= 0.5) / len(analyses)
+    if mom > 0.01 and rsi >= 52 and up >= 0.55:
+        return f"📈 bullisch (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
+    if mom < -0.01 and rsi <= 48 and up <= 0.45:
+        return f"📉 bärisch (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
+    return f"➖ neutral (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
 
 
 def _state_path(cfg: Config) -> Path:
@@ -65,6 +81,7 @@ def build_briefing(cfg: Config, top_n: int = 5) -> Briefing:
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     br = Briefing(timestamp=ts)
+    br.regime = market_regime(analyses)
     br.top_buys = [a for a in analyses if a.action in _BUY][:top_n]
     br.top_sells = [a for a in analyses if a.action in _SELL][:top_n]
 
@@ -88,6 +105,8 @@ def build_briefing(cfg: Config, top_n: int = 5) -> Briefing:
 def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
     """Markdown-Report (Telegram-tauglich)."""
     lines = [f"# 📊 Aktien-KI Briefing ({br.timestamp})"]
+    if br.regime:
+        lines.append(f"**Marktlage:** {br.regime}")
 
     if br.has_changes:
         lines.append("\n## ⚡ Bewegungen seit dem letzten Lauf")
