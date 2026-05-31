@@ -30,6 +30,7 @@ TECHNICAL_FEATURES: list[str] = [
     "stoch_k",
     "dow",
     "month",
+    "hour",
 ]
 
 
@@ -111,5 +112,6 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     idx = pd.DatetimeIndex(out.index)
     out["dow"] = idx.dayofweek.astype(float)      # 0=Mo … 4=Fr
     out["month"] = idx.month.astype(float)        # 1..12
+    out["hour"] = idx.hour.astype(float)          # Intraday: Tageszeit (0 bei Tagesdaten)
 
     return out

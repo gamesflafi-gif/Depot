@@ -87,7 +87,10 @@ crypto:
 
 # Wie viel Kurs-Historie wird für Training/Features geladen?
 history_period: "2y"        # z.B. 1y, 2y, 5y, max
-history_interval: "1d"      # 1d = Tageskerzen
+# Bar-Intervall: "1d" = Tageskerzen. Für INTRADAY z.B. "15m", "1h":
+#   Krypto via Binance (frei), Aktien/ETFs via Twelve Data (STOCKAI_TWELVEDATA_KEY).
+#   Hinweis: horizon_days/horizons zählen dann in BARS, nicht Tagen.
+history_interval: "1d"
 
 # Vorhersage-Ziel
 horizon_days: 5             # Haupt-Horizont (für Aktion/Sparplan)

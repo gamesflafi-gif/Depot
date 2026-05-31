@@ -20,6 +20,7 @@ from dataclasses import dataclass
 log = logging.getLogger(__name__)
 
 _FINNHUB_KEY_ENV = "STOCKAI_FINNHUB_KEY"
+_TWELVEDATA_KEY_ENV = "STOCKAI_TWELVEDATA_KEY"
 _UA = "Mozilla/5.0 (compatible; stockai/0.1)"
 _CRYPTO_HINTS = {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "BNB", "DOT", "LTC", "AVAX"}
 
@@ -70,6 +71,19 @@ def parse_finnhub(data: dict, ticker: str) -> Quote | None:
         return None
 
 
+def parse_twelvedata_quote(data: dict, ticker: str) -> Quote | None:
+    """Wertet die Twelve-Data /quote-Antwort aus (close, percent_change)."""
+    try:
+        if data.get("status") == "error":
+            return None
+        price = float(data["close"])
+        return Quote(ticker=ticker, price=price,
+                     change_pct=float(data.get("percent_change") or 0.0),
+                     source="twelvedata")
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
 def get_quote(ticker: str) -> Quote | None:
     """Aktueller Live-Kurs (oder None, falls keine Quelle verfügbar)."""
     try:
@@ -77,12 +91,19 @@ def get_quote(ticker: str) -> Quote | None:
             sym = to_binance_symbol(ticker)
             data = _http_json(f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}")
             return parse_binance(data, ticker)
-        key = os.environ.get(_FINNHUB_KEY_ENV)
-        if not key:
-            return None
-        data = _http_json(
-            f"https://finnhub.io/api/v1/quote?symbol={ticker.upper()}&token={key}")
-        return parse_finnhub(data, ticker)
+        # Aktien/ETFs: Twelve Data (ein Key für Quote + Intraday) bevorzugt,
+        # sonst Finnhub.
+        td = os.environ.get(_TWELVEDATA_KEY_ENV)
+        if td:
+            data = _http_json(
+                f"https://api.twelvedata.com/quote?symbol={ticker.upper()}&apikey={td}")
+            return parse_twelvedata_quote(data, ticker)
+        fh = os.environ.get(_FINNHUB_KEY_ENV)
+        if fh:
+            data = _http_json(
+                f"https://finnhub.io/api/v1/quote?symbol={ticker.upper()}&token={fh}")
+            return parse_finnhub(data, ticker)
+        return None
     except Exception as exc:
         log.warning("Live-Kurs für %s fehlgeschlagen: %s", ticker, exc)
         return None
