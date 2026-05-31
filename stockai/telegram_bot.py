@@ -33,6 +33,7 @@ _HELP = (
     "/analyse SYM – Einzelanalyse (z.B. /analyse NVDA)\n"
     "/live SYM – aktueller Live-Kurs (Krypto frei, Aktien via Finnhub-Key)\n"
     "/briefing – aktuelles Briefing mit Moves\n"
+    "/alerts – starke Live-Bewegungen\n"
     "/top [n] – Top-n Chancen & Risiken\n"
     "/sparplan [€] – Sparplan-Vorschlag\n"
     "/help – diese Übersicht\n\n"
@@ -54,6 +55,11 @@ def handle_command(cfg: Config, text: str) -> str:
     if cmd == "briefing":
         from stockai import briefing as bf
         return bf.render_briefing(bf.build_briefing(cfg))
+
+    if cmd == "alerts":
+        from stockai import alerts as al
+        res = al.check_alerts(cfg)
+        return al.render_alerts(res) or "Aktuell keine starken Bewegungen."
 
     if cmd == "top":
         from stockai import briefing as bf

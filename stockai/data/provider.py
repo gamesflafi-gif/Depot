@@ -26,9 +26,15 @@ _TWELVEDATA_KEY_ENV = "STOCKAI_TWELVEDATA_KEY"
 
 
 def _fetch_intraday(ticker: str, interval: str, bars: int = 1500):
-    """Intraday-Bars: Krypto via Binance (frei), Aktien via Twelve Data (Key)."""
+    """Intraday-Bars: Krypto via Binance (frei); Aktien via Alpaca (bevorzugt)
+    oder Twelve Data."""
     if is_crypto(ticker):
         return intraday.fetch_binance_klines(to_binance_symbol(ticker), interval, limit=min(bars, 1000))
+    from stockai.data import alpaca
+    if alpaca.configured():
+        df = alpaca.fetch_bars(ticker, interval, limit=bars)
+        if not df.empty:
+            return df
     key = os.environ.get(_TWELVEDATA_KEY_ENV)
     if not key:
         return prices_mod.fetch_prices(ticker, "5d", "1d").iloc[:0]  # leer -> Ticker wird übersprungen

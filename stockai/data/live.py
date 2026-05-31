@@ -14,10 +14,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import urllib.request
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
+
+# kleiner TTL-Cache für Live-Quotes (reduziert doppelte Anfragen pro Lauf)
+_QUOTE_CACHE: dict = {}
+_QUOTE_TTL = 60.0  # Sekunden
 
 _FINNHUB_KEY_ENV = "STOCKAI_FINNHUB_KEY"
 _TWELVEDATA_KEY_ENV = "STOCKAI_TWELVEDATA_KEY"
@@ -85,14 +90,28 @@ def parse_twelvedata_quote(data: dict, ticker: str) -> Quote | None:
 
 
 def get_quote(ticker: str) -> Quote | None:
-    """Aktueller Live-Kurs (oder None, falls keine Quelle verfügbar)."""
+    """Aktueller Live-Kurs (oder None, falls keine Quelle verfügbar). Mit Cache."""
+    now = time.time()
+    cached = _QUOTE_CACHE.get(ticker)
+    if cached and now - cached[0] < _QUOTE_TTL:
+        return cached[1]
+    q = _fetch_quote(ticker)
+    _QUOTE_CACHE[ticker] = (now, q)
+    return q
+
+
+def _fetch_quote(ticker: str) -> Quote | None:
     try:
         if is_crypto(ticker):
             sym = to_binance_symbol(ticker)
             data = _http_json(f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}")
             return parse_binance(data, ticker)
-        # Aktien/ETFs: Twelve Data (ein Key für Quote + Intraday) bevorzugt,
-        # sonst Finnhub.
+        # Aktien/ETFs: Alpaca (großzügig) > Twelve Data > Finnhub
+        from stockai.data import alpaca
+        if alpaca.configured():
+            q = alpaca.get_quote(ticker)
+            if q:
+                return q
         td = os.environ.get(_TWELVEDATA_KEY_ENV)
         if td:
             data = _http_json(
