@@ -197,6 +197,20 @@ def test_briefing_and_moves(tmp_path):
     assert br2.new_buys or br2.prob_moves
 
 
+def test_live_quote_parsing():
+    """Live-Kurs-Hilfsfunktionen (offline, ohne Netzwerk)."""
+    from stockai.data import live
+    assert live.to_binance_symbol("BTC-USD") == "BTCUSDT"
+    assert live.to_binance_symbol("ETH") == "ETHUSDT"
+    assert live.is_crypto("BTC-USD") and not live.is_crypto("AAPL")
+    qb = live.parse_binance({"lastPrice": "65000.5", "priceChangePercent": "2.5"}, "BTC-USD")
+    assert qb and abs(qb.price - 65000.5) < 1e-6 and qb.source == "binance"
+    qf = live.parse_finnhub({"c": 187.2, "dp": -1.3}, "AAPL")
+    assert qf and abs(qf.price - 187.2) < 1e-6 and qf.change_pct == -1.3
+    assert live.parse_finnhub({"c": 0}, "AAPL") is None   # ungültig
+    assert live.parse_binance({}, "X") is None
+
+
 def test_telegram_bot_commands():
     """Befehlsverarbeitung des Bots (ohne Netzwerk)."""
     from stockai.telegram_bot import handle_command

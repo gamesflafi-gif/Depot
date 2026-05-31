@@ -52,6 +52,21 @@ def cmd_train(cfg, args) -> None:
         print(f"    {name:18s}: {imp:.3f}")
 
 
+def cmd_live(cfg, args) -> None:
+    """Aktuelle Live-Kurse (Krypto via Binance, Aktien via Finnhub-Key)."""
+    from stockai.data.live import get_quote
+
+    syms = args.symbols if args.symbols else (cfg.tickers + cfg.etfs + cfg.crypto)
+    print(f"{'Symbol':10s}{'Live-Kurs':>14s}{'Tag %':>10s}{'Quelle':>10s}")
+    print("-" * 44)
+    for s in syms:
+        q = get_quote(s)
+        if q:
+            print(f"{s:10s}{q.price:14.2f}{q.change_pct:+10.2f}{q.source:>10s}")
+        else:
+            print(f"{s:10s}{'–':>14s}{'–':>10s}{'(kein Live)':>10s}")
+
+
 def cmd_doctor(cfg, args) -> None:
     """Diagnose: Konfiguration + Erreichbarkeit der Live-Datenquellen prüfen."""
     import os
@@ -84,9 +99,13 @@ def cmd_doctor(cfg, args) -> None:
             return f"NICHT erreichbar ({msg})"
 
     print(f"  Kursquelle:            {cfg.raw.get('price_source', 'auto')}")
+    from stockai.data.live import finnhub_configured
+    print(f"  Live-Kurse:            Krypto via Binance (frei), "
+          f"Aktien via Finnhub {'(Key gesetzt)' if finnhub_configured() else '(kein Key)'}")
     print("\n  Erreichbarkeit der Datenquellen:")
     print(f"    Yahoo Finance:  {_reach('https://query1.finance.yahoo.com')}")
     print(f"    Stooq (direkt): {_reach('https://stooq.com')}")
+    print(f"    Binance (Krypto-Live): {_reach('https://api.binance.com')}")
     print(f"    Google News:    {_reach('https://news.google.com')}")
     if key_set:
         print(f"    NewsAPI.org:    {_reach('https://newsapi.org')}")
@@ -582,6 +601,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Datenquelle überschreiben (ohne config.yaml zu ändern)")
     sub = p.add_subparsers(dest="command", required=True)
 
+    pl = sub.add_parser("live", help="Aktuelle Live-Kurse (Krypto frei, Aktien via Finnhub-Key)")
+    pl.add_argument("symbols", nargs="*", help="Symbole (leer = alle aus config)")
+
     sub.add_parser("doctor", help="Konfiguration & Datenquellen-Erreichbarkeit prüfen")
     sub.add_parser("train", help="Modell (neu) trainieren")
     sub.add_parser("evaluate", help="Modelltypen per Kreuzvalidierung vergleichen")
@@ -661,6 +683,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 _COMMANDS = {
     "doctor": cmd_doctor,
+    "live": cmd_live,
     "train": cmd_train,
     "evaluate": cmd_evaluate,
     "ablation": cmd_ablation,
