@@ -52,6 +52,44 @@ def cmd_train(cfg, args) -> None:
         print(f"    {name:18s}: {imp:.3f}")
 
 
+def cmd_alerts(cfg, args) -> None:
+    """Prüft Live-Kurse auf starke Bewegungen; optional per Telegram."""
+    from stockai import alerts as al
+    from stockai import notify
+
+    res = al.check_alerts(cfg, move_pct=args.move_pct)
+    report = al.render_alerts(res)
+    if not res.has_alerts:
+        print("Keine starken Bewegungen.")
+        return
+    print(report)
+    if args.notify:
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
+
+
+def cmd_monitor(cfg, args) -> None:
+    """Near-realtime-Überwachung: prüft alle N Minuten auf starke Bewegungen."""
+    import time
+    from stockai import alerts as al
+    from stockai import notify
+
+    print(f"Live-Monitor aktiv (alle {args.interval} Min, Schwelle {args.move_pct}%). "
+          "Beenden mit Strg+C.")
+    while True:
+        try:
+            res = al.check_alerts(cfg, move_pct=args.move_pct)
+            if res.has_alerts:
+                report = al.render_alerts(res)
+                print(report + "\n")
+                if args.notify:
+                    notify.notify(report)
+        except Exception as exc:
+            print(f"Monitor-Fehler: {exc}")
+        time.sleep(max(1, args.interval) * 60)
+
+
 def cmd_live(cfg, args) -> None:
     """Aktuelle Live-Kurse (Krypto via Binance, Aktien via Finnhub-Key)."""
     from stockai.data.live import get_quote
@@ -100,9 +138,10 @@ def cmd_doctor(cfg, args) -> None:
 
     print(f"  Kursquelle:            {cfg.raw.get('price_source', 'auto')}")
     import os as _os
+    al = bool(_os.environ.get("STOCKAI_ALPACA_KEY") and _os.environ.get("STOCKAI_ALPACA_SECRET"))
     td = bool(_os.environ.get("STOCKAI_TWELVEDATA_KEY"))
     fh = bool(_os.environ.get("STOCKAI_FINNHUB_KEY"))
-    stock_src = "Twelve Data" if td else ("Finnhub" if fh else "kein Key")
+    stock_src = ("Alpaca" if al else "Twelve Data" if td else "Finnhub" if fh else "kein Key")
     print(f"  Bar-Intervall (config):{cfg.history_interval:>8s}")
     print(f"  Live/Intraday-Aktien:  {stock_src}   (Krypto: Binance, frei)")
     print("\n  Erreichbarkeit der Datenquellen:")
@@ -604,8 +643,17 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Datenquelle überschreiben (ohne config.yaml zu ändern)")
     sub = p.add_subparsers(dest="command", required=True)
 
-    pl = sub.add_parser("live", help="Aktuelle Live-Kurse (Krypto frei, Aktien via Finnhub-Key)")
+    pl = sub.add_parser("live", help="Aktuelle Live-Kurse (Krypto frei, Aktien via Key)")
     pl.add_argument("symbols", nargs="*", help="Symbole (leer = alle aus config)")
+
+    pa = sub.add_parser("alerts", help="Live-Alerts: starke Bewegungen melden")
+    pa.add_argument("--move-pct", type=float, default=3.0, help="Schwelle in %")
+    pa.add_argument("--notify", action="store_true")
+
+    pm = sub.add_parser("monitor", help="Near-realtime-Überwachung (Dauerschleife)")
+    pm.add_argument("--interval", type=int, default=10, help="Minuten zwischen Checks")
+    pm.add_argument("--move-pct", type=float, default=3.0, help="Schwelle in %")
+    pm.add_argument("--notify", action="store_true")
 
     sub.add_parser("doctor", help="Konfiguration & Datenquellen-Erreichbarkeit prüfen")
     sub.add_parser("train", help="Modell (neu) trainieren")
@@ -687,6 +735,8 @@ def build_parser() -> argparse.ArgumentParser:
 _COMMANDS = {
     "doctor": cmd_doctor,
     "live": cmd_live,
+    "alerts": cmd_alerts,
+    "monitor": cmd_monitor,
     "train": cmd_train,
     "evaluate": cmd_evaluate,
     "ablation": cmd_ablation,

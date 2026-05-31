@@ -228,6 +228,32 @@ def test_intraday_parsers():
     assert intraday.parse_twelvedata({"status": "error"}).empty
 
 
+def test_alpaca_parsers():
+    from stockai.data import alpaca
+    df = alpaca.parse_bars({"bars": [
+        {"t": "2024-01-02T15:30:00Z", "o": 1, "h": 2, "l": 0.5, "c": 1.5, "v": 100},
+        {"t": "2024-01-02T15:45:00Z", "o": 1.5, "h": 2.2, "l": 1.4, "c": 2.0, "v": 80}]})
+    assert len(df) == 2 and abs(df["Close"].iloc[-1] - 2.0) < 1e-6
+    q = alpaca.parse_snapshot(
+        {"latestTrade": {"p": 110.0}, "prevDailyBar": {"c": 100.0}}, "AAPL")
+    assert q and q.source == "alpaca" and abs(q.change_pct - 10.0) < 1e-6
+    assert alpaca.parse_bars({}).empty
+
+
+def test_alerts_detects_move(tmp_path):
+    from stockai import alerts as al
+    from stockai.config import load_config
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+    # künstlicher Vorzustand + render
+    import json
+    json.dump({"AAA": 100.0}, open(tmp_path / "last_alerts.json", "w"))
+    res = al.AlertResult(timestamp="t", moves=[("AAA", 106.0, 6.0, 6.0)], has_alerts=True)
+    out = al.render_alerts(res)
+    assert "AAA" in out and "📈" in out
+    assert al.render_alerts(al.AlertResult(timestamp="t")) == ""
+
+
 def test_telegram_bot_commands():
     """Befehlsverarbeitung des Bots (ohne Netzwerk)."""
     from stockai.telegram_bot import handle_command

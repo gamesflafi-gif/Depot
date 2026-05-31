@@ -115,10 +115,14 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   Sparplan als kleiner, risikoreicher Topf behandelt; yfinance (`BTC-USD`) und
   Stooq (`btcusd`) liefern echte Krypto-Kurse.
 - **Live-Kurse & Intraday:** aktueller Live-Preis (`live`, Bot `/live`) – Krypto
-  gratis über Binance, Aktien/ETFs über einen kostenlosen **Twelve-Data**-Key
-  (`STOCKAI_TWELVEDATA_KEY`). Mit `history_interval: 15m` (o.ä.) trainiert das
-  Modell auf **Intraday-Bars** statt Tagesdaten (Krypto via Binance-Klines,
-  Aktien via Twelve Data). `horizon` zählt dann in Bars.
+  gratis über Binance, Aktien/ETFs über **Alpaca** (empfohlen, ~200 Anfragen/Min,
+  `STOCKAI_ALPACA_KEY`/`STOCKAI_ALPACA_SECRET`) oder Twelve Data. Mit
+  `history_interval: 15m` (o.ä.) trainiert das Modell auf **Intraday-Bars**
+  (Krypto via Binance-Klines, Aktien via Alpaca/Twelve Data). `horizon` zählt
+  dann in Bars.
+- **Live-Alerts & Monitor:** `alerts` meldet starke Kursbewegungen, `monitor`
+  überwacht near-realtime in einer Schleife; Bot-Befehl `/alerts`. Per Cron
+  z. B. alle 15 Min während des US-Handels.
 - **Anbieter-unabhängige Kursdaten:** kein Zwang zu einer einzelnen API – der
   Live-Modus lädt Kurse über yfinance **oder** direkt als CSV von Stooq (ohne
   Key) und fällt automatisch um (`price_source: auto`). News kommen direkt per
