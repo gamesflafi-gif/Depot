@@ -31,6 +31,7 @@ _TG_LIMIT = 3900
 _HELP = (
     "🤖 Aktien-KI Bot – Befehle:\n"
     "/analyse SYM – Einzelanalyse (z.B. /analyse NVDA)\n"
+    "/live SYM – aktueller Live-Kurs (Krypto frei, Aktien via Finnhub-Key)\n"
     "/briefing – aktuelles Briefing mit Moves\n"
     "/top [n] – Top-n Chancen & Risiken\n"
     "/sparplan [€] – Sparplan-Vorschlag\n"
@@ -69,10 +70,21 @@ def handle_command(cfg: Config, text: str) -> str:
             amount = 100.0
         return notify.render_savings_plan(build_savings_plan(cfg, monthly_amount=amount))
 
+    if cmd == "live":
+        from stockai.data.live import get_quote
+        if not arg:
+            return "Bitte ein Symbol angeben, z.B. /live BTC-USD"
+        q = get_quote(arg.upper())
+        if not q:
+            return (f"Kein Live-Kurs für {arg.upper()} (Krypto ist frei; für "
+                    f"Aktien einen Finnhub-Key in STOCKAI_FINNHUB_KEY setzen).")
+        return f"🔴 LIVE {q.ticker}: {q.price:.2f} ({q.change_pct:+.2f}% heute) – {q.source}"
+
     if cmd in ("analyse", "analyze", "aktie"):
         if not arg:
             return "Bitte ein Symbol angeben, z.B. /analyse NVDA"
         from stockai import pipeline
+        from stockai.data.live import get_quote
         sym = arg.upper()
         res = pipeline.analyze(cfg, universe_override=[sym])
         if not res:
@@ -80,9 +92,12 @@ def handle_command(cfg: Config, text: str) -> str:
         a = res[0]
         er = f"{a.expected_return:+.1%}" if a.expected_return is not None else "–"
         hz = " · ".join(f"{h}T {p:.0%}" for h, p in sorted(a.horizon_probs.items()))
+        q = get_quote(sym)
+        price_line = (f"🔴 LIVE: {q.price:.2f} ({q.change_pct:+.2f}% heute, {q.source})\n"
+                      if q else f"Kurs: {a.last_price:.2f}\n")
         return (f"📊 {a.ticker} [{a.asset_class}] – {a.action}\n"
-                f"Kurs: {a.last_price:.2f}\n"
-                f"P(Profit): {a.profit_probability:.0%} | E[Rendite]: {er}\n"
+                + price_line
+                + f"P(Profit): {a.profit_probability:.0%} | E[Rendite]: {er}\n"
                 + (f"Horizonte: {hz}\n" if hz else "")
                 + f"RSI: {a.rsi_14:.0f} | Sentiment: {a.sentiment_mean:+.2f}\n"
                 f"Timing: {a.timing}\n\n_Keine Anlageberatung._")
