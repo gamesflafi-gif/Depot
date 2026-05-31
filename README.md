@@ -86,6 +86,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   dadurch zu den einflussreichsten Merkmalen.
 - **Expected-Return-Modell:** Neben „steigt ja/nein" schätzt ein Regressor die
   **erwartete Rendite-Höhe** – für ein feineres Ranking der besten Aktien.
+- **Mehrere Horizonte:** zusätzlich zur Haupt-Prognose (5 Tage) eine
+  kurz-/mittelfristige Einschätzung über `horizons` (Standard 1/5/20 Tage),
+  sichtbar in `analyze` und im Telegram-Bot (`/analyse SYM`).
 - **Wiederkehrende Muster & Saisonalität:** Kalendereffekte (Wochentag/Monat),
   ein **kausales Muster-Gedächtnis** (Folge-Rendite je Kurs-Zustand) und eine
   **Analog-Mustererkennung**: Die KI vergleicht die *Form* der jüngsten

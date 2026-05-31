@@ -90,8 +90,10 @@ history_period: "2y"        # z.B. 1y, 2y, 5y, max
 history_interval: "1d"      # 1d = Tageskerzen
 
 # Vorhersage-Ziel
-horizon_days: 5             # Über wie viele Handelstage wird die Rendite vorhergesagt?
+horizon_days: 5             # Haupt-Horizont (für Aktion/Sparplan)
 profit_threshold: 0.0       # Ab welcher Rendite gilt es als "profitabel" (0.0 = jede positive Bewegung)
+# Zusätzliche Horizonte für eine kurz-/mittelfristige Einschätzung (Tage)
+horizons: [1, 5, 20]
 
 # News
 news_max_per_ticker: 25     # Maximale Anzahl Headlines pro Ticker
