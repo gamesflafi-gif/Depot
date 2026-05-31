@@ -24,6 +24,7 @@ class Config:
     history_period: str
     history_interval: str
     horizon_days: int
+    horizons: list[int]
     profit_threshold: float
     news_max_per_ticker: int
     news_lookback_days: int
@@ -88,6 +89,7 @@ def load_config(path: str | os.PathLike | None = None) -> Config:
         history_period=str(data.get("history_period", "2y")),
         history_interval=str(data.get("history_interval", "1d")),
         horizon_days=int(data.get("horizon_days", 5)),
+        horizons=[int(h) for h in data.get("horizons", [1, 5, 20])],
         profit_threshold=float(data.get("profit_threshold", 0.0)),
         news_max_per_ticker=int(data.get("news_max_per_ticker", 25)),
         news_lookback_days=int(data.get("news_lookback_days", 7)),

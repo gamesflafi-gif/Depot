@@ -274,6 +274,9 @@ def cmd_analyze(cfg, args) -> None:
         print("\n🚀 Boom-/Kauf-Kandidaten (wohin das Geld tendiert):")
         for r in booming:
             print(f"\n  {r.ticker}  [{r.action}, Konfidenz {r.confidence:.0%}]")
+            if r.horizon_probs:
+                hz = " · ".join(f"{h}T {p:.0%}" for h, p in sorted(r.horizon_probs.items()))
+                print(f"    Horizonte: {hz}")
             print(f"    Timing: {r.timing}")
             for reason in r.reasons:
                 print(f"      • {reason}")

@@ -79,10 +79,12 @@ def handle_command(cfg: Config, text: str) -> str:
             return f"Keine Daten für {sym} gefunden."
         a = res[0]
         er = f"{a.expected_return:+.1%}" if a.expected_return is not None else "–"
+        hz = " · ".join(f"{h}T {p:.0%}" for h, p in sorted(a.horizon_probs.items()))
         return (f"📊 {a.ticker} [{a.asset_class}] – {a.action}\n"
                 f"Kurs: {a.last_price:.2f}\n"
                 f"P(Profit): {a.profit_probability:.0%} | E[Rendite]: {er}\n"
-                f"RSI: {a.rsi_14:.0f} | Sentiment: {a.sentiment_mean:+.2f}\n"
+                + (f"Horizonte: {hz}\n" if hz else "")
+                + f"RSI: {a.rsi_14:.0f} | Sentiment: {a.sentiment_mean:+.2f}\n"
                 f"Timing: {a.timing}\n\n_Keine Anlageberatung._")
 
     return "Unbekannter Befehl. /help zeigt die Übersicht."

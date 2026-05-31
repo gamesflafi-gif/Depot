@@ -231,6 +231,7 @@ class TickerAnalysis:
     price_vs_high_20: float = 1.0
     volatility: float = 0.02
     expected_return: float | None = None
+    horizon_probs: dict = field(default_factory=dict)
     top_headlines: list[dict] = field(default_factory=list)
     signal: str = ""
     action: str = "HALTEN"
@@ -263,6 +264,10 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         )
         # Stetige Folge-Rendite als Ziel für das Expected-Return-Modell
         feat["fwd_ret"] = prices["Close"].shift(-cfg.horizon_days) / prices["Close"] - 1.0
+        # Ziel je zusätzlichem Horizont (kurz-/mittelfristige Einschätzung)
+        for h in cfg.horizons:
+            fr = prices["Close"].shift(-h) / prices["Close"] - 1.0
+            feat[f"target_h{h}"] = (fr > cfg.profit_threshold).astype("float")
         # Muster-Gedächtnis (wiederkehrende Kurs-Zustände) + Analog-Muster
         feat["pattern_mem"] = pattern_memory(prices, cfg.horizon_days).values
         feat["analog_mem"] = analog_memory(prices, cfg.horizon_days).values
@@ -483,6 +488,9 @@ def train(cfg: Config) -> TrainResult:
     result.cv_metrics = cv_metrics
     # Expected-Return-Modell (Regression) mittrainieren, falls Daten vorhanden
     predictor.fit_regressor(data, ret_col="fwd_ret")
+    # Klassifizierer je zusätzlichem Horizont (kurz-/mittelfristige Sicht)
+    for h in cfg.horizons:
+        predictor.fit_horizon(h, data, f"target_h{h}")
 
     # Anzahl der real gelabelten Live-Snapshots direkt aus dem Store ablesen
     # (kein erneuter, teurer Aufbau des Historien-Datensatzes nötig).
@@ -603,6 +611,7 @@ def analyze(
         proba = float(predictor.predict_proba(X)[0])
         er = predictor.predict_return(X)
         expected_return = float(er[0]) if er is not None else None
+        horizon_probs = predictor.predict_horizons(X)
 
         scored_sorted = sorted(scored_news, key=lambda kv: abs(kv[1]), reverse=True)
         headlines = [
@@ -638,6 +647,7 @@ def analyze(
                 price_vs_high_20=row.get("price_vs_high_20", 1.0),
                 volatility=float(row.get("vol_20d", 0.02) or 0.02),
                 expected_return=expected_return,
+                horizon_probs=horizon_probs,
                 top_headlines=headlines,
                 signal=_signal(proba),
                 action=rec.action,

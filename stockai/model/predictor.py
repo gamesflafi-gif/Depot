@@ -148,6 +148,8 @@ class Predictor:
         self.base_estimator: Any = _build_estimator(model_type, random_state, self.params)
         # Optionales Expected-Return-Modell (Regression der Folge-Rendite)
         self.regressor: Any = None
+        # Optionale Klassifizierer je Zeithorizont (z.B. 1/5/20 Tage)
+        self.horizon_models: dict[int, Any] = {}
         # Kalibrierte Wahrscheinlichkeiten (verlässlichere P(Profit)) via
         # isotonischer Regression auf zeitlich sauberen CV-Folds.
         if self.calibrate:
@@ -299,9 +301,35 @@ class Predictor:
 
     def predict_return(self, df: pd.DataFrame) -> np.ndarray | None:
         """Erwartete Folge-Rendite je Zeile (oder None, falls kein Regressor)."""
-        if self.regressor is None:
+        reg = getattr(self, "regressor", None)
+        if reg is None:
             return None
-        return self.regressor.predict(df[self.feature_names].values)
+        return reg.predict(df[self.feature_names].values)
+
+    def fit_horizon(self, horizon: int, df: pd.DataFrame, target_col: str) -> bool:
+        """Trainiert einen schnellen Klassifizierer für einen Zeithorizont."""
+        if target_col not in df.columns:
+            return False
+        data = df.dropna(subset=self.feature_names + [target_col])
+        y = data[target_col].astype(int).values if len(data) else np.array([])
+        if len(data) < 50 or len(np.unique(y)) < 2:
+            return False
+        # Logistisches Modell -> gleichmäßige, verlässlichere Wahrscheinlichkeiten
+        est = _build_estimator("logistic", self.random_state)
+        est.fit(data[self.feature_names].values, y)
+        self.horizon_models[horizon] = est
+        return True
+
+    def predict_horizons(self, df: pd.DataFrame) -> dict[int, float]:
+        """P(profitabel) je trainiertem Horizont für die erste Zeile."""
+        out: dict[int, float] = {}
+        X = df[self.feature_names].values
+        for h, est in sorted(getattr(self, "horizon_models", {}).items()):
+            try:
+                out[h] = float(est.predict_proba(X)[:, 1][0])
+            except Exception:
+                pass
+        return out
 
     def partial_train(self, df: pd.DataFrame, target_col: str = "target") -> None:
         """Inkrementelles Lernen (nur für ``sgd_online``).
