@@ -634,6 +634,33 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_whale_signals(tmp_path):
+    """Whale-Radar: Richtung/Stärke-Logik und Rendern."""
+    from stockai import whale as wh
+    from stockai.config import load_config
+
+    # Richtung aus Volumen + Kursreaktion
+    acc = wh.WhaleSignal("NVDA", "Aktie", rel_volume=3.0, price_change=0.04, direction="Akkumulation")
+    dist = wh.WhaleSignal("BTC-USD", "Krypto", rel_volume=4.0, price_change=-0.05, direction="Distribution")
+    # stärkeres Signal hat höhere strength (mehr Volumen + größere Reaktion)
+    assert dist.strength > acc.strength
+
+    scan = wh.WhaleScan(signals=[dist, acc], n_scanned=20)
+    out = wh.render_whales(scan)
+    assert "Whale-Radar" in out and "Akkumulation" in out and "Distribution" in out
+    assert "🐋 Keine" in wh.render_whales(wh.WhaleScan(n_scanned=5))
+
+    # Integration im Demo-Modus: scannt, liefert eine gültige Struktur
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]; cfg.etfs = []; cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+    res = wh.scan_whales(cfg, min_rel=1.2)
+    assert res.n_scanned >= 1
+    assert all(0 <= s.rel_volume for s in res.signals)
+
+
 def test_clock_berlin_time():
     """Sichtbare Zeiten laufen über die Berlin-Zeitzone (nicht UTC)."""
     from datetime import timezone
