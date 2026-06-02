@@ -35,6 +35,12 @@ def test_technical_features_created():
         assert col in df.columns
     # nach Warmlaufphase keine NaN mehr
     assert df[TECHNICAL_FEATURES].iloc[60:].notna().all().all()
+    # neue volumengewichtete Features sind endlich (kein inf) und skalenfrei
+    for col in ("rel_volume", "obv_slope", "mfi_14", "ret_skew_20"):
+        vals = df[col].iloc[60:].values
+        assert np.isfinite(vals).all()
+    assert (df["rel_volume"].iloc[60:] > 0).all()        # Verhältnis > 0
+    assert df["mfi_14"].iloc[60:].between(0, 100).all()  # MFI in [0,100]
 
 
 def test_sentiment_scoring():

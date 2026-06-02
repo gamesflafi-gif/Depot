@@ -24,6 +24,10 @@ TECHNICAL_FEATURES: list[str] = [
     "dist_sma50",
     "volume_change",
     "volume_z",
+    "rel_volume",
+    "obv_slope",
+    "mfi_14",
+    "ret_skew_20",
     "price_vs_high_20",
     "bb_pctb",
     "atr_pct",
@@ -85,6 +89,30 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     vol_mean = volume.rolling(20).mean()
     vol_std = volume.rolling(20).std()
     out["volume_z"] = (volume - vol_mean) / vol_std.replace(0, np.nan)
+
+    # Relatives Volumen: aktuelles vs. 20-Tage-Schnitt (>1 = ungewöhnlich aktiv,
+    # die „Whale"-/Smart-Money-Spur). Robuster fürs Schwellen-Setzen als der z-Score.
+    out["rel_volume"] = volume / vol_mean.replace(0, np.nan)
+
+    # On-Balance-Volume-Trend: fließt Volumen netto in Käufe (Akkumulation) oder
+    # Verkäufe (Distribution)? Steigung über 10 Tage, skaliert aufs typische Volumen
+    # → vergleichbar über Werte hinweg. Klassisches Frühsignal für „Smart Money".
+    obv = (np.sign(close.diff()).fillna(0.0) * volume).cumsum()
+    out["obv_slope"] = (obv - obv.shift(10)) / (vol_mean.replace(0, np.nan) * 10.0)
+
+    # Money-Flow-Index (14): volumengewichtetes Momentum (wie RSI, aber mit
+    # Geldfluss) – erkennt, ob Kauf-/Verkaufsdruck *mit* Volumen unterlegt ist.
+    typical = (high + low + close) / 3.0
+    raw_flow = typical * volume
+    up = typical.diff() > 0
+    pos_flow = raw_flow.where(up, 0.0).rolling(14).sum()
+    neg_flow = raw_flow.where(~up, 0.0).rolling(14).sum()
+    mfr = pos_flow / neg_flow.replace(0, np.nan)
+    out["mfi_14"] = 100 - (100 / (1 + mfr))
+
+    # Schiefe der Tagesrenditen (20T): asymmetrisches Risiko – stark negative
+    # Schiefe warnt vor Abwärts-Ausreißern (Crash-Neigung), positive vor Sprüngen.
+    out["ret_skew_20"] = daily_ret.rolling(20).skew()
 
     # Abstand zum 20-Tage-Hoch
     high20 = close.rolling(20).max()
