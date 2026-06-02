@@ -73,6 +73,23 @@ def test_predictor_trains_and_predicts():
     assert ((proba >= 0) & (proba <= 1)).all()
 
 
+def test_advisor_no_sell_when_model_bullish():
+    # Überkauft + am Hoch, aber Modell weiter bullisch -> KEIN Verkauf
+    rec = recommend(
+        profit_probability=0.66, rsi_14=78, momentum_5d=0.02,
+        price_vs_high_20=0.99, macd_hist=-0.3, sentiment_mean=-0.2,
+        expected_return=0.02,
+    )
+    assert rec.action != "VERKAUFEN"
+    # Gleiche Technik, aber Modell bärisch -> Verkauf
+    rec2 = recommend(
+        profit_probability=0.45, rsi_14=78, momentum_5d=-0.02,
+        price_vs_high_20=0.99, macd_hist=-0.3, sentiment_mean=-0.2,
+        expected_return=-0.01,
+    )
+    assert rec2.action == "VERKAUFEN"
+
+
 def test_advisor_sell_signal_on_overbought():
     rec = recommend(
         profit_probability=0.5, rsi_14=78, momentum_5d=-0.02,
