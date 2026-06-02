@@ -586,6 +586,54 @@ def test_watch_alerts(tmp_path, monkeypatch):
     assert "Keine Alerts" in wt.render_watches(cfg)
 
 
+def test_per_user_separation(tmp_path, monkeypatch):
+    """Jeder Nutzer hat ein eigenes Depot; Alt-Daten wandern zum Betreiber."""
+    import json
+    from stockai import holdings as hd, users, watch as wt
+    from stockai.config import load_config
+
+    monkeypatch.setenv("STOCKAI_TELEGRAM_CHAT_ID", "555,666")
+    cfg = load_config()
+    sdir = tmp_path / "s"
+    sdir.mkdir()
+    cfg.paths = {"store_dir": str(sdir), "model_dir": str(tmp_path / "m")}
+
+    # getrennte Depots
+    hd.add_holding(cfg, "NVDA", 10, 850, user="555")
+    hd.add_holding(cfg, "TSLA", 5, 200, user="666")
+    assert [h.ticker for h in hd.load_holdings(cfg, "555")] == ["NVDA"]
+    assert [h.ticker for h in hd.load_holdings(cfg, "666")] == ["TSLA"]   # sieht 555 nicht
+
+    # getrennte Alerts + gemerkte Präferenz
+    wt.add_watch(cfg, wt.Watch("BTC-USD", "price", "<", 50000), user="555")
+    assert wt.load_watches(cfg, "666") == []
+    users.set_pref(cfg, "555", "monthly", 300.0)
+    assert users.load_prefs(cfg, "555")["monthly"] == 300.0
+    assert users.load_prefs(cfg, "666") == {}
+
+    assert set(users.all_users(cfg)) >= {"555", "666"}
+
+
+def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
+    """Eine alte gemeinsame holdings.json wird beim ersten Zugriff dem Betreiber
+    (erste Allowlist-ID) zugeordnet – andere Nutzer starten leer."""
+    import json
+    from stockai import holdings as hd
+    from stockai.config import load_config
+
+    monkeypatch.setenv("STOCKAI_TELEGRAM_CHAT_ID", "555,666")
+    cfg = load_config()
+    sdir = tmp_path / "s"
+    sdir.mkdir()
+    cfg.paths = {"store_dir": str(sdir), "model_dir": str(tmp_path / "m")}
+    json.dump([{"ticker": "NVDA", "qty": 10, "buy_price": 800}],
+              open(sdir / "holdings.json", "w"))
+
+    assert [h.ticker for h in hd.load_holdings(cfg, "555")] == ["NVDA"]   # Betreiber erbt
+    assert not (sdir / "holdings.json").exists()                          # alt verschoben
+    assert hd.load_holdings(cfg, "666") == []                             # anderer leer
+
+
 def test_chat_id_allowlist():
     """Mehrere erlaubte Chat-IDs werden korrekt zerlegt (Allowlist/Freundeskreis)."""
     from stockai import notify

@@ -32,12 +32,13 @@ class Watch:
 
 
 # --------------------------------------------------------------------------- #
-def _path(cfg: Config) -> Path:
-    return Path(cfg.store_dir) / _FILE
+def _path(cfg: Config, user: str | None) -> Path:
+    from stockai.users import user_path
+    return user_path(cfg, user, _FILE)
 
 
-def load_watches(cfg: Config) -> list[Watch]:
-    p = _path(cfg)
+def load_watches(cfg: Config, user: str | None = None) -> list[Watch]:
+    p = _path(cfg, user)
     if not p.exists():
         return []
     try:
@@ -47,8 +48,8 @@ def load_watches(cfg: Config) -> list[Watch]:
         return []
 
 
-def save_watches(cfg: Config, watches: list[Watch]) -> None:
-    p = _path(cfg)
+def save_watches(cfg: Config, watches: list[Watch], user: str | None = None) -> None:
+    p = _path(cfg, user)
     p.parent.mkdir(parents=True, exist_ok=True)
     json.dump([{"ticker": w.ticker, "metric": w.metric, "op": w.op,
                 "value": w.value, "armed": w.armed} for w in watches],
@@ -80,18 +81,18 @@ def parse_spec(parts: list[str]) -> Watch | None:
     return Watch(ticker=ticker, metric=metric, op=rest[0], value=value)
 
 
-def add_watch(cfg: Config, watch: Watch) -> list[Watch]:
-    watches = load_watches(cfg)
+def add_watch(cfg: Config, watch: Watch, user: str | None = None) -> list[Watch]:
+    watches = load_watches(cfg, user)
     watches.append(watch)
-    save_watches(cfg, watches)
+    save_watches(cfg, watches, user)
     return watches
 
 
-def remove_watch(cfg: Config, index: int) -> bool:
-    watches = load_watches(cfg)
+def remove_watch(cfg: Config, index: int, user: str | None = None) -> bool:
+    watches = load_watches(cfg, user)
     if 0 <= index < len(watches):
         watches.pop(index)
-        save_watches(cfg, watches)
+        save_watches(cfg, watches, user)
         return True
     return False
 
@@ -130,14 +131,14 @@ def _holds(val: float, op: str, threshold: float) -> bool:
     return val < threshold if op == "<" else val > threshold
 
 
-def check_watches(cfg: Config, fire: bool = True) -> list[str]:
+def check_watches(cfg: Config, fire: bool = True, user: str | None = None) -> list[str]:
     """Prüft alle Bedingungen; liefert Meldungen für frisch erreichte Trigger.
 
     Crossing-Logik: ein Trigger feuert nur, wenn er gerade *erstmals wieder*
     erfüllt ist; er wird erst dann erneut scharf, wenn die Bedingung zwischendurch
     nicht mehr galt. So kommt keine Nachricht im Minutentakt.
     """
-    watches = load_watches(cfg)
+    watches = load_watches(cfg, user)
     messages: list[str] = []
     changed = False
     for w in watches:
@@ -153,7 +154,7 @@ def check_watches(cfg: Config, fire: bool = True) -> list[str]:
             w.armed = True                            # wieder scharf machen
             changed = True
     if changed and fire:
-        save_watches(cfg, watches)
+        save_watches(cfg, watches, user)
     return messages
 
 
@@ -173,8 +174,8 @@ def _trigger_text(w: Watch, val: float) -> str:
             f"{w.op} {_fmt(w.metric, w.value)} erreicht")
 
 
-def render_watches(cfg: Config) -> str:
-    watches = load_watches(cfg)
+def render_watches(cfg: Config, user: str | None = None) -> str:
+    watches = load_watches(cfg, user)
     if not watches:
         return ("🔔 Keine Alerts gesetzt.\n"
                 "Beispiele:\n"

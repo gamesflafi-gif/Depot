@@ -78,12 +78,13 @@ class DepotReport:
 
 
 # --------------------------------------------------------------------------- #
-def _path(cfg: Config) -> Path:
-    return Path(cfg.store_dir) / _FILE
+def _path(cfg: Config, user: str | None) -> Path:
+    from stockai.users import user_path
+    return user_path(cfg, user, _FILE)
 
 
-def load_holdings(cfg: Config) -> list[Holding]:
-    p = _path(cfg)
+def load_holdings(cfg: Config, user: str | None = None) -> list[Holding]:
+    p = _path(cfg, user)
     if not p.exists():
         return []
     try:
@@ -93,17 +94,18 @@ def load_holdings(cfg: Config) -> list[Holding]:
         return []
 
 
-def save_holdings(cfg: Config, holdings: list[Holding]) -> None:
-    p = _path(cfg)
+def save_holdings(cfg: Config, holdings: list[Holding], user: str | None = None) -> None:
+    p = _path(cfg, user)
     p.parent.mkdir(parents=True, exist_ok=True)
     json.dump([{"ticker": h.ticker, "qty": h.qty, "buy_price": h.buy_price} for h in holdings],
               open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 
-def add_holding(cfg: Config, ticker: str, qty: float, buy_price: float) -> list[Holding]:
+def add_holding(cfg: Config, ticker: str, qty: float, buy_price: float,
+                user: str | None = None) -> list[Holding]:
     """Fügt eine Position hinzu oder mischt sie ein (gewichteter Ø-Kaufkurs)."""
     ticker = ticker.strip().upper()
-    holdings = load_holdings(cfg)
+    holdings = load_holdings(cfg, user)
     for h in holdings:
         if h.ticker == ticker:                       # nachkaufen -> Ø-Einstand
             total_qty = h.qty + qty
@@ -113,24 +115,24 @@ def add_holding(cfg: Config, ticker: str, qty: float, buy_price: float) -> list[
             break
     else:
         holdings.append(Holding(ticker, qty, buy_price))
-    save_holdings(cfg, holdings)
+    save_holdings(cfg, holdings, user)
     return holdings
 
 
-def remove_holding(cfg: Config, ticker: str) -> bool:
+def remove_holding(cfg: Config, ticker: str, user: str | None = None) -> bool:
     ticker = ticker.strip().upper()
-    holdings = load_holdings(cfg)
+    holdings = load_holdings(cfg, user)
     kept = [h for h in holdings if h.ticker != ticker]
-    save_holdings(cfg, kept)
+    save_holdings(cfg, kept, user)
     return len(kept) != len(holdings)
 
 
-def build_depot_report(cfg: Config) -> DepotReport:
+def build_depot_report(cfg: Config, user: str | None = None) -> DepotReport:
     """Bewertet alle Depot-Positionen: Live-Kurs, G/V und KI-Einschätzung."""
     from stockai import pipeline
     from stockai.data.live import get_quote
 
-    holdings = load_holdings(cfg)
+    holdings = load_holdings(cfg, user)
     rep = DepotReport()
     if not holdings:
         return rep
@@ -160,9 +162,9 @@ def build_depot_report(cfg: Config) -> DepotReport:
     return rep
 
 
-def depot_alert_text(cfg: Config) -> str | None:
+def depot_alert_text(cfg: Config, user: str | None = None) -> str | None:
     """Nur dann Text, wenn es etwas Handlungsrelevantes gibt (für Push-Alerts)."""
-    rep = build_depot_report(cfg)
+    rep = build_depot_report(cfg, user)
     flagged = [p for p in rep.positions if p.sell_warning]
     if not flagged:
         return None
