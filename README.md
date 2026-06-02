@@ -144,6 +144,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
   eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
   antwortet der Bot allen (nicht empfohlen).
+- **Sektor-Rotation:** `sectors` / `/sektoren` fasst die Analysen je **Branche**
+  zusammen (Tech, Financials, Energy …) und zeigt, **welche Sektoren führen und
+  welche zurückfallen** (Ø Conviction, Momentum, Anteil bullisch, Top-Wert je
+  Branche) – Markt-Abdeckung aus der Vogelperspektive, „wohin rotiert das Geld".
 - **Whale-Radar:** `whales` scannt alle Werte auf **ungewöhnlich hohes Volumen**
   (Smart-Money-Spur) und meldet, ob es nach **Akkumulation** (Volumen + steigender
   Kurs) oder **Distribution** (Volumen + fallender Kurs) aussieht. Der Tageslauf

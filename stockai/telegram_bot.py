@@ -45,6 +45,7 @@ _HELP = (
     "  /top [n]       Top-n Chancen & Risiken\n"
     "  /alerts        Live-Bewegungen (einstellbar: /alerts 5, /alerts off)\n"
     "  /whales        auffälliges Volumen (Smart-Money-Spur)\n"
+    "  /sektoren      Sektor-Rotation: welche Branchen führen\n"
     "  /watch         eigene Trigger (z.B. /watch add BTC-USD < 50000)\n"
     "\n"
     "🎯 Persönlich\n"
@@ -165,6 +166,10 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
     if cmd in ("whales", "whale", "volumen"):
         from stockai import whale as wh
         return wh.render_whales(wh.scan_whales(cfg))
+
+    if cmd in ("sektoren", "sectors", "branchen"):
+        from stockai import sectors as sc
+        return sc.render_sectors(sc.sector_rotation(cfg, use_cache=cached))
 
     if cmd in ("track", "trackrecord", "bilanz"):
         from stockai import track as tk
