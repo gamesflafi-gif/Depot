@@ -391,6 +391,46 @@ def _remember_name(cfg: Config, chat_id: str, frm: dict) -> None:
         pass
 
 
+_BOT_COMMANDS = [
+    ("menu", "🏠 Dein persönlicher Überblick"),
+    ("chancen", "🎯 Deine Top-Chancen (nach Risiko)"),
+    ("briefing", "📊 Marktüberblick & Bewegungen"),
+    ("analyse", "🔎 Einzelanalyse (z.B. /analyse NVDA)"),
+    ("chart", "📈 Kurs-Chart als Bild"),
+    ("depot", "💼 Dein Depot: G/V + KI-Bewertung"),
+    ("sparplan", "💶 Sparplan-Vorschlag"),
+    ("risiko", "🎚️ Risiko-Profil einstellen"),
+    ("alerts", "🚨 Live-Alerts einstellen"),
+    ("watch", "🔔 Eigene Trigger setzen"),
+    ("whales", "🐋 Auffälliges Volumen"),
+    ("sektoren", "🧭 Sektor-Rotation"),
+    ("track", "📒 Trefferquote der KI"),
+    ("health", "🩺 Selbstcheck der KI"),
+    ("help", "❓ Alle Befehle"),
+]
+_BOT_ABOUT = ("Selbstlernende Aktien-, ETF- & Krypto-KI: Analysen, Chancen, "
+              "Depot, Alerts & Charts. Keine Anlageberatung.")
+_BOT_SHORT = "Selbstlernende Aktien/ETF/Krypto-KI – Chancen, Depot, Alerts, Charts."
+
+
+def _configure_bot(token: str) -> None:
+    """Setzt Befehlsmenü + Beschreibung über die Bot-API (einmal beim Start).
+
+    Das Profilbild lässt sich per API NICHT setzen – das geht nur über @BotFather
+    (/setuserpic). Befehlsliste und Beschreibungstexte aber schon.
+    """
+    cmds = json.dumps([{"command": c, "description": d} for c, d in _BOT_COMMANDS])
+    for method, params in (
+        ("setMyCommands", {"commands": cmds}),
+        ("setMyShortDescription", {"short_description": _BOT_SHORT}),
+        ("setMyDescription", {"description": _BOT_ABOUT}),
+    ):
+        try:
+            _api(token, method, params, timeout=10)
+        except Exception as exc:
+            log.warning("%s fehlgeschlagen: %s", method, exc)
+
+
 def _typing(token: str, chat_id: str) -> None:
     """Zeigt im Chat „tippt …", damit der Bot bei längeren Befehlen nicht
     eingefroren wirkt."""
@@ -464,6 +504,7 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
         return
 
     log.info("Telegram-Bot gestartet (Polling). Erlaubte Chats: %d", len(allowed))
+    _configure_bot(token)                    # Befehlsmenü + Beschreibung setzen
 
     def _authorized(cid: str) -> bool:
         return (not allowed) or (cid in allowed)

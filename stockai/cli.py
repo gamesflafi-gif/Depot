@@ -320,6 +320,16 @@ def cmd_watch(cfg, args) -> None:
     print(wt.render_watches(cfg))
 
 
+def cmd_logo(cfg, args) -> None:
+    """Erzeugt das Bot-Logo (PNG) zum Hochladen via @BotFather (/setuserpic)."""
+    from stockai import charts
+    path = getattr(args, "out", None) or "bot_logo.png"
+    with open(path, "wb") as fh:
+        fh.write(charts.make_logo())
+    print(f"Logo gespeichert: {path}")
+    print("Profilbild setzen: in Telegram @BotFather -> /setuserpic -> Bild senden.")
+
+
 def cmd_chart(cfg, args) -> None:
     """Erzeugt einen Kurs-Chart (PNG) und sendet ihn optional per Telegram."""
     import os
@@ -1003,6 +1013,9 @@ def build_parser() -> argparse.ArgumentParser:
     pse = sub.add_parser("sectors", help="Sektor-Rotation: welche Branchen führen")
     pse.add_argument("--notify", action="store_true", help="Report per Telegram senden")
 
+    plo = sub.add_parser("logo", help="Bot-Logo (PNG) erzeugen (für @BotFather)")
+    plo.add_argument("--out", default="bot_logo.png", help="Zieldatei")
+
     pch = sub.add_parser("chart", help="Kurs-Chart (PNG) mit Signalen erzeugen/senden")
     pch.add_argument("ticker", nargs="?", help="Symbol, z.B. NVDA")
     pch.add_argument("--top", action="store_true", help="den Wert mit höchster Conviction charten")
@@ -1113,6 +1126,7 @@ _COMMANDS = {
     "whales": cmd_whales,
     "sectors": cmd_sectors,
     "chart": cmd_chart,
+    "logo": cmd_logo,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,
