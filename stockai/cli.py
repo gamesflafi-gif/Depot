@@ -470,6 +470,7 @@ def cmd_strategy(cfg, args) -> None:
         retrain_every=getattr(args, "retrain_every", 1),
         train_frac=getattr(args, "train_frac", 0.4),
         cost_bps=getattr(args, "cost_bps", 10.0),
+        regime_filter=not getattr(args, "no_regime", False),
     )
     m, b = res.metrics, res.benchmark_metrics
     print(f"  Zeitraum:            ~{res.years:.1f} Jahre, {res.n_rebalances} Rebalancings "
@@ -765,6 +766,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Anteil der Historie als Anfangs-Training (Rest wird gehandelt)")
     pst.add_argument("--cost-bps", type=float, default=10.0,
                      help="Transaktionskosten je Umschichtung in Basispunkten (10 = 0,1%)")
+    pst.add_argument("--no-regime", action="store_true",
+                     help="Regime-Bremse deaktivieren (immer voll investiert)")
     pst.add_argument("--out", default="equity_curve.png", help="Pfad für den Chart")
     pst.add_argument("--no-chart", action="store_true", help="Keinen Chart erzeugen")
 

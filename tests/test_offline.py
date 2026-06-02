@@ -73,6 +73,22 @@ def test_predictor_trains_and_predicts():
     assert ((proba >= 0) & (proba <= 1)).all()
 
 
+def test_regime_exposure_defensive():
+    from types import SimpleNamespace
+    from stockai.portfolio import _regime_exposure, build_portfolio
+    bull = [SimpleNamespace(momentum_5d=0.03, ticker="A", action="KAUFEN",
+                            profit_probability=0.6, confidence=0.7, last_price=10.0)
+            for _ in range(4)]
+    bear = [SimpleNamespace(momentum_5d=-0.04, ticker=f"A{i}", action="KAUFEN",
+                            profit_probability=0.6, confidence=0.7, last_price=10.0)
+            for i in range(4)]
+    assert _regime_exposure(bull) == 1.0
+    assert _regime_exposure(bear) < 0.6          # defensiv im Abschwung
+    # Im Bärenmarkt wird weniger investiert (mehr Cash)
+    pf = build_portfolio(bear, capital=1000.0)
+    assert pf.cash > 0.0                          # Regime-Bremse hält Cash
+
+
 def test_advisor_no_sell_when_model_bullish():
     # Überkauft + am Hoch, aber Modell weiter bullisch -> KEIN Verkauf
     rec = recommend(
