@@ -59,8 +59,12 @@ _HELP = (
 )
 
 
-def handle_command(cfg: Config, text: str) -> str:
-    """Wertet einen Befehlstext aus und liefert die Antwort (Text)."""
+def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
+    """Wertet einen Befehlstext aus und liefert die Antwort (Text).
+
+    ``user`` (Telegram-Chat-ID) trennt persönliche Daten – Depot, Sparplan und
+    Alerts gehören jeweils nur dem anfragenden Nutzer.
+    """
     parts = text.strip().split()
     if not parts:
         return _HELP
@@ -97,7 +101,7 @@ def handle_command(cfg: Config, text: str) -> str:
                         "z.B. /watch add BTC-USD < 50000\n"
                         "      /watch add NVDA rsi < 30\n"
                         "      /watch add BTC-USD vol > 2")
-            wt.add_watch(cfg, w)
+            wt.add_watch(cfg, w, user=user)
             return (f"✔ Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} "
                     f"{w.value:g}\nAlle Alerts: /watch")
         if sub in ("remove", "del", "delete"):
@@ -105,11 +109,12 @@ def handle_command(cfg: Config, text: str) -> str:
                 idx = int(parts[2])
             except (IndexError, ValueError):
                 return "Nutzung: /watch remove NUMMER (siehe /watch)"
-            return ("✔ entfernt." if wt.remove_watch(cfg, idx) else "Nummer nicht gefunden.")
+            return ("✔ entfernt." if wt.remove_watch(cfg, idx, user=user)
+                    else "Nummer nicht gefunden.")
         if sub == "clear":
-            wt.save_watches(cfg, [])
+            wt.save_watches(cfg, [], user=user)
             return "✔ Alle Alerts gelöscht."
-        return wt.render_watches(cfg)
+        return wt.render_watches(cfg, user=user)
 
     if cmd in ("depot", "portfolio", "wallet"):
         from stockai import holdings as hd
@@ -119,17 +124,17 @@ def handle_command(cfg: Config, text: str) -> str:
                 tkr, qty, price = parts[2], float(parts[3]), float(parts[4])
             except (IndexError, ValueError):
                 return "Nutzung: /depot add TICKER STÜCK KAUFKURS\nz.B. /depot add NVDA 10 850"
-            hd.add_holding(cfg, tkr, qty, price)
+            hd.add_holding(cfg, tkr, qty, price, user=user)
             return f"✔ {tkr.upper()} hinzugefügt ({qty:g} @ {price:.2f}).\nSchau mit /depot"
         if sub in ("remove", "del", "delete"):
             if len(parts) < 3:
                 return "Nutzung: /depot remove TICKER"
-            ok = hd.remove_holding(cfg, parts[2])
+            ok = hd.remove_holding(cfg, parts[2], user=user)
             return (f"✔ {parts[2].upper()} entfernt." if ok else "Position nicht gefunden.")
         if sub == "clear":
-            hd.save_holdings(cfg, [])
+            hd.save_holdings(cfg, [], user=user)
             return "✔ Depot geleert."
-        return hd.render_depot(hd.build_depot_report(cfg))
+        return hd.render_depot(hd.build_depot_report(cfg, user=user))
 
     if cmd in ("weakspots", "schwachstellen", "schwaechen"):
         from stockai import weakspots as ws
@@ -143,11 +148,15 @@ def handle_command(cfg: Config, text: str) -> str:
 
     if cmd == "sparplan":
         from stockai.savings_plan import build_savings_plan
-        from stockai import notify
-        try:
-            amount = float(arg) if arg else 100.0
-        except ValueError:
-            amount = 100.0
+        from stockai import notify, users
+        if arg:                                   # neuer Betrag -> pro Nutzer merken
+            try:
+                amount = float(arg.replace(",", "."))
+                users.set_pref(cfg, user, "monthly", amount)
+            except ValueError:
+                amount = float(users.load_prefs(cfg, user).get("monthly", 100.0))
+        else:
+            amount = float(users.load_prefs(cfg, user).get("monthly", 100.0))
         return notify.render_savings_plan(build_savings_plan(cfg, monthly_amount=amount))
 
     if cmd == "live":
@@ -209,7 +218,7 @@ def _reply(cfg: Config, token: str, chat_id: str, text: str) -> None:
     """Befehl auswerten und Antwort mit antippbarem Menü senden."""
     from stockai.notify import main_menu_markup
     try:
-        answer = handle_command(cfg, text)
+        answer = handle_command(cfg, text, user=chat_id)   # Chat-ID = persönlicher Kontext
     except Exception as exc:
         answer = f"Fehler bei der Verarbeitung: {exc}"
     _send(token, chat_id, answer, keyboard=main_menu_markup())

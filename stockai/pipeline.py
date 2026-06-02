@@ -178,12 +178,31 @@ def analog_memory(
     return pd.Series(out, index=prices.index)
 
 
-def universe(cfg: Config) -> list[str]:
+def personal_tickers(cfg: Config) -> list[str]:
+    """Alle Werte, die Nutzer in ihren Depots/Alerts haben – damit die KI sie
+    automatisch mit-lernt und gezielt beobachtet (Personalisierung ohne eigenes
+    Modell pro Nutzer)."""
+    out: list[str] = []
+    try:
+        from stockai import users, holdings as hd, watch as wt
+        for u in users.all_users(cfg):
+            out += [h.ticker for h in hd.load_holdings(cfg, u)]
+            out += [w.ticker for w in wt.load_watches(cfg, u)]
+    except Exception:
+        return []
+    return out
+
+
+def universe(cfg: Config, include_personal: bool = True) -> list[str]:
     """Alle beobachteten Werte über die Anlageklassen hinweg (dedupliziert):
-    Aktien + ETFs + Krypto."""
+    Aktien + ETFs + Krypto – plus die Depot-/Alert-Werte der Nutzer, damit die
+    gemeinsame KI sich langfristig auch um genau deren Aktien kümmert."""
+    base = list(cfg.tickers) + list(cfg.etfs) + list(getattr(cfg, "crypto", []))
+    if include_personal:
+        base += personal_tickers(cfg)
     seen: list[str] = []
-    for t in list(cfg.tickers) + list(cfg.etfs) + list(getattr(cfg, "crypto", [])):
-        if t not in seen:
+    for t in base:
+        if t and t not in seen:
             seen.append(t)
     return seen
 
@@ -194,6 +213,12 @@ def asset_class(cfg: Config, ticker: str) -> str:
         return "Krypto"
     if ticker in cfg.etfs:
         return "ETF"
+    try:                                  # nutzer-eigene Kryptowerte erkennen
+        from stockai.data.live import is_crypto
+        if is_crypto(ticker):
+            return "Krypto"
+    except Exception:
+        pass
     return "Aktie"
 
 

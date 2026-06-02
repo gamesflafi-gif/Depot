@@ -276,6 +276,18 @@ def cmd_watch(cfg, args) -> None:
         print("✔ Alle Alerts gelöscht.")
         return
     if action == "check":
+        # --all-users: jede Person bekommt nur ihre eigenen, frisch erreichten Alerts.
+        if getattr(args, "all_users", False):
+            from stockai import users
+            for u in users.all_users(cfg):
+                msgs = wt.check_watches(cfg, fire=True, user=u)
+                if msgs:
+                    text = "🔔 Alert ausgelöst!\n" + "\n".join(msgs) + \
+                           "\n\nℹ️ Keine Anlageberatung."
+                    print(f"[{u}]\n{text}")
+                    notify.send_telegram(text, chat_id=u,
+                                         reply_markup=notify.main_menu_markup())
+            return
         msgs = wt.check_watches(cfg, fire=True)
         if msgs:
             text = "🔔 Alert ausgelöst!\n" + "\n".join(msgs) + "\n\nℹ️ Keine Anlageberatung."
@@ -313,6 +325,16 @@ def cmd_depot(cfg, args) -> None:
 
     if getattr(args, "alert_only", False):
         # Nur senden, wenn die KI bei einer Position kritisch ist (für den Cron).
+        # --all-users: jeder Nutzer bekommt seine eigene Warnung an seinen Chat.
+        if getattr(args, "all_users", False):
+            from stockai import users
+            for u in users.all_users(cfg):
+                text = hd.depot_alert_text(cfg, user=u)
+                if text:
+                    print(f"[{u}] {text}")
+                    notify.send_telegram(text, chat_id=u,
+                                         reply_markup=notify.main_menu_markup())
+            return
         text = hd.depot_alert_text(cfg)
         if text:
             print(text)
@@ -881,6 +903,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="add/remove/clear/check (ohne Angabe: Alerts anzeigen)")
     pwt.add_argument("rest", nargs="*", help="Bedingung, z.B. BTC-USD < 50000")
     pwt.add_argument("--notify", action="store_true", help="Treffer per Telegram senden")
+    pwt.add_argument("--all-users", action="store_true",
+                     help="für alle Nutzer prüfen und jedem an seinen Chat senden (Cron)")
 
     pdp = sub.add_parser("depot", help="Eigenes Depot: Positionen + KI-Bewertung & G/V")
     pdp.add_argument("depot_action", nargs="?", choices=["add", "remove", "clear"],
@@ -891,6 +915,8 @@ def build_parser() -> argparse.ArgumentParser:
     pdp.add_argument("--notify", action="store_true", help="Bericht per Telegram senden")
     pdp.add_argument("--alert-only", action="store_true",
                      help="nur melden, wenn die KI eine Position kritisch sieht (für Cron)")
+    pdp.add_argument("--all-users", action="store_true",
+                     help="für alle Nutzer prüfen und jedem an seinen Chat senden (Cron)")
 
     psc = sub.add_parser("scorecard", help="Treffsicherheit der Empfehlungen bewerten")
     psc.add_argument("--threshold", type=float, default=0.55)

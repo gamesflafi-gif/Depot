@@ -107,12 +107,19 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   Konfiguration mit wachsender Datenbasis.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
-- **Eigenes Depot:** `depot` verfolgt deine **echten Positionen** (Ticker,
-  Stückzahl, Kaufkurs) und zeigt je Position **Gewinn/Verlust + die aktuelle
-  KI-Bewertung** – inkl. Warnung, wenn die KI nicht mehr bullisch ist. Eintragen
-  per `depot add NVDA 10 850` (CLI oder `/depot add …` im Chat). Der Tageslauf
-  meldet automatisch, sobald die KI eine deiner Positionen kritisch sieht
-  (`depot --alert-only`). Daten bleiben lokal (`holdings.json`).
+- **Eigenes Depot (pro Nutzer):** `depot` verfolgt deine **echten Positionen**
+  (Ticker, Stückzahl, Kaufkurs) und zeigt je Position **Gewinn/Verlust + die
+  aktuelle KI-Bewertung** – inkl. Warnung, wenn die KI nicht mehr bullisch ist.
+  Eintragen per `depot add NVDA 10 850` (CLI oder `/depot add …` im Chat). Bei
+  mehreren Telegram-Nutzern hat **jeder sein eigenes Depot, seinen eigenen
+  Sparplan und eigene Alerts** (getrennt nach Chat-ID unter `users/<id>/`). Der
+  Tageslauf meldet jedem automatisch, sobald die KI eine seiner Positionen
+  kritisch sieht (`depot --alert-only --all-users`).
+- **Personalisierung ohne Genauigkeitsverlust:** Die KI bleibt **ein** gemeinsames
+  Modell (mehr Daten = bessere Treffer), nimmt aber die **Depot-/Alert-Werte aller
+  Nutzer automatisch ins Universum** auf – sie lernt und beobachtet so gezielt
+  genau die Aktien, die ihr im Depot habt, statt pro Nutzer ein schwaches
+  Einzel-Modell zu trainieren.
 - **Interaktiver Telegram-Bot:** `bot` startet einen Bot, dem du direkt
   schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`,
   `/depot`, `/track`, `/weakspots`, `/health`. **Antippbare Buttons** (Inline-Menü)

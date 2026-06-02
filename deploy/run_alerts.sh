@@ -9,5 +9,5 @@ mkdir -p logs
 LOG="logs/alerts-$(date +%Y-%m-%d).log"
 # 1) allgemeine starke Bewegungen
 "$PY" -m stockai.cli alerts --notify >> "$LOG" 2>&1
-# 2) eigene bedingte Alerts (Crossing-Logik, nur bei frisch erreichtem Trigger)
-"$PY" -m stockai.cli watch check --notify >> "$LOG" 2>&1
+# 2) eigene bedingte Alerts pro Nutzer (Crossing-Logik, nur bei frischem Trigger)
+"$PY" -m stockai.cli watch check --all-users >> "$LOG" 2>&1
