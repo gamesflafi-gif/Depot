@@ -144,6 +144,11 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
   eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
   antwortet der Bot allen (nicht empfohlen).
+- **Charts im Chat:** `/chart NVDA` schickt einen **Kurs-Chart als Bild** –
+  Kursverlauf mit SMA20/SMA50, **▲/▼ Kauf-/Verkaufssignalen** (SMA-Kreuzung) und
+  RSI-Panel, beschriftet mit dem aktuellen KI-Urteil (Aktion + Conviction). Der
+  wöchentliche Lauf schickt zusätzlich den Chart des Werts mit der höchsten
+  Conviction (`chart --top --notify`).
 - **Sektor-Rotation:** `sectors` / `/sektoren` fasst die Analysen je **Branche**
   zusammen (Tech, Financials, Energy …) und zeigt, **welche Sektoren führen und
   welche zurückfallen** (Ø Conviction, Momentum, Anteil bullisch, Top-Wert je

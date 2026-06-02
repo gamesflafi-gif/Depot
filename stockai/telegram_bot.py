@@ -40,6 +40,7 @@ _HELP = (
     "\n"
     "📊 Analyse\n"
     "  /analyse SYM   Einzelanalyse (z.B. /analyse NVDA)\n"
+    "  /chart SYM     Kurs-Chart mit Signalen als Bild\n"
     "  /live SYM      aktueller Live-Kurs\n"
     "  /briefing      aktuelles Briefing mit Bewegungen\n"
     "  /top [n]       Top-n Chancen & Risiken\n"
@@ -326,7 +327,8 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
                 + (f"Horizonte: {hz}\n" if hz else "")
                 + f"RSI: {a.rsi_14:.0f}  ·  News-Stimmung: {a.sentiment_mean:+.2f}\n"
                 + f"Timing: {a.timing}\n\n"
-                + render_conviction(a) + "\n\nℹ️ Keine Anlageberatung.")
+                + render_conviction(a)
+                + f"\n\n📈 Chart: /chart {a.ticker}\nℹ️ Keine Anlageberatung.")
 
     return "Unbekannter Befehl. /help zeigt die Übersicht."
 
@@ -401,6 +403,37 @@ def _typing(token: str, chat_id: str) -> None:
 def _reply(cfg: Config, token: str, chat_id: str, text: str) -> None:
     """Befehl auswerten und Antwort mit antippbarem Menü senden."""
     from stockai.notify import main_menu_markup
+    parts = text.strip().split()
+    cmd0 = parts[0].lstrip("/").split("@")[0].lower() if parts else ""
+
+    # Chart-Befehl liefert ein Bild statt Text
+    if cmd0 in ("chart", "grafik", "verlauf"):
+        if len(parts) < 2:
+            _send(token, chat_id, "Bitte ein Symbol angeben, z.B. /chart NVDA",
+                  keyboard=main_menu_markup())
+            return
+        try:
+            _api(token, "sendChatAction",
+                 {"chat_id": chat_id, "action": "upload_photo"}, timeout=8)
+        except Exception:
+            pass
+        try:
+            from stockai import charts
+            from stockai.notify import send_telegram_photo
+            result = charts.price_chart(cfg, parts[1])
+        except Exception as exc:
+            result = None
+            _send(token, chat_id, f"Chart fehlgeschlagen: {exc}")
+            return
+        if not result:
+            _send(token, chat_id, f"Keine Chart-Daten für {parts[1].upper()}.")
+            return
+        png, caption = result
+        if not send_telegram_photo(png, caption, token=token, chat_id=chat_id,
+                                   reply_markup=main_menu_markup()):
+            _send(token, chat_id, "Bild konnte nicht gesendet werden.")
+        return
+
     _typing(token, chat_id)                            # sofortiges Lebenszeichen
     try:
         # Chat-ID = persönlicher Kontext; cached=True für schnelle Wiederholungen

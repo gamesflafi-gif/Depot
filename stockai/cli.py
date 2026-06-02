@@ -320,6 +320,41 @@ def cmd_watch(cfg, args) -> None:
     print(wt.render_watches(cfg))
 
 
+def cmd_chart(cfg, args) -> None:
+    """Erzeugt einen Kurs-Chart (PNG) und sendet ihn optional per Telegram."""
+    import os
+    from stockai import charts, notify
+
+    ticker = args.ticker
+    if getattr(args, "top", False):           # den Wert mit höchster Conviction wählen
+        from stockai import pipeline
+        buys = [a for a in pipeline.analyze(cfg)
+                if a.action in ("BOOM", "KAUFEN") and a.conviction == a.conviction]
+        buys.sort(key=lambda a: a.conviction, reverse=True)
+        if not buys:
+            print("Aktuell keine Kauf-Chance für einen Chart.")
+            return
+        ticker = buys[0].ticker
+    if not ticker:
+        print("Bitte ein Symbol angeben (oder --top).")
+        return
+
+    result = charts.price_chart(cfg, ticker)
+    if not result:
+        print(f"Keine Chart-Daten für {ticker.upper()}.")
+        return
+    png, caption = result
+    out_dir = os.path.join(cfg.store_dir, "charts")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{ticker.upper()}.png")
+    with open(path, "wb") as fh:
+        fh.write(png)
+    print(f"Chart gespeichert: {path}")
+    if getattr(args, "notify", False):
+        ok = notify.send_telegram_photo(png, caption, reply_markup=notify.main_menu_markup())
+        print("Per Telegram gesendet ✔" if ok else "Nicht gesendet (Kanal/Netz prüfen).")
+
+
 def cmd_sectors(cfg, args) -> None:
     """Sektor-Rotation: welche Branchen führen, welche fallen zurück."""
     from stockai import sectors as sc
@@ -968,6 +1003,11 @@ def build_parser() -> argparse.ArgumentParser:
     pse = sub.add_parser("sectors", help="Sektor-Rotation: welche Branchen führen")
     pse.add_argument("--notify", action="store_true", help="Report per Telegram senden")
 
+    pch = sub.add_parser("chart", help="Kurs-Chart (PNG) mit Signalen erzeugen/senden")
+    pch.add_argument("ticker", nargs="?", help="Symbol, z.B. NVDA")
+    pch.add_argument("--top", action="store_true", help="den Wert mit höchster Conviction charten")
+    pch.add_argument("--notify", action="store_true", help="Chart per Telegram senden")
+
     pwh = sub.add_parser("whales", help="Whale-Radar: auffälliges Volumen (Smart-Money-Spur)")
     pwh.add_argument("--min", type=float, default=2.0, help="Mindest-rel.-Volumen (Standard 2.0)")
     pwh.add_argument("--notify", action="store_true", help="Report per Telegram senden")
@@ -1072,6 +1112,7 @@ _COMMANDS = {
     "watch": cmd_watch,
     "whales": cmd_whales,
     "sectors": cmd_sectors,
+    "chart": cmd_chart,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,
