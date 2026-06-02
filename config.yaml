@@ -114,7 +114,7 @@ crypto:
   - SOL-USD   # Solana
 
 # Wie viel Kurs-Historie wird für Training/Features geladen?
-history_period: "2y"        # z.B. 1y, 2y, 5y, max
+history_period: "3y"        # mehr Historie = mehr Trainingsdaten (1y, 2y, 3y, 5y, max)
 # Bar-Intervall: "1d" = Tageskerzen. Für INTRADAY z.B. "15m", "1h":
 #   Krypto via Binance (frei), Aktien/ETFs via Twelve Data (STOCKAI_TWELVEDATA_KEY).
 #   Hinweis: horizon_days/horizons zählen dann in BARS, nicht Tagen.
