@@ -376,6 +376,16 @@ def snapshot_live(cfg: Config) -> int:
     _augment_with_market(rows)
     if not rows:
         return 0
+    # Vorhersage des aktuellen Modells mitspeichern (für den Live-Track-Record):
+    # später vergleichen wir diese Prognose mit dem real eingetretenen Ergebnis.
+    predictor = ModelStore(cfg.model_dir).load_model()
+    if predictor is not None:
+        for r in rows:
+            try:
+                X = pd.DataFrame([r])[predictor.feature_names]
+                r["pred_proba"] = float(predictor.predict_proba(X)[0])
+            except Exception:
+                r["pred_proba"] = np.nan
     store.update(pd.DataFrame(rows), key_cols=KEY_COLS)
     return len(rows)
 

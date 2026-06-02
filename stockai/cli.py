@@ -212,6 +212,20 @@ def cmd_tune(cfg, args) -> None:
     print("\n  ✔ Gespeichert – werden beim nächsten 'train' automatisch angewandt.")
 
 
+def cmd_track(cfg, args) -> None:
+    """Live-Track-Record: echte gesammelte Prognosen vs. reales Ergebnis."""
+    from stockai import track as tr
+    from stockai import notify
+
+    rec = tr.build_track_record(cfg, prob_threshold=args.threshold)
+    report = tr.render_track_record(rec)
+    print(report)
+    if args.notify:
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
+
+
 def cmd_scorecard(cfg, args) -> None:
     """Bewertet die Treffsicherheit der Empfehlungen (Walk-Forward)."""
     from stockai import scorecard as sc
@@ -712,6 +726,10 @@ def build_parser() -> argparse.ArgumentParser:
     psw.add_argument("--retrain-every", type=int, default=5)
     psw.add_argument("--train-frac", type=float, default=0.3)
 
+    ptr = sub.add_parser("track", help="Live-Track-Record (echte Prognosen vs. Ergebnis)")
+    ptr.add_argument("--threshold", type=float, default=0.55)
+    ptr.add_argument("--notify", action="store_true")
+
     psc = sub.add_parser("scorecard", help="Treffsicherheit der Empfehlungen bewerten")
     psc.add_argument("--threshold", type=float, default=0.55)
 
@@ -789,6 +807,7 @@ _COMMANDS = {
     "ablation": cmd_ablation,
     "sweep": cmd_sweep,
     "tune": cmd_tune,
+    "track": cmd_track,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,

@@ -9,6 +9,8 @@ mkdir -p logs
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') weekly ====="
   # Selbst-Weiterentwicklung: bestes Modell neu wählen & tunen
   "$PY" -m stockai.cli evolve || echo "evolve fehlgeschlagen"
+  # Live-Track-Record (echte Prognosen vs. Ergebnis) per Telegram
+  "$PY" -m stockai.cli track --notify || echo "track fehlgeschlagen"
   # Wochen-Top-5 in beide Richtungen
   "$PY" -m stockai.cli top --n 5 --notify || echo "weekly fehlgeschlagen"
 } >> "logs/weekly-$(date +%Y-%m-%d).log" 2>&1

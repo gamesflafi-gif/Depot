@@ -430,6 +430,35 @@ def test_cross_validate_embargo():
     assert cv1["cv_folds"] >= 1
 
 
+def test_track_record(tmp_path):
+    """Live-Track-Record aus gesammelten Snapshots (Prognose vs. Ergebnis)."""
+    import numpy as np
+    import pandas as pd
+    from stockai import track
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+    # Feature-Store mit Prognosen + realem Ergebnis simulieren
+    rng = np.random.default_rng(0)
+    proba = rng.uniform(0, 1, 60)
+    target = (proba + rng.normal(0, 0.3, 60) > 0.5).astype(float)
+    df = pd.DataFrame({"ticker": ["X"] * 60,
+                       "date": pd.date_range("2026-01-01", periods=60).astype(str),
+                       "pred_proba": proba, "target": target})
+    # ein paar noch offene (ungelabelte) Snapshots
+    df = pd.concat([df, pd.DataFrame({"ticker": ["Y"] * 5, "date": ["2026-04-01"] * 5,
+                                      "pred_proba": [0.6] * 5, "target": [np.nan] * 5})])
+    df.to_csv(tmp_path / "feature_store.csv", index=False)
+
+    rec = track.build_track_record(cfg)
+    assert rec.n_labeled == 60 and rec.n_pending == 5
+    assert 0.0 <= rec.accuracy <= 1.0
+    assert rec.calibration
+    out = track.render_track_record(rec)
+    assert "Track-Record" in out
+
+
 def test_market_regime():
     from types import SimpleNamespace
     from stockai.briefing import market_regime
