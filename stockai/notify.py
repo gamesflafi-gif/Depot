@@ -38,6 +38,7 @@ def parse_chat_ids(raw: str | None) -> list[str]:
 def main_menu_markup() -> str:
     """Antippbares Hauptmenü (Telegram-Inline-Tastatur) – kein Tippen nötig."""
     kb = {"inline_keyboard": [
+        [{"text": "🏠 Mein Menü", "callback_data": "/menu"}],
         [{"text": "📊 Briefing", "callback_data": "/briefing"},
          {"text": "🚀 Top 5", "callback_data": "/top 5"}],
         [{"text": "💼 Depot", "callback_data": "/depot"},

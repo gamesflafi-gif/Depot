@@ -5,6 +5,7 @@ Zusatz-Abhängigkeiten (nur urllib). Aus Sicherheitsgründen reagiert der Bot nu
 auf die in ``STOCKAI_TELEGRAM_CHAT_ID`` hinterlegte Chat-ID (deine eigene).
 
 Befehle:
+    /menu          – persönlicher Überblick (Depot, Alerts, Sparplan)
     /analyse SYM   – Einzelanalyse eines Wertes (z.B. /analyse NVDA)
     /live SYM      – aktueller Live-Kurs
     /briefing      – aktuelles Briefing mit Moves
@@ -35,6 +36,8 @@ _TG_LIMIT = 3900
 _HELP = (
     "🤖 Aktien-KI Bot · deine Befehle\n"
     "\n"
+    "🏠 /menu   dein persönlicher Überblick (Depot, Alerts, Sparplan)\n"
+    "\n"
     "📊 Analyse\n"
     "  /analyse SYM   Einzelanalyse (z.B. /analyse NVDA)\n"
     "  /live SYM      aktueller Live-Kurs\n"
@@ -60,6 +63,42 @@ _HELP = (
 )
 
 
+def _personal_overview(cfg: Config, user: str | None) -> str:
+    """Persönlicher, schneller Überblick je Nutzer (ohne schwere Analyse)."""
+    from stockai import holdings as hd, watch as wt, users
+    prefs = users.load_prefs(cfg, user)
+    name = prefs.get("name")
+    nh = len(hd.load_holdings(cfg, user))
+    nw = len(wt.load_watches(cfg, user))
+    monthly = prefs.get("monthly")
+
+    lines = [f"👋 Hallo {name}!" if name else "👋 Hallo!", "", "Dein Überblick:"]
+    if nh:
+        lines.append(f"💼 Depot: {nh} Position(en)  →  /depot")
+    else:
+        lines.append("💼 Depot: noch leer  →  /depot add NVDA 10 850")
+    if nw:
+        lines.append(f"🔔 Alerts: {nw} aktiv  →  /watch")
+    else:
+        lines.append("🔔 Alerts: keine  →  /watch add BTC-USD < 50000")
+    if monthly:
+        lines.append(f"💶 Sparplan: {float(monthly):g}€/Monat  →  /sparplan")
+    else:
+        lines.append("💶 Sparplan: noch keiner  →  /sparplan 200")
+    lines.append("")
+    lines.append("Tipp einen Button unten oder /help für alle Befehle.")
+    return "\n".join(lines)
+
+
+def _welcome(cfg: Config, user: str | None) -> str:
+    """Freundliche Begrüßung beim /start – persönlich und mit Überblick."""
+    return ("🤖 Willkommen bei deiner Aktien-KI!\n"
+            "Ich analysiere Aktien, ETFs & Krypto, lerne laufend dazu und melde "
+            "dir Chancen, Whale-Volumen und Depot-Warnungen.\n\n"
+            + _personal_overview(cfg, user)
+            + "\n\nℹ️ Keine Anlageberatung.")
+
+
 def handle_command(cfg: Config, text: str, user: str | None = None,
                    cached: bool = False) -> str:
     """Wertet einen Befehlstext aus und liefert die Antwort (Text).
@@ -75,8 +114,12 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
     cmd = parts[0].lower().lstrip("/").split("@")[0]
     arg = parts[1] if len(parts) > 1 else None
 
-    if cmd in ("start", "help"):
+    if cmd == "help":
         return _HELP
+    if cmd == "start":
+        return _welcome(cfg, user)
+    if cmd in ("menu", "menü", "uebersicht", "übersicht"):
+        return _personal_overview(cfg, user)
 
     if cmd == "briefing":
         from stockai import briefing as bf
@@ -247,6 +290,19 @@ def _send(token: str, chat_id: str, text: str, keyboard: str | None = None) -> N
         log.warning("Senden fehlgeschlagen: %s", exc)
 
 
+def _remember_name(cfg: Config, chat_id: str, frm: dict) -> None:
+    """Merkt sich den Telegram-Vornamen pro Nutzer (für persönliche Begrüßung)."""
+    name = (frm or {}).get("first_name")
+    if not name:
+        return
+    try:
+        from stockai import users
+        if users.load_prefs(cfg, chat_id).get("name") != name:
+            users.set_pref(cfg, chat_id, "name", name)
+    except Exception:
+        pass
+
+
 def _typing(token: str, chat_id: str) -> None:
     """Zeigt im Chat „tippt …", damit der Bot bei längeren Befehlen nicht
     eingefroren wirkt."""
@@ -299,9 +355,11 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
     except Exception:
         pass
 
-    for cid in allowed:                      # Startmeldung an alle Erlaubten
-        _send(token, cid, "🤖 Aktien-KI Bot ist online. Tippe einen Button "
-              "oder /help.", keyboard=main_menu_markup())
+    for cid in allowed:                      # persönliche Startmeldung an alle Erlaubten
+        from stockai import users
+        nm = users.load_prefs(cfg, cid).get("name")
+        hi = f"🤖 Bot wieder online{', ' + nm if nm else ''}! Tippe 🏠 Mein Menü."
+        _send(token, cid, hi, keyboard=main_menu_markup())
 
     offset = None
     while True:
@@ -338,6 +396,7 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
                           "Nicht autorisiert. Deine Chat-ID: " + chat_id +
                           "\nGib sie dem Betreiber, damit er dich freischaltet.")
                     continue
+                _remember_name(cfg, chat_id, msg.get("from", {}))
                 _reply(cfg, token, chat_id, text)
         except Exception as exc:
             log.warning("Bot-Schleife: %s", exc)

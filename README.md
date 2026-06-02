@@ -122,7 +122,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   Einzel-Modell zu trainieren.
 - **Interaktiver Telegram-Bot:** `bot` startet einen Bot, dem du direkt
   schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`,
-  `/depot`, `/track`, `/weakspots`, `/health`. **Antippbare Buttons** (Inline-Menü)
+  `/menu`, `/depot`, `/track`, `/weakspots`, `/health`. **`/menu`** zeigt einen
+  **persönlichen Überblick** (Begrüßung mit Vorname, eigenes Depot, Alerts,
+  Sparplan). **Antippbare Buttons** (Inline-Menü)
   machen Tippen optional; jede Nachricht (auch das tägliche Push-Briefing) hat das
   Menü dabei. Dauerbetrieb via `deploy/install_bot.sh` (systemd-Dienst).
 - **Mehrere Nutzer (Allowlist):** In `STOCKAI_TELEGRAM_CHAT_ID` mehrere Chat-IDs

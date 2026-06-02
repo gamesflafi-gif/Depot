@@ -314,17 +314,26 @@ def test_alerts_detects_move(tmp_path):
     assert al.render_alerts(al.AlertResult(timestamp="t")) == ""
 
 
-def test_telegram_bot_commands():
+def test_telegram_bot_commands(tmp_path):
     """Befehlsverarbeitung des Bots (ohne Netzwerk)."""
+    from stockai import telegram_bot as tb
     from stockai.telegram_bot import handle_command
     from stockai.config import load_config
 
     cfg = load_config()
     cfg.raw["data_source"] = "demo"
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
     assert "Befehle" in handle_command(cfg, "/help")
-    assert "Befehle" in handle_command(cfg, "/start")
     assert "Symbol" in handle_command(cfg, "/analyse")          # ohne Argument
     assert "Unbekannt" in handle_command(cfg, "/quatsch")
+
+    # persönliches Menü: Vorname wird gemerkt und begrüßt
+    tb._remember_name(cfg, "111", {"first_name": "Max"})
+    menu = handle_command(cfg, "/menu", user="111")
+    assert "Hallo Max" in menu and "Depot" in menu and "Alerts" in menu
+    assert "Willkommen" in handle_command(cfg, "/start", user="111")
+    # anderer Nutzer ohne Name -> neutrale Begrüßung, eigener (leerer) Stand
+    assert "Hallo!" in handle_command(cfg, "/menu", user="222")
 
 
 def test_ticker_bias_causal():
