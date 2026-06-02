@@ -61,12 +61,19 @@ def recommend(
     if sentiment_mean < -0.15:
         reasons.append(f"Negatives News-Sentiment ({sentiment_mean:+.2f})")
 
-    # Verkaufslogik: hoch gelaufen + Erschöpfungssignale
-    if (overbought or near_high) and (momentum_fading or sentiment_mean < -0.1):
+    # Verkaufslogik: hoch gelaufen + Erschöpfung – ABER nur, wenn das Modell
+    # nicht mehr bullisch ist. (Echtdaten zeigten: rein technische Verkäufe im
+    # Aufwärtstrend trafen nur ~16 % – wir verkaufen daher keine Gewinner mehr,
+    # die das Modell weiter positiv sieht.)
+    model_bearish = profit_probability < 0.52 or (
+        expected_return is not None and expected_return < 0.0)
+    if (overbought or near_high) and (momentum_fading or sentiment_mean < -0.1) \
+            and model_bearish:
         return Recommendation(
             action="VERKAUFEN",
             confidence=min(0.9, 0.5 + abs(macd_hist) + (rsi_14 - 70) / 100 if overbought else 0.55),
-            reasons=reasons or ["Erschöpfungssignale nach Aufwärtsbewegung"],
+            reasons=(reasons or ["Erschöpfungssignale nach Aufwärtsbewegung"]) +
+                    [f"Modell nicht mehr bullisch (P {profit_probability:.0%})"],
             timing="Jetzt / in Stärke verkaufen – Aufwärtstrend zeigt Ermüdung.",
         )
 
