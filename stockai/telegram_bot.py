@@ -142,24 +142,38 @@ def _api(token: str, method: str, params: dict, timeout: int = 35):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _send(token: str, chat_id: str, text: str) -> None:
+def _send(token: str, chat_id: str, text: str, keyboard: str | None = None) -> None:
     try:
-        _api(token, "sendMessage",
-             {"chat_id": chat_id, "text": text[:_TG_LIMIT],
-              "disable_web_page_preview": "true"}, timeout=15)
+        params = {"chat_id": chat_id, "text": text[:_TG_LIMIT],
+                  "disable_web_page_preview": "true"}
+        if keyboard:
+            params["reply_markup"] = keyboard
+        _api(token, "sendMessage", params, timeout=15)
     except Exception as exc:
         log.warning("Senden fehlgeschlagen: %s", exc)
 
 
+def _reply(cfg: Config, token: str, chat_id: str, text: str) -> None:
+    """Befehl auswerten und Antwort mit antippbarem Menü senden."""
+    from stockai.notify import main_menu_markup
+    try:
+        answer = handle_command(cfg, text)
+    except Exception as exc:
+        answer = f"Fehler bei der Verarbeitung: {exc}"
+    _send(token, chat_id, answer, keyboard=main_menu_markup())
+
+
 def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
     """Startet die Long-Polling-Schleife (läuft dauerhaft)."""
+    from stockai.notify import main_menu_markup
     token = os.environ.get(_TOKEN_ENV)
     owner = os.environ.get(_CHAT_ENV)
     if not token:
         raise RuntimeError(f"{_TOKEN_ENV} nicht gesetzt (siehe .env / doctor).")
     log.info("Telegram-Bot gestartet (Polling).")
     if owner:
-        _send(token, owner, "🤖 Aktien-KI Bot ist online. /help für Befehle.")
+        _send(token, owner, "🤖 Aktien-KI Bot ist online. Tippe einen Button "
+              "oder /help.", keyboard=main_menu_markup())
 
     offset = None
     while True:
@@ -170,6 +184,22 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
             data = _api(token, "getUpdates", params, timeout=poll_timeout + 10)
             for upd in data.get("result", []):
                 offset = upd["update_id"] + 1
+
+                # 1) Button-Klick (Inline-Tastatur)
+                cb = upd.get("callback_query")
+                if cb:
+                    cb_chat = str(cb.get("message", {}).get("chat", {}).get("id", ""))
+                    try:    # Lade-Spinner am Button stoppen
+                        _api(token, "answerCallbackQuery",
+                             {"callback_query_id": cb.get("id", "")}, timeout=10)
+                    except Exception:
+                        pass
+                    if owner and cb_chat != str(owner):
+                        continue
+                    _reply(cfg, token, cb_chat, cb.get("data", "/help"))
+                    continue
+
+                # 2) normale Textnachricht
                 msg = upd.get("message") or upd.get("edited_message") or {}
                 text = msg.get("text")
                 chat_id = str(msg.get("chat", {}).get("id", ""))
@@ -178,11 +208,7 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
                 if owner and chat_id != str(owner):
                     _send(token, chat_id, "Nicht autorisiert.")
                     continue
-                try:
-                    reply = handle_command(cfg, text)
-                except Exception as exc:
-                    reply = f"Fehler bei der Verarbeitung: {exc}"
-                _send(token, chat_id, reply)
+                _reply(cfg, token, chat_id, text)
         except Exception as exc:
             log.warning("Bot-Schleife: %s", exc)
             time.sleep(5)

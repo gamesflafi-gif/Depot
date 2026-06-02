@@ -562,6 +562,12 @@ def test_savings_plan_demo():
     # Report rendert ohne Fehler; ohne Webhook-URL wird nichts gesendet
     report = notify.render_savings_plan(plan)
     assert "Sparplan-Update" in report
+    assert "**" not in report and "# " not in report   # sauberes Telegram-Format
+    # antippbares Menü: valides JSON mit Callback-Befehlen
+    import json
+    kb = json.loads(notify.main_menu_markup())
+    cbs = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+    assert "/briefing" in cbs and "/weakspots" in cbs and "/help" in cbs
     # Ohne Konfiguration wird nichts gesendet (kein Fehler)
     assert notify.send_webhook("test", url=None) is False
     assert notify.send_telegram("test", token=None, chat_id=None) is False
