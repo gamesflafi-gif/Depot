@@ -74,11 +74,15 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 
 ### Wie wird die Präzision maximiert – und ehrlich gemessen?
 
-- **Viele Signale:** 18 technische Indikatoren (Renditen über mehrere Horizonte,
+- **Viele Signale:** technische Indikatoren (Renditen über mehrere Horizonte,
   RSI, MACD inkl. Histogramm, gleitende Durchschnitte, Bollinger %B, ATR,
-  Stochastik, Volumen-z-Score …), **Markt-/Querschnitts-Features** (relative
-  Stärke + Perzentil-Ränge von Momentum & Sentiment im Universum – „wohin
-  rotiert das Geld") und **News-Sentiment als gelerntes Merkmal**.
+  Stochastik) plus **volumengewichtete „Smart-Money"-Signale** (relatives
+  Volumen, On-Balance-Volume-Trend = Akkumulation/Distribution, Money-Flow-Index)
+  und **Tail-Risiko** (Schiefe der Renditen). Dazu **Markt-/Querschnitts-Features**
+  (relative Stärke + Perzentil-Ränge von Momentum & Sentiment im Universum –
+  „wohin rotiert das Geld") und **News-Sentiment als gelerntes Merkmal**. Welche
+  Features wirklich helfen, entscheidet die automatische Feature-Auswahl auf
+  echten Daten (`evolve`/`ablation`).
 - **News fließen ins Lernen ein:** Das Modell wird auf tagesgenauem Sentiment
   mit-trainiert (im Demo-Modus an das Trend-Regime gekoppelt), nicht nur als
   Anzeige. Zusätzlich tiefere News-Features: **Sentiment-Trend**, **News-Mengen-
