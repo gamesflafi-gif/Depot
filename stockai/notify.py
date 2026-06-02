@@ -60,7 +60,7 @@ def onboarding_markup() -> str:
     kb = {"inline_keyboard": [
         [{"text": "🛡️ Defensiv", "callback_data": "/risiko defensiv"},
          {"text": "⚖️ Ausgewogen", "callback_data": "/risiko ausgewogen"},
-         {"text": "🔥 Offensiv", "callback_data": "/risiko offensiv"}],
+         {"text": "📈 Offensiv", "callback_data": "/risiko offensiv"}],
         [{"text": "🎯 Chancen ansehen", "callback_data": "/chancen"},
          {"text": "🏠 Menü", "callback_data": "/menu"}],
     ]}
@@ -73,7 +73,7 @@ def render_savings_plan(plan) -> str:
         "📈 Sparplan-Update",
         f"Monatlich: {plan.monthly_amount:.2f}€  ·  Core/ETF-Anteil {plan.core_share:.0%}",
         "",
-        "🧱 CORE (ETFs)",
+        "🏛️ CORE (ETFs)",
     ]
     for p in plan.core_positions:
         lines.append(f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%})")
@@ -88,7 +88,7 @@ def render_savings_plan(plan) -> str:
     if not plan.satellite_positions:
         lines.append("  • (aktuell keine – defensiv im Core)")
     if plan.crypto_positions:
-        lines += ["", "🪙 KRYPTO (Beimischung, höheres Risiko)"]
+        lines += ["", "₿ KRYPTO (Beimischung, höheres Risiko)"]
         for p in plan.crypto_positions:
             lines.append(
                 f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "

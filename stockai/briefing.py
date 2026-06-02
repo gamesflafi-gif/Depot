@@ -127,7 +127,7 @@ def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
     # --- Was hat sich bewegt? ---------------------------------------------
     if br.has_changes:
         lines.append("")
-        lines.append("⚡ NEU SEIT DEM LETZTEN LAUF")
+        lines.append("🔔 NEU SEIT DEM LETZTEN LAUF")
         for t, p in br.new_buys:
             lines.append(f"  🟢 Kaufsignal: {t}  ({p:.0%} Chance)")
         for t, p in br.new_sells:

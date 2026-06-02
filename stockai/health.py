@@ -216,7 +216,7 @@ def render_health(rep: HealthReport) -> str:
         lines.append(f"\n🛡️ Gegensteuern: Kaufschwelle wird strenger "
                      f"(+{rep.posture:.0%} statt +{rep.posture - rep.posture_change:.0%}).")
     elif rep.posture_change < 0:
-        lines.append(f"\n🌤️ Erholung: Kaufschwelle wird gelockert "
+        lines.append(f"\n✅️ Erholung: Kaufschwelle wird gelockert "
                      f"(jetzt +{rep.posture:.0%}).")
     elif rep.posture > 0:
         lines.append(f"\n🛡️ Aktuell vorsichtiger: Kaufschwelle +{rep.posture:.0%} "

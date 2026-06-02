@@ -62,9 +62,9 @@ def render_sectors(stats: list[SectorStat]) -> str:
     lines = ["🧭 Sektor-Rotation – wohin fließt das Geld", ""]
     for i, s in enumerate(stats):
         if i == 0:
-            mark = "🥇"
+            mark = "🔼"
         elif i == len(stats) - 1 and len(stats) > 2:
-            mark = "🐌"
+            mark = "🔻"
         else:
             mark = "  "
         lines.append(
