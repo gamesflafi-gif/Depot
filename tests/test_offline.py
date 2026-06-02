@@ -643,6 +643,20 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_bot_logo_and_commands():
+    """Logo ist ein gültiges PNG; das Befehlsmenü ist wohlgeformt."""
+    from stockai import charts
+    from stockai import telegram_bot as tb
+
+    png = charts.make_logo()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 1000
+    # Telegram-Befehlsliste: nur Kleinbuchstaben, kurze Beschreibungen
+    assert any(c == "menu" for c, _ in tb._BOT_COMMANDS)
+    for cmd, desc in tb._BOT_COMMANDS:
+        assert cmd == cmd.lower() and " " not in cmd
+        assert 1 <= len(desc) <= 256
+
+
 def test_chart_png(tmp_path):
     """Chart liefert ein gültiges PNG + Bildunterschrift; Multipart bettet es ein."""
     from stockai import charts, notify

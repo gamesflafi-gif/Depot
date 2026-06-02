@@ -144,6 +144,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
   eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
   antwortet der Bot allen (nicht empfohlen).
+- **Polierter Bot:** beim Start setzt der Bot automatisch das **Telegram-
+  Befehlsmenü** (die „/"-Vorschläge) sowie Kurz-/Langbeschreibung über die API.
+  Ein **Profilbild/Logo** erzeugt `logo` (`python -m stockai.cli logo`) – hochladen
+  via @BotFather → `/setuserpic` (die API kann das Avatar nicht selbst setzen).
 - **Charts im Chat:** `/chart NVDA` schickt einen **Kurs-Chart als Bild** –
   Kursverlauf mit SMA20/SMA50, **▲/▼ Kauf-/Verkaufssignalen** (SMA-Kreuzung) und
   RSI-Panel, beschriftet mit dem aktuellen KI-Urteil (Aktion + Conviction). Der

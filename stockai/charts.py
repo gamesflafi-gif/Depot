@@ -12,6 +12,41 @@ import io
 from stockai.config import Config
 
 
+def make_logo() -> bytes:
+    """Erzeugt ein quadratisches Bot-Logo (PNG) zum Hochladen via @BotFather."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    fig = plt.figure(figsize=(6.4, 6.4), dpi=100)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_facecolor("#0e1726")
+    fig.patch.set_facecolor("#0e1726")
+    ax.set_xlim(0, 10); ax.set_ylim(0, 10); ax.axis("off")
+
+    # aufsteigende Kurslinie mit Flächenfüllung
+    x = np.linspace(1, 9, 9)
+    y = np.array([3.0, 3.6, 3.2, 4.4, 4.0, 5.2, 5.0, 6.4, 7.2])
+    ax.fill_between(x, y, 1.5, color="#3ddc84", alpha=0.12)
+    ax.plot(x, y, color="#3ddc84", lw=6, solid_capstyle="round")
+    ax.scatter([9], [7.2], s=260, color="#3ddc84", zorder=5,
+               edgecolors="#0e1726", linewidths=3)
+    # Pfeilspitze nach oben rechts
+    ax.annotate("", xy=(9.4, 7.9), xytext=(8.4, 6.6),
+                arrowprops=dict(arrowstyle="-|>", color="#3ddc84", lw=5))
+
+    ax.text(5, 2.0, "KI", fontsize=92, fontweight="bold", color="white",
+            ha="center", va="center")
+    ax.text(5, 0.95, "AKTIEN · ETF · KRYPTO", fontsize=15, color="#9fb3c8",
+            ha="center", va="center", fontweight="bold")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return buf.getvalue()
+
+
 def price_chart(cfg: Config, ticker: str, days: int = 140) -> tuple[bytes, str] | None:
     """Erzeugt einen PNG-Chart + Bildunterschrift für ``ticker``.
 
