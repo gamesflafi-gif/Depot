@@ -162,13 +162,18 @@ class Predictor:
 
     # ------------------------------------------------------------------ #
     def cross_validate(
-        self, df: pd.DataFrame, target_col: str = "target", n_splits: int = 5
+        self, df: pd.DataFrame, target_col: str = "target", n_splits: int = 5,
+        purge_dates: int = 0,
     ) -> dict[str, float]:
         """Ehrliche Präzisionsschätzung per zeitlicher Kreuzvalidierung.
 
         Trainiert auf wachsenden Vergangenheitsfenstern und bewertet jeweils auf
         dem darauffolgenden Block (``TimeSeriesSplit``). Liefert Mittelwert und
         Streuung der Out-of-Sample-Metriken – kein Blick in die Zukunft.
+
+        ``purge_dates`` > 0 setzt ein **Embargo**: die letzten ``purge_dates``
+        Handelstage vor jedem Testblock werden aus dem Training entfernt. Das
+        verhindert Leckage durch überlappende Vorhersage-Ziele (Label-Overlap).
         """
         data = df.dropna(subset=self.feature_names + [target_col]).copy()
         if "date" in data.columns:
@@ -178,8 +183,17 @@ class Predictor:
         if len(data) < (n_splits + 1) * 10 or len(np.unique(y)) < 2:
             return {}
 
+        # Embargo in Zeilen abschätzen (Zeilen pro Datum × purge_dates)
+        embargo = 0
+        if purge_dates > 0 and "date" in data.columns:
+            n_dates = max(1, data["date"].nunique())
+            rows_per_date = max(1, round(len(data) / n_dates))
+            embargo = purge_dates * rows_per_date
+
         accs, aucs, f1s = [], [], []
         for tr_idx, te_idx in TimeSeriesSplit(n_splits=n_splits).split(X):
+            if embargo and len(tr_idx) > embargo + 10:
+                tr_idx = tr_idx[:-embargo]   # Lücke zwischen Training und Test
             if len(np.unique(y[tr_idx])) < 2:
                 continue
             est = _build_estimator(self.model_type, self.random_state)

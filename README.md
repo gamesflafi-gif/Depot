@@ -144,8 +144,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 - **Kalibrierte Wahrscheinlichkeiten:** Mit `calibrate: true` werden die
   P(Profit)-Werte isotonisch kalibriert – „70 %" heißt dann wirklich ~70 %.
 - **Ehrliche Validierung:** Bewertung per **zeitlicher Kreuzvalidierung**
-  (`TimeSeriesSplit`) – das Modell sieht beim Testen nie die Zukunft. `train`
-  zeigt AUC/Accuracy als Mittelwert ± Streuung, `evaluate` vergleicht alle Modelle.
+  (`TimeSeriesSplit`) mit **Embargo** (purge_dates) – die letzten Tage vor jedem
+  Testblock werden aus dem Training entfernt, um Leckage durch überlappende
+  Vorhersage-Ziele zu vermeiden. `train` zeigt AUC/Accuracy ± Streuung,
+  `evaluate` vergleicht alle Modelle.
 - **Hyperparameter-Tuning:** `tune` optimiert die Modellparameter per CV und
   speichert sie; `train` wendet sie automatisch an.
 - **Recommendation-Scorecard:** `scorecard` bewertet per Walk-Forward, wie

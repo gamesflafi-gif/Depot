@@ -360,6 +360,24 @@ def test_crypto_support():
     assert sum(p.monthly for p in plan.crypto_positions) <= 10.5
 
 
+def test_cross_validate_embargo():
+    """CV mit Embargo (purge_dates) läuft und liefert gültige Kennzahlen."""
+    import numpy as np
+    import pandas as pd
+    from stockai.model.predictor import Predictor
+    from stockai.features.technical import TECHNICAL_FEATURES
+    df = add_technical_features(_synthetic_prices(seed=5, n=600))
+    df["target"] = (df["Close"].shift(-5) / df["Close"] - 1 > 0).astype(float)
+    df["date"] = df.index
+    feats = TECHNICAL_FEATURES
+    p = Predictor(feats, model_type="logistic")
+    cv0 = p.cross_validate(df, n_splits=4, purge_dates=0)
+    cv1 = p.cross_validate(df, n_splits=4, purge_dates=5)
+    assert cv0 and cv1
+    assert 0.0 <= cv1["cv_accuracy_mean"] <= 1.0
+    assert cv1["cv_folds"] >= 1
+
+
 def test_market_regime():
     from types import SimpleNamespace
     from stockai.briefing import market_regime
