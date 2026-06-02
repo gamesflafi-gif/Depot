@@ -195,6 +195,31 @@ def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
 
 
 # --------------------------------------------------------------------------- #
+_LOCK_HANDLE = None   # offen halten, solange der Prozess lebt
+
+
+def _acquire_lock(cfg: Config) -> bool:
+    """Exklusive Datei-Sperre, damit nur EIN Bot gleichzeitig pollt.
+
+    Liefert True, wenn die Sperre erlangt wurde. Auf Systemen ohne ``fcntl``
+    (z.B. Windows) wird keine Sperre genutzt (immer True).
+    """
+    global _LOCK_HANDLE
+    try:
+        import fcntl
+        from pathlib import Path
+        path = Path(cfg.store_dir) / "bot.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fh = open(path, "w")
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _LOCK_HANDLE = fh                     # Referenz halten -> Sperre bleibt aktiv
+        return True
+    except OSError:
+        return False                          # bereits gesperrt
+    except Exception:
+        return True                           # kein fcntl -> ohne Sperre weiter
+
+
 def _api(token: str, method: str, params: dict, timeout: int = 35):
     url = f"https://api.telegram.org/bot{token}/{method}"
     data = urllib.parse.urlencode(params).encode("utf-8")
@@ -236,10 +261,24 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
     allowed = parse_chat_ids(os.environ.get(_CHAT_ENV))
     if not token:
         raise RuntimeError(f"{_TOKEN_ENV} nicht gesetzt (siehe .env / doctor).")
+
+    # Single-Instance-Sperre: verhindert, dass zwei Bot-Prozesse gleichzeitig
+    # pollen und jede Nachricht doppelt beantworten.
+    if not _acquire_lock(cfg):
+        log.warning("Es läuft bereits eine Bot-Instanz – diese beende ich.")
+        print("Es läuft bereits ein Bot (Lock aktiv) – doppelte Instanz beendet.")
+        return
+
     log.info("Telegram-Bot gestartet (Polling). Erlaubte Chats: %d", len(allowed))
 
     def _authorized(cid: str) -> bool:
         return (not allowed) or (cid in allowed)
+
+    # Beim Start eventuell aufgelaufene Alt-Updates verwerfen (kein Nachzügler-Spam)
+    try:
+        _api(token, "getUpdates", {"offset": -1, "timeout": 0}, timeout=15)
+    except Exception:
+        pass
 
     for cid in allowed:                      # Startmeldung an alle Erlaubten
         _send(token, cid, "🤖 Aktien-KI Bot ist online. Tippe einen Button "
