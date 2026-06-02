@@ -656,16 +656,38 @@ def learning_curve(cfg: Config, steps: int = 5) -> list[dict]:
     return curve
 
 
+# Kurzzeit-Cache (pro Prozess): wiederholte Analysen im laufenden Bot werden
+# sofort bedient und entlasten den Server – Cron-Läufe sind eigene, kurze
+# Prozesse und damit immer frisch.
+_ANALYZE_CACHE: dict = {}
+_ANALYZE_TTL = 180.0   # Sekunden
+
+
+def clear_analyze_cache() -> None:
+    _ANALYZE_CACHE.clear()
+
+
 # --------------------------------------------------------------------------- #
 def analyze(
-    cfg: Config, retrain_if_missing: bool = True, universe_override: list[str] | None = None
+    cfg: Config, retrain_if_missing: bool = True, universe_override: list[str] | None = None,
+    use_cache: bool = False,
 ) -> list[TickerAnalysis]:
     """Live-Analyse: berechnet je Ticker die Profitabilitäts-Wahrscheinlichkeit.
 
     Das Ranking zeigt, *wer* wahrscheinlich profitabel wird und *wohin*
     (relativ) das Kapital tendiert. ``universe_override`` ersetzt optional die zu
     bewertenden Ticker; Standard ist das gesamte Universum (Aktien+ETFs+Krypto).
+    ``use_cache`` bedient identische Anfragen ``_ANALYZE_TTL`` Sekunden lang aus
+    dem Speicher (für den interaktiven Bot, mehrere Nutzer).
     """
+    import time
+    if use_cache:
+        key = (getattr(cfg, "data_source", ""),
+               tuple(universe_override) if universe_override else "ALL")
+        hit = _ANALYZE_CACHE.get(key)
+        if hit and (time.time() - hit[0]) < _ANALYZE_TTL:
+            return hit[1]
+
     model_store = ModelStore(cfg.model_dir)
     predictor = model_store.load_model()
     if predictor is None:
@@ -756,6 +778,8 @@ def analyze(
         )
 
     results.sort(key=lambda r: r.profit_probability, reverse=True)
+    if use_cache:
+        _ANALYZE_CACHE[key] = (time.time(), results)
     return results
 
 

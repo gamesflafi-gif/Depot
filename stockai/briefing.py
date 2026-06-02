@@ -84,11 +84,11 @@ def _save_state(cfg: Config, analyses) -> None:
     json.dump(state, open(_state_path(cfg), "w", encoding="utf-8"), indent=2)
 
 
-def build_briefing(cfg: Config, top_n: int = 5) -> Briefing:
+def build_briefing(cfg: Config, top_n: int = 5, use_cache: bool = False) -> Briefing:
     """Erzeugt das Briefing inkl. Moves gegenüber dem letzten Lauf."""
     from stockai import pipeline
 
-    analyses = pipeline.analyze(cfg)
+    analyses = pipeline.analyze(cfg, use_cache=use_cache)
     prev = _load_state(cfg)
 
     ts = _now_de().strftime("%d.%m.%Y, %H:%M Uhr")
@@ -160,11 +160,11 @@ def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
     return "\n".join(lines)
 
 
-def build_top(cfg: Config, n: int = 5):
+def build_top(cfg: Config, n: int = 5, use_cache: bool = False):
     """Liefert (top_n, bottom_n) Werte nach Profit-Wahrscheinlichkeit."""
     from stockai import pipeline
 
-    analyses = pipeline.analyze(cfg)
+    analyses = pipeline.analyze(cfg, use_cache=use_cache)
     ranked = sorted(analyses, key=lambda a: a.profit_probability, reverse=True)
     top = ranked[:n]
     bottom = list(reversed(ranked[-n:])) if len(ranked) >= n else list(reversed(ranked))

@@ -127,7 +127,8 @@ def remove_holding(cfg: Config, ticker: str, user: str | None = None) -> bool:
     return len(kept) != len(holdings)
 
 
-def build_depot_report(cfg: Config, user: str | None = None) -> DepotReport:
+def build_depot_report(cfg: Config, user: str | None = None,
+                       use_cache: bool = False) -> DepotReport:
     """Bewertet alle Depot-Positionen: Live-Kurs, G/V und KI-Einschätzung."""
     from stockai import pipeline
     from stockai.data.live import get_quote
@@ -138,7 +139,8 @@ def build_depot_report(cfg: Config, user: str | None = None) -> DepotReport:
         return rep
 
     tickers = [h.ticker for h in holdings]
-    analyses = {a.ticker: a for a in pipeline.analyze(cfg, universe_override=tickers)}
+    analyses = {a.ticker: a
+                for a in pipeline.analyze(cfg, universe_override=tickers, use_cache=use_cache)}
 
     for h in holdings:
         a = analyses.get(h.ticker)

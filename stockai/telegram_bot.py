@@ -60,11 +60,14 @@ _HELP = (
 )
 
 
-def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
+def handle_command(cfg: Config, text: str, user: str | None = None,
+                   cached: bool = False) -> str:
     """Wertet einen Befehlstext aus und liefert die Antwort (Text).
 
     ``user`` (Telegram-Chat-ID) trennt persönliche Daten – Depot, Sparplan und
-    Alerts gehören jeweils nur dem anfragenden Nutzer.
+    Alerts gehören jeweils nur dem anfragenden Nutzer. ``cached`` bedient teure
+    Markt-Analysen kurzzeitig aus dem Speicher (schnellere Antworten, weniger
+    Last bei mehreren Nutzern).
     """
     parts = text.strip().split()
     if not parts:
@@ -77,7 +80,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
 
     if cmd == "briefing":
         from stockai import briefing as bf
-        return bf.render_briefing(bf.build_briefing(cfg))
+        return bf.render_briefing(bf.build_briefing(cfg, use_cache=cached))
 
     if cmd == "alerts":
         from stockai import alerts as al
@@ -139,7 +142,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
         if sub == "clear":
             hd.save_holdings(cfg, [], user=user)
             return "✔ Depot geleert."
-        return hd.render_depot(hd.build_depot_report(cfg, user=user))
+        return hd.render_depot(hd.build_depot_report(cfg, user=user, use_cache=cached))
 
     if cmd in ("weakspots", "schwachstellen", "schwaechen"):
         from stockai import weakspots as ws
@@ -148,7 +151,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
     if cmd == "top":
         from stockai import briefing as bf
         n = int(arg) if arg and arg.isdigit() else 5
-        top, bottom = bf.build_top(cfg, n=n)
+        top, bottom = bf.build_top(cfg, n=n, use_cache=cached)
         return bf.render_top(top, bottom, n)
 
     if cmd == "sparplan":
@@ -180,7 +183,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
         from stockai import pipeline
         from stockai.data.live import get_quote
         sym = arg.upper()
-        res = pipeline.analyze(cfg, universe_override=[sym])
+        res = pipeline.analyze(cfg, universe_override=[sym], use_cache=cached)
         if not res:
             return f"Keine Daten für {sym} gefunden."
         a = res[0]
@@ -244,11 +247,22 @@ def _send(token: str, chat_id: str, text: str, keyboard: str | None = None) -> N
         log.warning("Senden fehlgeschlagen: %s", exc)
 
 
+def _typing(token: str, chat_id: str) -> None:
+    """Zeigt im Chat „tippt …", damit der Bot bei längeren Befehlen nicht
+    eingefroren wirkt."""
+    try:
+        _api(token, "sendChatAction", {"chat_id": chat_id, "action": "typing"}, timeout=8)
+    except Exception:
+        pass
+
+
 def _reply(cfg: Config, token: str, chat_id: str, text: str) -> None:
     """Befehl auswerten und Antwort mit antippbarem Menü senden."""
     from stockai.notify import main_menu_markup
+    _typing(token, chat_id)                            # sofortiges Lebenszeichen
     try:
-        answer = handle_command(cfg, text, user=chat_id)   # Chat-ID = persönlicher Kontext
+        # Chat-ID = persönlicher Kontext; cached=True für schnelle Wiederholungen
+        answer = handle_command(cfg, text, user=chat_id, cached=True)
     except Exception as exc:
         answer = f"Fehler bei der Verarbeitung: {exc}"
     _send(token, chat_id, answer, keyboard=main_menu_markup())
