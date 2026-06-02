@@ -102,8 +102,9 @@ def _bar(score: float) -> str:
 def render_conviction(a, conv: Conviction | None = None) -> str:
     """Erklärbarer Conviction-Block für die Einzelanalyse."""
     conv = conv or compute_conviction(a)
-    lines = [f"Conviction: {conv.score:.0f}/100 ({conv.label})  {_bar(conv.score)}",
+    lines = [f"🎯 Conviction: {conv.score:.0f}/100 ({conv.label})  {_bar(conv.score)}",
              "Beiträge:"]
     for name, pts in sorted(conv.parts, key=lambda kv: abs(kv[1]), reverse=True):
-        lines.append(f"  • {name}: {pts:+.0f}")
+        icon = "➕" if pts > 0 else ("➖" if pts < 0 else "·")
+        lines.append(f"  {icon} {name}: {pts:+.0f}")
     return "\n".join(lines)
