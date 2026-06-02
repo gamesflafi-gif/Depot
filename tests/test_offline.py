@@ -643,6 +643,30 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_chart_png(tmp_path):
+    """Chart liefert ein gültiges PNG + Bildunterschrift; Multipart bettet es ein."""
+    from stockai import charts, notify
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA"]; cfg.etfs = []; cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    res = charts.price_chart(cfg, "AAA")
+    assert res is not None
+    png, caption = res
+    assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 1000   # echtes PNG
+    assert "AAA" in caption
+
+    body, ctype = notify._multipart({"chat_id": "1", "caption": caption},
+                                    "photo", "chart.png", png)
+    assert ctype.startswith("multipart/form-data") and png[:8] in body
+    # ohne Token/Chat wird nichts gesendet (kein Fehler)
+    assert notify.send_telegram_photo(png, caption, token=None, chat_id=None) is False
+
+
 def test_sector_rotation():
     """Sektor-Rotation aggregiert Analysen je Branche und rankt nach Conviction."""
     from stockai import sectors as sc

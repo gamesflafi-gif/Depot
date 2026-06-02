@@ -156,5 +156,48 @@ def webhook_configured() -> bool:
     return bool(os.environ.get(_WEBHOOK_ENV))
 
 
+def _multipart(fields: dict, file_field: str, filename: str, data: bytes):
+    """Baut einen multipart/form-data-Body (für sendPhoto, ohne Zusatzpakete)."""
+    import uuid
+    boundary = "----stockai" + uuid.uuid4().hex
+    crlf = b"\r\n"
+    body = bytearray()
+    for k, v in fields.items():
+        body += b"--" + boundary.encode() + crlf
+        body += f'Content-Disposition: form-data; name="{k}"'.encode() + crlf + crlf
+        body += str(v).encode("utf-8") + crlf
+    body += b"--" + boundary.encode() + crlf
+    body += (f'Content-Disposition: form-data; name="{file_field}"; '
+             f'filename="{filename}"').encode() + crlf
+    body += b"Content-Type: image/png" + crlf + crlf
+    body += data + crlf
+    body += b"--" + boundary.encode() + b"--" + crlf
+    return bytes(body), f"multipart/form-data; boundary={boundary}"
+
+
+def send_telegram_photo(png: bytes, caption: str = "", token: str | None = None,
+                        chat_id: str | None = None, reply_markup: str | None = None) -> bool:
+    """Sendet ein PNG-Bild an einen oder mehrere Telegram-Chats."""
+    token = token or os.environ.get(_TG_TOKEN_ENV)
+    ids = parse_chat_ids(chat_id or os.environ.get(_TG_CHAT_ENV))
+    if not token or not ids:
+        return False
+    ok_any = False
+    for cid in ids:
+        try:
+            fields = {"chat_id": cid, "caption": caption[:1000]}
+            if reply_markup:
+                fields["reply_markup"] = reply_markup
+            body, ctype = _multipart(fields, "photo", "chart.png", png)
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{token}/sendPhoto",
+                data=body, headers={"Content-Type": ctype})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                ok_any = ok_any or (200 <= resp.status < 300)
+        except Exception:
+            continue
+    return ok_any
+
+
 def telegram_configured() -> bool:
     return bool(os.environ.get(_TG_TOKEN_ENV) and parse_chat_ids(os.environ.get(_TG_CHAT_ENV)))

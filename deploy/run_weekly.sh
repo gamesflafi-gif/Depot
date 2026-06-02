@@ -15,4 +15,6 @@ mkdir -p logs
   "$PY" -m stockai.cli health --notify || echo "health fehlgeschlagen"
   # Wochen-Top-5 in beide Richtungen
   "$PY" -m stockai.cli top --n 5 --notify || echo "weekly fehlgeschlagen"
+  # Visueller Wochenreport: Chart des Werts mit der höchsten Conviction
+  "$PY" -m stockai.cli chart --top --notify || echo "chart fehlgeschlagen"
 } >> "logs/weekly-$(date +%Y-%m-%d).log" 2>&1
