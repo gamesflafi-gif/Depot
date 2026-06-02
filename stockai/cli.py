@@ -235,6 +235,21 @@ def cmd_track(cfg, args) -> None:
               ("gesendet ✔" if ok else "nicht gesendet"))
 
 
+def cmd_health(cfg, args) -> None:
+    """Selbstcheck: Wird die KI besser oder schlechter? Warnt bei Verschlechterung."""
+    from stockai import health as hl
+    from stockai import notify
+
+    rep = hl.assess_health(cfg, record=not args.no_record)
+    report = hl.render_health(rep)
+    print(report)
+    # bei Verschlechterung auch ohne --notify melden (das ist der Sinn)
+    if args.notify or rep.warnings:
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
+
+
 def cmd_scorecard(cfg, args) -> None:
     """Bewertet die Treffsicherheit der Empfehlungen (Walk-Forward)."""
     from stockai import scorecard as sc
@@ -756,6 +771,11 @@ def build_parser() -> argparse.ArgumentParser:
     ptr.add_argument("--threshold", type=float, default=0.55)
     ptr.add_argument("--notify", action="store_true")
 
+    phl = sub.add_parser("health", help="Selbstcheck: wird die KI besser oder schlechter?")
+    phl.add_argument("--notify", action="store_true")
+    phl.add_argument("--no-record", action="store_true",
+                     help="nur anzeigen, keinen Messpunkt speichern")
+
     psc = sub.add_parser("scorecard", help="Treffsicherheit der Empfehlungen bewerten")
     psc.add_argument("--threshold", type=float, default=0.55)
 
@@ -835,6 +855,7 @@ _COMMANDS = {
     "tune": cmd_tune,
     "weakspots": cmd_weakspots,
     "track": cmd_track,
+    "health": cmd_health,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,

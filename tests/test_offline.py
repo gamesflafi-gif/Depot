@@ -475,6 +475,43 @@ def test_weakspots_self_correction(tmp_path):
     assert cautious.action == "KAUFEN"
 
 
+def test_health_detects_degradation(tmp_path):
+    """Selbstcheck merkt sich den Verlauf und warnt, wenn die KI schlechter wird."""
+    import numpy as np
+    import pandas as pd
+    from stockai import health as hl
+    from stockai.config import load_config
+    from stockai.model.store import _FEATURE_STORE_FILE
+
+    cfg = load_config()
+    sdir = tmp_path / "s"
+    sdir.mkdir()
+    cfg.paths = {"store_dir": str(sdir), "model_dir": str(tmp_path / "m")}
+    rng = np.random.default_rng(0)
+
+    def write(acc):
+        proba = rng.uniform(0, 1, 80)
+        pred = (proba >= 0.5).astype(int)
+        y = pred.copy()
+        flip = rng.uniform(0, 1, 80) > acc
+        y[flip] = 1 - y[flip]
+        pd.DataFrame({
+            "ticker": ["X"] * 80,
+            "date": pd.date_range("2026-01-01", periods=80).astype(str),
+            "pred_proba": proba, "target": y.astype(float),
+        }).to_csv(sdir / _FEATURE_STORE_FILE, index=False)
+
+    write(0.62)
+    first = hl.assess_health(cfg)
+    assert first.source == "live" and first.current > 0.5
+
+    write(0.50)
+    worse = hl.assess_health(cfg)
+    assert worse.previous == worse.previous          # Vorwert gemerkt
+    assert worse.status.startswith("⚠️") and worse.warnings
+    assert "schlechter" in hl.render_health(worse)
+
+
 def test_track_record(tmp_path):
     """Live-Track-Record aus gesammelten Snapshots (Prognose vs. Ergebnis)."""
     import numpy as np

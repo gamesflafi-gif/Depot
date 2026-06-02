@@ -48,6 +48,7 @@ _HELP = (
     "🔍 Selbstkontrolle der KI\n"
     "  /track         traf die KI live richtig?\n"
     "  /weakspots     wo liegt die KI daneben?\n"
+    "  /health        wird die KI besser oder schlechter?\n"
     "\n"
     "  /help          diese Übersicht\n"
     "\n"
@@ -78,6 +79,10 @@ def handle_command(cfg: Config, text: str) -> str:
     if cmd in ("track", "trackrecord", "bilanz"):
         from stockai import track as tk
         return tk.render_track_record(tk.build_track_record(cfg))
+
+    if cmd in ("health", "check", "selbstcheck"):
+        from stockai import health as hl
+        return hl.render_health(hl.assess_health(cfg, record=False))
 
     if cmd in ("weakspots", "schwachstellen", "schwaechen"):
         from stockai import weakspots as ws

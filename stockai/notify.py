@@ -34,7 +34,8 @@ def main_menu_markup() -> str:
          {"text": "🔔 Alerts", "callback_data": "/alerts"}],
         [{"text": "📒 Track", "callback_data": "/track"},
          {"text": "🔍 Schwächen", "callback_data": "/weakspots"}],
-        [{"text": "❓ Hilfe", "callback_data": "/help"}],
+        [{"text": "🩺 Selbstcheck", "callback_data": "/health"},
+         {"text": "❓ Hilfe", "callback_data": "/help"}],
     ]}
     return json.dumps(kb)
 
