@@ -806,6 +806,7 @@ def cmd_sparplan(cfg, args) -> None:
     plan = build_savings_plan(
         cfg, monthly_amount=args.monthly, core_share=args.core_share,
         max_stock_weight=args.max_position, max_stocks=args.max_stocks,
+        risk=getattr(args, "risk", None),
     )
     print(f"{'Instrument':12s}{'Typ':>7s}{'€/Monat':>10s}{'Anteil':>9s}"
           f"{'Aktion':>11s}{'P(Profit)':>11s}")
@@ -985,6 +986,8 @@ def build_parser() -> argparse.ArgumentParser:
     psp.add_argument("--max-position", type=float, default=0.15,
                      help="Max. Anteil je Einzelaktie")
     psp.add_argument("--max-stocks", type=int, default=5, help="Max. Einzelaktien")
+    psp.add_argument("--risk", choices=["defensiv", "ausgewogen", "offensiv"], default=None,
+                     help="Risiko-Profil (passt Core-/Krypto-Anteil & Streuung an)")
     psp.add_argument("--report", default=None, help="Report als Markdown speichern")
     psp.add_argument("--notify", action="store_true",
                      help="Report an STOCKAI_WEBHOOK_URL senden")

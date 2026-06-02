@@ -53,6 +53,17 @@ class SavingsPlan:
 
 _BUY = {"BOOM", "KAUFEN"}
 
+# Risiko-Profile: defensiver = mehr ETF-Core, weniger/kein Krypto, kleinere
+# Einzelpositionen; offensiver = mehr Einzelaktien + Krypto, größere Positionen.
+RISK_PRESETS = {
+    "defensiv":   dict(core_share=0.75, crypto_share=0.0,  max_stocks=3,
+                       max_stock_weight=0.10, max_crypto=1),
+    "ausgewogen": dict(core_share=0.50, crypto_share=0.10, max_stocks=5,
+                       max_stock_weight=0.15, max_crypto=2),
+    "offensiv":   dict(core_share=0.30, crypto_share=0.20, max_stocks=7,
+                       max_stock_weight=0.20, max_crypto=3),
+}
+
 
 def build_savings_plan(
     cfg: Config,
@@ -62,6 +73,7 @@ def build_savings_plan(
     max_stocks: int = 5,
     crypto_share: float = 0.10,
     max_crypto: int = 2,
+    risk: str | None = None,
 ) -> SavingsPlan:
     """Erstellt einen Sparplan aus dem aktuellen Analyse-Ranking.
 
@@ -72,7 +84,15 @@ def build_savings_plan(
         max_stocks: maximale Anzahl Einzelaktien (Satelliten).
         crypto_share: maximaler Anteil für Krypto (höheres Risiko -> klein).
         max_crypto: maximale Anzahl Krypto-Positionen.
+        risk: optionales Risiko-Profil (defensiv|ausgewogen|offensiv); überschreibt
+            Core-/Krypto-Anteil und Streuungs-Grenzen passend zur Risikoneigung.
     """
+    if risk and risk in RISK_PRESETS:
+        p = RISK_PRESETS[risk]
+        core_share, crypto_share = p["core_share"], p["crypto_share"]
+        max_stocks, max_stock_weight = p["max_stocks"], p["max_stock_weight"]
+        max_crypto = p["max_crypto"]
+
     from stockai import pipeline
 
     etfs = list(cfg.etfs)
@@ -195,4 +215,7 @@ def build_savings_plan(
         plan.notes.append(
             f"{monthly_amount - invested:.2f}€ bleiben als Puffer/Cash (Obergrenzen)."
         )
+    if risk and risk in RISK_PRESETS:
+        plan.notes.insert(0, f"Risiko-Profil: {risk} (Core {core_share:.0%}, "
+                             f"Krypto bis {crypto_share:.0%}).")
     return plan
