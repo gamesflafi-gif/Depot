@@ -1,9 +1,12 @@
 """Schwachstellen-Analyse: wo liegt das Modell am häufigsten daneben?
 
 Per Walk-Forward werden echte Prognosen erzeugt und gegen das reale Ergebnis
-gestellt – aufgeschlüsselt nach Bedingungen (Wahrscheinlichkeits-Bereich,
-RSI-Zone, News-Sentiment, Marktlage, Anlageklasse). So sieht man, *unter welchen
-Umständen* die KI falsch deutet, und kann gezielt nachbessern.
+gestellt – aufgeschlüsselt nach vielen Bedingungen (RSI-Zone, News-Sentiment,
+Marktlage, Momentum, Volatilität, Anlageklasse). So sieht man, *unter welchen
+Umständen* die KI falsch deutet, und kann gezielt nachbessern. Mit ``period``
+lässt sich eine lange Historie analysieren, um mehr aus der Vergangenheit zu
+lernen; die erkannten Schwächen werden als „Lektionen" gespeichert und dämpfen
+ab dann die täglichen Empfehlungen.
 """
 from __future__ import annotations
 
@@ -17,7 +20,8 @@ import pandas as pd
 from stockai.config import Config
 
 _LESSONS_FILE = "lessons.json"
-_FLAG = -0.03   # Trefferquote >3 %-Punkte unter Basis = Schwachstelle
+_FLAG = -0.03    # Trefferquote >3 %-Punkte unter Basis = Schwachstelle
+_VOL_CUT = 0.03  # Tages-Volatilität: darüber = "hohe Schwankung"
 
 
 @dataclass
@@ -27,8 +31,14 @@ class WeakSpots:
     base_rate: float = float("nan")
 
 
-# maschinenlesbare Prüfungen je Bedingung (für die tägliche Selbstkorrektur)
-def _matches(kind: str, rsi: float, sent: float, regime: float) -> bool:
+# maschinenlesbare Prüfungen je Bedingung (für die tägliche Selbstkorrektur).
+# ``f`` ist ein Feature-Dict des aktuellen Kandidaten – so lassen sich beliebig
+# viele Dimensionen prüfen.
+def _matches(kind: str, f: dict) -> bool:
+    rsi = f.get("rsi", 50.0); sent = f.get("sent", 0.0); regime = f.get("regime", 0.0)
+    vol = f.get("vol", 0.02); mom = f.get("mom", 0.0); cls = f.get("cls", "")
+    if kind.startswith("class_"):
+        return cls == kind[len("class_"):]
     return {
         "rsi_low":  rsi < 30,
         "rsi_mid":  30 <= rsi <= 70,
@@ -38,6 +48,10 @@ def _matches(kind: str, rsi: float, sent: float, regime: float) -> bool:
         "sent_pos": sent > 0.1,
         "regime_down": regime < 0,
         "regime_up":   regime >= 0,
+        "vol_high": vol > _VOL_CUT,
+        "vol_low":  vol <= _VOL_CUT,
+        "mom_neg": mom < 0,
+        "mom_pos": mom >= 0,
     }.get(kind, False)
 
 
@@ -55,15 +69,21 @@ def _segment(df: pd.DataFrame, dim: str, labels: dict) -> list:
     return out
 
 
-def analyze_weakspots(cfg: Config, train_frac: float = 0.4) -> WeakSpots:
+def analyze_weakspots(cfg: Config, train_frac: float = 0.4,
+                      period: str | None = None) -> WeakSpots:
+    """Walk-Forward über das Panel; segmentiert die Treffsicherheit der
+    Kaufsignale nach vielen Bedingungen. ``period`` (z.B. "10y") analysiert eine
+    längere Historie, um mehr aus der Vergangenheit zu lernen.
+    """
     from stockai.strategy import _build_panel
-    from stockai.pipeline import FEATURE_COLUMNS, resolve_model_type
+    from stockai.pipeline import FEATURE_COLUMNS, resolve_model_type, asset_class
     from stockai.model.predictor import Predictor
 
-    panel = _build_panel(cfg)
+    panel = _build_panel(cfg, period=period)
     res = WeakSpots()
     if panel.empty:
         return res
+    cls_map = {t: asset_class(cfg, t) for t in panel["ticker"].unique()}
     horizon = cfg.horizon_days
     model_type, _ = resolve_model_type(cfg, panel, feature_names=FEATURE_COLUMNS)
     dates = np.sort(panel["date"].unique())
@@ -86,7 +106,8 @@ def analyze_weakspots(cfg: Config, train_frac: float = 0.4) -> WeakSpots:
         for (_, r), p in zip(today.iterrows(), proba):
             recs.append({"proba": float(p), "target": float(r["target"]),
                          "rsi": r.get("rsi_14", 50.0), "sent": r.get("sent_mean", 0.0),
-                         "regime": r.get("mkt_trend", 0.0)})
+                         "regime": r.get("mkt_trend", 0.0), "vol": r.get("vol_20d", 0.02),
+                         "mom": r.get("ret_5d", 0.0), "cls": cls_map.get(r["ticker"], "")})
     if len(recs) < 50:
         return res
     df = pd.DataFrame(recs)
@@ -111,6 +132,19 @@ def analyze_weakspots(cfg: Config, train_frac: float = 0.4) -> WeakSpots:
         "Abschwung (Markt<SMA50)": (b["regime"] < 0, "regime_down"),
         "Aufschwung (Markt>SMA50)": (b["regime"] >= 0, "regime_up"),
     })
+    seg += _segment(b, "Kaufsignal × Momentum", {
+        "Momentum fallend (5T<0)": (b["mom"] < 0, "mom_neg"),
+        "Momentum steigend (5T≥0)": (b["mom"] >= 0, "mom_pos"),
+    })
+    seg += _segment(b, "Kaufsignal × Schwankung", {
+        "hohe Schwankung": (b["vol"] > _VOL_CUT, "vol_high"),
+        "ruhig": (b["vol"] <= _VOL_CUT, "vol_low"),
+    })
+    # Anlageklasse (dynamisch, je nach vorhandenen Klassen)
+    cls_labels = {c: (b["cls"] == c, f"class_{c}") for c in b["cls"].unique() if c}
+    if cls_labels:
+        seg += _segment(b, "Kaufsignal × Anlageklasse", cls_labels)
+
     res.segments = sorted(seg, key=lambda s: s["hit"])   # schlechteste zuerst
     return res
 
@@ -155,12 +189,15 @@ def load_lessons(cfg: Config) -> list:
         return []
 
 
-def caution_for(lessons: list, rsi: float, sent: float, regime: float) -> list[str]:
+def caution_for(lessons: list, feats: dict) -> list[str]:
     """Liefert Klartext-Warnungen für die Bedingungen, in denen die KI hier
-    historisch schwach war (für transparente Begründung der Empfehlung)."""
+    historisch schwach war (für transparente Begründung der Empfehlung).
+
+    ``feats`` ist ein Dict mit rsi/sent/regime/vol/mom/cls des Kandidaten.
+    """
     out = []
     for le in lessons:
-        if _matches(le.get("kind", ""), rsi, sent, regime):
+        if _matches(le.get("kind", ""), feats):
             out.append(f"{le['group']}: hier traf die KI zuletzt nur "
                        f"{le['hit']:.0%} ({le['gap']:+.0%} vs. Schnitt)")
     return out
@@ -181,5 +218,5 @@ def render_weakspots(w: WeakSpots) -> str:
     if worst and worst["gap"] < -0.03:
         lines.append(f"\n→ Größte Schwäche: „{worst['group']}\" – hier liegt die KI "
                      f"{abs(worst['gap']):.0%} unter der Basisrate.")
-    lines.append("\n_Keine Anlageberatung._")
+    lines.append("\nℹ️ Keine Anlageberatung.")
     return "\n".join(lines)

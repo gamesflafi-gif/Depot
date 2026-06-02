@@ -464,8 +464,16 @@ def test_weakspots_self_correction(tmp_path):
     assert lessons and lessons[0]["kind"] == "rsi_high"
 
     # passt die Lage auf die Lektion -> Warnung; sonst nicht
-    assert ws.caution_for(lessons, rsi=75, sent=0.0, regime=0.0)
-    assert not ws.caution_for(lessons, rsi=50, sent=0.0, regime=0.0)
+    assert ws.caution_for(lessons, {"rsi": 75, "sent": 0.0, "regime": 0.0})
+    assert not ws.caution_for(lessons, {"rsi": 50, "sent": 0.0, "regime": 0.0})
+
+    # weitere Dimensionen: Anlageklasse, Momentum, Volatilität greifen ebenfalls
+    more = [{"kind": "class_Krypto", "group": "Krypto", "hit": 0.4, "gap": -0.1},
+            {"kind": "vol_high", "group": "hohe Schwankung", "hit": 0.41, "gap": -0.09},
+            {"kind": "mom_neg", "group": "Momentum fallend", "hit": 0.43, "gap": -0.07}]
+    assert ws.caution_for(more, {"cls": "Krypto", "vol": 0.05, "mom": -0.02})
+    assert len(ws.caution_for(more, {"cls": "Krypto", "vol": 0.05, "mom": -0.02})) == 3
+    assert not ws.caution_for(more, {"cls": "Aktie", "vol": 0.01, "mom": 0.02})
 
     # BOOM-Lage wird bei gelernter Schwachstelle auf KAUFEN gedämpft
     strong = dict(profit_probability=0.70, rsi_14=60, momentum_5d=0.03,

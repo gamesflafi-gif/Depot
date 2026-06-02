@@ -691,9 +691,11 @@ def analyze(
         ]
 
         macd_hist = row.get("macd", 0.0) - row.get("macd_signal", 0.0)
-        weak_conditions = _ws.caution_for(
-            lessons, row.get("rsi_14", 50.0), row.get("sent_mean", 0.0),
-            row.get("mkt_trend", 0.0)) if lessons else None
+        weak_conditions = _ws.caution_for(lessons, {
+            "rsi": row.get("rsi_14", 50.0), "sent": row.get("sent_mean", 0.0),
+            "regime": row.get("mkt_trend", 0.0), "vol": row.get("vol_20d", 0.02),
+            "mom": row.get("ret_5d", 0.0), "cls": asset_class(cfg, ticker),
+        }) if lessons else None
         rec = recommend(
             profit_probability=proba,
             rsi_14=row.get("rsi_14", 50.0),
