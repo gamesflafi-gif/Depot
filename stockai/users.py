@@ -24,6 +24,9 @@ DEFAULT_USER = "default"
 _CHAT_ENV = "STOCKAI_TELEGRAM_CHAT_ID"
 _PREFS = "prefs.json"
 
+RISK_LEVELS = ("defensiv", "ausgewogen", "offensiv")
+_DEFAULT_RISK = "ausgewogen"
+
 
 def sanitize(user: str | None) -> str:
     """Macht eine Chat-ID zu einem sicheren Verzeichnisnamen."""
@@ -80,3 +83,18 @@ def set_pref(cfg: Config, user: str | None, key: str, value) -> None:
     prefs[key] = value
     json.dump(prefs, open(user_path(cfg, user, _PREFS), "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
+
+
+def get_risk(cfg: Config, user: str | None) -> str:
+    """Risikoneigung des Nutzers: defensiv | ausgewogen | offensiv."""
+    r = str(load_prefs(cfg, user).get("risk", _DEFAULT_RISK)).lower()
+    return r if r in RISK_LEVELS else _DEFAULT_RISK
+
+
+def set_risk(cfg: Config, user: str | None, level: str) -> str | None:
+    """Setzt die Risikoneigung; liefert die gesetzte Stufe oder None bei ungültig."""
+    level = str(level).lower()
+    if level not in RISK_LEVELS:
+        return None
+    set_pref(cfg, user, "risk", level)
+    return level

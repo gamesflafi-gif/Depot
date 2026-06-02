@@ -47,8 +47,12 @@ _HELP = (
     "  /whales        auffälliges Volumen (Smart-Money-Spur)\n"
     "  /watch         eigene Trigger (z.B. /watch add BTC-USD < 50000)\n"
     "\n"
+    "🎯 Persönlich\n"
+    "  /chancen       deine Top-Chancen (nach Risiko-Profil)\n"
+    "  /risiko        defensiv | ausgewogen | offensiv\n"
+    "\n"
     "💶 Geld\n"
-    "  /sparplan [€]  Sparplan-Vorschlag (Standard 100€)\n"
+    "  /sparplan [€]  Sparplan-Vorschlag (an dein Risiko angepasst)\n"
     "  /depot         dein Depot: G/V + KI-Bewertung\n"
     "  /depot add NVDA 10 850   Position eintragen\n"
     "\n"
@@ -85,8 +89,9 @@ def _personal_overview(cfg: Config, user: str | None) -> str:
         lines.append(f"💶 Sparplan: {float(monthly):g}€/Monat  →  /sparplan")
     else:
         lines.append("💶 Sparplan: noch keiner  →  /sparplan 200")
+    lines.append(f"🎚️ Risiko: {users.get_risk(cfg, user)}  →  /risiko")
     lines.append("")
-    lines.append("Tipp einen Button unten oder /help für alle Befehle.")
+    lines.append("🎯 Deine Chancen: /chancen  ·  alle Befehle: /help")
     return "\n".join(lines)
 
 
@@ -204,6 +209,44 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         top, bottom = bf.build_top(cfg, n=n, use_cache=cached)
         return bf.render_top(top, bottom, n)
 
+    if cmd in ("risiko", "risk", "strategie"):
+        from stockai import users
+        if arg:
+            lvl = users.set_risk(cfg, user, arg)
+            if not lvl:
+                return ("Bitte defensiv, ausgewogen oder offensiv wählen.\n"
+                        "z.B. /risiko offensiv")
+            return (f"✔ Risiko-Profil: {lvl}.\nDas passt deinen Sparplan und die "
+                    "Schwelle für Kauf-Chancen an (/sparplan, /chancen).")
+        cur = users.get_risk(cfg, user)
+        return (f"🎚️ Dein Risiko-Profil: {cur}\n\n"
+                "Ändern mit:\n  /risiko defensiv – mehr ETF-Core, kein/wenig Krypto\n"
+                "  /risiko ausgewogen – ausgewogene Mischung\n"
+                "  /risiko offensiv – mehr Einzelaktien & Krypto\n\n"
+                "Wirkt auf /sparplan (Aufteilung) und /chancen (Schwelle).")
+
+    if cmd in ("chancen", "chance"):
+        from stockai import pipeline, users
+        from stockai.conviction import risk_floor
+        floor = risk_floor(users.get_risk(cfg, user))
+        analyses = pipeline.analyze(cfg, use_cache=cached)
+        buys = [a for a in analyses if a.action in ("BOOM", "KAUFEN")
+                and a.conviction == a.conviction and a.conviction >= floor]
+        buys.sort(key=lambda a: a.conviction, reverse=True)
+        if not buys:
+            return (f"🎯 Aktuell keine Chance über deiner Schwelle "
+                    f"(Conviction ≥ {floor:.0f}, Profil {users.get_risk(cfg, user)}).\n"
+                    "Profil ändern: /risiko")
+        lines = [f"🎯 Deine Top-Chancen (Conviction ≥ {floor:.0f}, "
+                 f"Profil {users.get_risk(cfg, user)})", ""]
+        for a in buys[:8]:
+            er = (f" · erwartet {a.expected_return:+.1%}"
+                  if a.expected_return is not None else "")
+            lines.append(f"🟢 {a.ticker} ({a.asset_class}) · 🎯 {a.conviction:.0f} · "
+                         f"Chance {a.profit_probability:.0%}{er}")
+        lines.append("\nℹ️ Keine Anlageberatung.")
+        return "\n".join(lines)
+
     if cmd == "sparplan":
         from stockai.savings_plan import build_savings_plan
         from stockai import notify, users
@@ -215,7 +258,9 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
                 amount = float(users.load_prefs(cfg, user).get("monthly", 100.0))
         else:
             amount = float(users.load_prefs(cfg, user).get("monthly", 100.0))
-        return notify.render_savings_plan(build_savings_plan(cfg, monthly_amount=amount))
+        risk = users.get_risk(cfg, user)
+        return notify.render_savings_plan(
+            build_savings_plan(cfg, monthly_amount=amount, risk=risk))
 
     if cmd == "live":
         from stockai.data.live import get_quote

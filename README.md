@@ -79,6 +79,11 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   Whale-Bestätigung, Abzug bei gelernten Schwachstellen) zu **einer transparenten
   Kennzahl 0–100** – die besten Chancen im Briefing werden danach gerankt, und
   `/analyse` zeigt die Beiträge offen (erklärbar, kein Black-Box-Score).
+- **Persönliche Risiko-Strategie:** `/risiko defensiv|ausgewogen|offensiv` pro
+  Nutzer. Defensiv = mehr ETF-Core, kein/wenig Krypto, kleinere Positionen;
+  offensiv = mehr Einzelaktien & Krypto, größere Positionen. Wirkt auf den
+  **Sparplan** (Aufteilung) und auf `/chancen` (zeigt nur Chancen über deiner
+  Conviction-Schwelle – defensiver verlangt mehr Überzeugung).
 - **Persönlicher Track-Record:** `/track` zeigt – sobald genug gesammelt –, wie
   gut die KI **auf genau deinen Depot-Werten** trifft (Beweis statt Behauptung).
 - **Viele Signale:** technische Indikatoren (Renditen über mehrere Horizonte,

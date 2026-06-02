@@ -76,6 +76,12 @@ def compute_conviction(a) -> Conviction:
     return Conviction(score=score, label=_label(score), parts=parts)
 
 
+def risk_floor(risk: str) -> float:
+    """Mindest-Conviction, ab der einem Nutzer eine Kauf-Chance gezeigt wird –
+    defensiver verlangt mehr Überzeugung, offensiver lässt mehr zu."""
+    return {"defensiv": 65.0, "ausgewogen": 58.0, "offensiv": 52.0}.get(risk, 58.0)
+
+
 def _label(score: float) -> str:
     if score >= 72:
         return "sehr hoch"

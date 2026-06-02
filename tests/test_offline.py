@@ -643,6 +643,37 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_risk_profile(tmp_path):
+    """Risiko-Profil wird gespeichert und steuert Sparplan-Aufteilung & Schwelle."""
+    from stockai import users
+    from stockai.conviction import risk_floor
+    from stockai.savings_plan import build_savings_plan
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC", "DDD"]; cfg.etfs = ["WORLD", "SP500"]
+    cfg.crypto = ["BTC-USD"]
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    # setzen/lesen + Validierung
+    assert users.get_risk(cfg, "1") == "ausgewogen"            # Default
+    assert users.set_risk(cfg, "1", "offensiv") == "offensiv"
+    assert users.get_risk(cfg, "1") == "offensiv"
+    assert users.set_risk(cfg, "1", "quatsch") is None         # ungültig
+
+    # defensiver -> höherer Core-Anteil als offensiv
+    defo = build_savings_plan(cfg, monthly_amount=100, risk="defensiv")
+    offo = build_savings_plan(cfg, monthly_amount=100, risk="offensiv")
+    core_def = sum(p.monthly for p in defo.core_positions)
+    core_off = sum(p.monthly for p in offo.core_positions)
+    assert core_def > core_off
+
+    # Schwelle: defensiver verlangt mehr Conviction
+    assert risk_floor("defensiv") > risk_floor("ausgewogen") > risk_floor("offensiv")
+
+
 def test_conviction_score():
     """Conviction bündelt Signale transparent zu einer Kennzahl (0..100)."""
     from stockai.conviction import compute_conviction, render_conviction
