@@ -430,6 +430,19 @@ def test_cross_validate_embargo():
     assert cv1["cv_folds"] >= 1
 
 
+def test_weakspots_render():
+    from stockai.weakspots import WeakSpots, render_weakspots
+    w = WeakSpots(n=200, base_rate=0.5, segments=[
+        {"dim": "Kaufsignal × RSI", "group": "RSI>70 (überkauft)", "count": 40,
+         "hit": 0.42, "base": 0.5, "gap": -0.08},
+        {"dim": "Kaufsignal × Sentiment", "group": "News positiv", "count": 60,
+         "hit": 0.58, "base": 0.5, "gap": 0.08},
+    ])
+    out = render_weakspots(w)
+    assert "Schwachstellen" in out and "überkauft" in out
+    assert "zu wenig" in render_weakspots(WeakSpots(n=10))
+
+
 def test_track_record(tmp_path):
     """Live-Track-Record aus gesammelten Snapshots (Prognose vs. Ergebnis)."""
     import numpy as np

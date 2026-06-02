@@ -212,6 +212,15 @@ def cmd_tune(cfg, args) -> None:
     print("\n  ✔ Gespeichert – werden beim nächsten 'train' automatisch angewandt.")
 
 
+def cmd_weakspots(cfg, args) -> None:
+    """Schwachstellen-Analyse: wo liegt das Modell am häufigsten daneben?"""
+    from stockai import weakspots as ws
+
+    print("Analysiere Schwachstellen (Walk-Forward) …\n")
+    w = ws.analyze_weakspots(cfg)
+    print(ws.render_weakspots(w))
+
+
 def cmd_track(cfg, args) -> None:
     """Live-Track-Record: echte gesammelte Prognosen vs. reales Ergebnis."""
     from stockai import track as tr
@@ -726,6 +735,8 @@ def build_parser() -> argparse.ArgumentParser:
     psw.add_argument("--retrain-every", type=int, default=5)
     psw.add_argument("--train-frac", type=float, default=0.3)
 
+    sub.add_parser("weakspots", help="Schwachstellen-Analyse: wo liegt das Modell daneben?")
+
     ptr = sub.add_parser("track", help="Live-Track-Record (echte Prognosen vs. Ergebnis)")
     ptr.add_argument("--threshold", type=float, default=0.55)
     ptr.add_argument("--notify", action="store_true")
@@ -807,6 +818,7 @@ _COMMANDS = {
     "ablation": cmd_ablation,
     "sweep": cmd_sweep,
     "tune": cmd_tune,
+    "weakspots": cmd_weakspots,
     "track": cmd_track,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
