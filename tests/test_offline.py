@@ -634,6 +634,27 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_analyze_cache(tmp_path):
+    """Kurzzeit-Cache: zweiter Aufruf liefert dasselbe Ergebnis sofort; ohne
+    Cache bzw. nach Leeren wird neu gerechnet."""
+    from stockai import pipeline
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB", "CCC"]; cfg.etfs = []; cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    pipeline.clear_analyze_cache()
+    a = pipeline.analyze(cfg, use_cache=True)
+    b = pipeline.analyze(cfg, use_cache=True)
+    assert a is b                                  # Cache-Treffer (identisches Objekt)
+    pipeline.clear_analyze_cache()
+    c = pipeline.analyze(cfg, use_cache=True)
+    assert c is not a                              # nach Leeren neu berechnet
+
+
 def test_whale_signals(tmp_path):
     """Whale-Radar: Richtung/Stärke-Logik und Rendern."""
     from stockai import whale as wh
