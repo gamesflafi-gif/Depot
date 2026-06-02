@@ -130,6 +130,12 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
   eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
   antwortet der Bot allen (nicht empfohlen).
+- **Whale-Radar:** `whales` scannt alle Werte auf **ungewöhnlich hohes Volumen**
+  (Smart-Money-Spur) und meldet, ob es nach **Akkumulation** (Volumen + steigender
+  Kurs) oder **Distribution** (Volumen + fallender Kurs) aussieht. Der Tageslauf
+  meldet nur starke Signale (`whales --alert-only`); im Chat jederzeit per
+  `/whales` bzw. Button 🐋. Ehrlich: sichtbar ist der *Volumen-Fußabdruck*, nicht
+  die einzelne Wallet – ein Frühsignal, keine Garantie.
 - **Smarte bedingte Alerts:** `watch` lässt dich **eigene Trigger** setzen –
   `watch add BTC-USD < 50000`, `watch add NVDA rsi < 30`, `watch add BTC-USD vol > 2`
   (ungewöhnliches Volumen) oder `watch add NVDA pct < -5`. Der Cron prüft sie

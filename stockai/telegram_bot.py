@@ -41,6 +41,7 @@ _HELP = (
     "  /briefing      aktuelles Briefing mit Bewegungen\n"
     "  /top [n]       Top-n Chancen & Risiken\n"
     "  /alerts        starke Live-Bewegungen\n"
+    "  /whales        auffälliges Volumen (Smart-Money-Spur)\n"
     "  /watch         eigene Trigger (z.B. /watch add BTC-USD < 50000)\n"
     "\n"
     "💶 Geld\n"
@@ -82,6 +83,10 @@ def handle_command(cfg: Config, text: str, user: str | None = None) -> str:
         from stockai import alerts as al
         res = al.check_alerts(cfg)
         return al.render_alerts(res) or "Aktuell keine starken Bewegungen."
+
+    if cmd in ("whales", "whale", "volumen"):
+        from stockai import whale as wh
+        return wh.render_whales(wh.scan_whales(cfg))
 
     if cmd in ("track", "trackrecord", "bilanz"):
         from stockai import track as tk

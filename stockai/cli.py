@@ -301,6 +301,29 @@ def cmd_watch(cfg, args) -> None:
     print(wt.render_watches(cfg))
 
 
+def cmd_whales(cfg, args) -> None:
+    """Whale-Radar: auffälliges Volumen (Smart-Money-Spur) im Universum."""
+    from stockai import whale as wh
+    from stockai import notify
+
+    min_rel = float(getattr(args, "min", 2.0) or 2.0)
+    if getattr(args, "alert_only", False):
+        text = wh.whale_alert_text(cfg, min_rel=max(min_rel, 2.5))
+        if text:
+            print(text)
+            notify.notify(text)
+        else:
+            print("Keine starken Whale-Signale.")
+        return
+    print("Scanne Volumen (Whale-Radar) …\n")
+    report = wh.render_whales(wh.scan_whales(cfg, min_rel=min_rel))
+    print(report)
+    if getattr(args, "notify", False):
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
+
+
 def cmd_depot(cfg, args) -> None:
     """Eigenes Depot: Positionen verwalten und von der KI bewerten lassen."""
     from stockai import holdings as hd
@@ -906,6 +929,12 @@ def build_parser() -> argparse.ArgumentParser:
     pwt.add_argument("--all-users", action="store_true",
                      help="für alle Nutzer prüfen und jedem an seinen Chat senden (Cron)")
 
+    pwh = sub.add_parser("whales", help="Whale-Radar: auffälliges Volumen (Smart-Money-Spur)")
+    pwh.add_argument("--min", type=float, default=2.0, help="Mindest-rel.-Volumen (Standard 2.0)")
+    pwh.add_argument("--notify", action="store_true", help="Report per Telegram senden")
+    pwh.add_argument("--alert-only", action="store_true",
+                     help="nur bei starken Signalen melden (für Cron)")
+
     pdp = sub.add_parser("depot", help="Eigenes Depot: Positionen + KI-Bewertung & G/V")
     pdp.add_argument("depot_action", nargs="?", choices=["add", "remove", "clear"],
                      help="add/remove/clear (ohne Angabe: Depot anzeigen)")
@@ -1000,6 +1029,7 @@ _COMMANDS = {
     "health": cmd_health,
     "depot": cmd_depot,
     "watch": cmd_watch,
+    "whales": cmd_whales,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,

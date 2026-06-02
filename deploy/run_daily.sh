@@ -26,4 +26,6 @@ STAMP="$(date +%Y-%m-%d)"
   # 4) Depot prüfen – pro Nutzer, nur melden wenn die KI eine Position kritisch sieht
   "$PY" -m stockai.cli --source live depot --alert-only --all-users \
         || echo "depot-check fehlgeschlagen"
+  # 5) Whale-Radar – nur bei starkem, auffälligem Volumen melden
+  "$PY" -m stockai.cli --source live whales --alert-only || echo "whales fehlgeschlagen"
 } >> "$LOG_DIR/daily-$STAMP.log" 2>&1
