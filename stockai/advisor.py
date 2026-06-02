@@ -31,6 +31,7 @@ def recommend(
     sentiment_mean: float,
     expected_return: float | None = None,
     weak_conditions: list[str] | None = None,
+    caution_offset: float = 0.0,
 ) -> Recommendation:
     """Leitet eine Handlungsempfehlung ab.
 
@@ -49,8 +50,13 @@ def recommend(
             (``weakspots``). Trifft die aktuelle Lage auf eine Bedingung, in der
             die KI historisch danebenlag, wird ein Kaufsignal um eine Stufe
             gedämpft (BOOM→KAUFEN, KAUFEN→HALTEN) – die KI lernt aus Fehlern.
+        caution_offset: globale Anhebung der Kauf-Schwellen (0..0.06), gesetzt
+            von der Selbstüberwachung (``health``). Verschlechtert sich die KI,
+            verlangt sie vorübergehend mehr Überzeugung für ein Kaufsignal und
+            lockert wieder, sobald sie sich erholt.
     """
     reasons: list[str] = []
+    off = max(0.0, min(0.06, caution_offset))
 
     # --- Verkaufs-/Timing-Signale (haben Vorrang vor Kaufsignalen) ------- #
     overbought = rsi_14 >= 70
@@ -83,7 +89,9 @@ def recommend(
         )
 
     # --- Kauf-/Boom-Signale --------------------------------------------- #
-    strong_signal = profit_probability >= 0.62
+    # caution_offset hebt die Schwellen an, wenn die Selbstüberwachung eine
+    # Schwächephase erkannt hat (vorübergehend strenger).
+    strong_signal = profit_probability >= 0.62 + off
     momentum_up = macd_hist > 0 and momentum_5d > 0.01
     positive_news = sentiment_mean > 0.15
     not_overheated = rsi_14 < 68
@@ -117,7 +125,10 @@ def recommend(
             timing="Früh im Trend – Einstieg/Aufstockung sinnvoll, solange RSI < 70.",
         )
 
-    if profit_probability >= 0.55 and not_overheated and not er_negative:
+    if profit_probability >= 0.55 + off and not_overheated and not er_negative:
+        if off > 0:
+            reasons.append(f"Vorsichtsmodus aktiv (Kaufschwelle +{off:.0%}) – "
+                           "die KI war zuletzt schwächer")
         reasons.append(f"Modell: {profit_probability:.0%} Profit-Wahrscheinlichkeit")
         if weak:   # KAUFEN → HALTEN: in schwacher Lage lieber abwarten
             return Recommendation(

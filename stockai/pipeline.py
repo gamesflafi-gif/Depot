@@ -666,7 +666,9 @@ def analyze(
 
     # gelernte Schwachstellen einmalig laden (für die Selbstkorrektur)
     from stockai import weakspots as _ws
+    from stockai import health as _hl
     lessons = _ws.load_lessons(cfg)
+    caution_offset = _hl.load_posture(cfg)   # Vorsichtsmodus der Selbstüberwachung
 
     # 2. Durchgang: Vorhersage + Empfehlung
     results: list[TickerAnalysis] = []
@@ -701,6 +703,7 @@ def analyze(
             sentiment_mean=row.get("sent_mean", 0.0),
             expected_return=expected_return,
             weak_conditions=weak_conditions,
+            caution_offset=caution_offset,
         )
         results.append(
             TickerAnalysis(

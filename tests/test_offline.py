@@ -512,6 +512,46 @@ def test_health_detects_degradation(tmp_path):
     assert "schlechter" in hl.render_health(worse)
 
 
+def test_health_self_regulation(tmp_path):
+    """Bei Verschlechterung steigt die Vorsicht (Kaufschwelle), Erholung lockert."""
+    import numpy as np
+    import pandas as pd
+    from stockai import advisor, health as hl
+    from stockai.config import load_config
+    from stockai.model.store import _FEATURE_STORE_FILE
+
+    cfg = load_config()
+    sdir = tmp_path / "s"
+    sdir.mkdir()
+    cfg.paths = {"store_dir": str(sdir), "model_dir": str(tmp_path / "m")}
+    rng = np.random.default_rng(1)
+
+    def write(acc):
+        proba = rng.uniform(0, 1, 80)
+        y = (proba >= 0.5).astype(int)
+        flip = rng.uniform(0, 1, 80) > acc
+        y[flip] = 1 - y[flip]
+        pd.DataFrame({
+            "ticker": ["X"] * 80,
+            "date": pd.date_range("2026-01-01", periods=80).astype(str),
+            "pred_proba": proba, "target": y.astype(float),
+        }).to_csv(sdir / _FEATURE_STORE_FILE, index=False)
+
+    write(0.62); hl.assess_health(cfg)
+    assert hl.load_posture(cfg) == 0.0               # gut: keine Vorsicht
+    write(0.45); hl.assess_health(cfg)
+    assert hl.load_posture(cfg) > 0.0                # schlecht: strenger geworden
+    high = hl.load_posture(cfg)
+    write(0.65); hl.assess_health(cfg)
+    assert hl.load_posture(cfg) < high               # Erholung: wieder gelockert
+
+    # Grenzsignal: gleiches P, aber mit Offset wird aus KAUFEN ein HALTEN
+    base = dict(profit_probability=0.57, rsi_14=55, momentum_5d=0.0,
+                price_vs_high_20=0.9, macd_hist=0.01, sentiment_mean=0.0)
+    assert advisor.recommend(**base).action == "KAUFEN"
+    assert advisor.recommend(**base, caution_offset=0.04).action == "HALTEN"
+
+
 def test_track_record(tmp_path):
     """Live-Track-Record aus gesammelten Snapshots (Prognose vs. Ergebnis)."""
     import numpy as np

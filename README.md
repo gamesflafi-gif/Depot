@@ -170,6 +170,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   sich den Verlauf und **warnt automatisch** (per Telegram), wenn die KI spürbar
   schlechter wird oder schlechter als die Basisrate trifft. Solange noch wenig
   live gesammelt ist, dient die Modellgüte (Holdout-AUC) als Ersatzsignal.
+- **Automatisches Gegensteuern:** Erkennt `health` eine Schwächephase, hebt die
+  KI ihre **Kaufschwelle** vorübergehend an (verlangt mehr Überzeugung) und
+  lockert schrittweise wieder, sobald sie sich erholt – gedeckelt (max. +6 %)
+  und reversibel. So schützt sich die KI selbst, ohne dass du eingreifen musst.
 - **News-Ablation:** `ablation` misst den tatsächlichen Beitrag der News
   (Technik vs. News vs. kombiniert) – statt zu behaupten, dass News helfen,
   wird es nachgewiesen. (News tragen real meist einen *kleinen* Mehrwert, da

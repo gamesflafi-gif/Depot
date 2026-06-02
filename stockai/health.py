@@ -20,9 +20,12 @@ from pathlib import Path
 from stockai.config import Config
 
 _HISTORY_FILE = "health_history.json"
+_POSTURE_FILE = "posture.json"
 _MIN_LIVE = 30        # ab so vielen Live-Prognosen zählt der Track-Record
 _DROP = 0.03          # Verschlechterung > 3 %-Punkte = Warnung
 _GAIN = 0.03          # Verbesserung > 3 %-Punkte = Lob
+_STEP = 0.02          # Schrittweite der Vorsichts-Anpassung
+_MAX_OFFSET = 0.06    # max. Anhebung der Kaufschwelle (defensiv gedeckelt)
 
 
 @dataclass
@@ -36,10 +39,35 @@ class HealthReport:
     n: int = 0
     warnings: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    posture: float = 0.0          # aktuelle Anhebung der Kaufschwelle (0..0.06)
+    posture_change: float = 0.0   # Änderung in diesem Lauf (+ strenger / − lockerer)
 
 
 def _path(cfg: Config) -> Path:
     return Path(cfg.store_dir) / _HISTORY_FILE
+
+
+def _posture_path(cfg: Config) -> Path:
+    return Path(cfg.store_dir) / _POSTURE_FILE
+
+
+def load_posture(cfg: Config) -> float:
+    """Aktuelle Vorsichts-Anhebung der Kaufschwelle (0 = normal)."""
+    p = _posture_path(cfg)
+    if not p.exists():
+        return 0.0
+    try:
+        return float(json.load(open(p, encoding="utf-8")).get("buy_offset", 0.0))
+    except Exception:
+        return 0.0
+
+
+def save_posture(cfg: Config, offset: float, reason: str) -> None:
+    p = _posture_path(cfg)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    json.dump({"buy_offset": round(offset, 4), "reason": reason,
+               "updated": datetime.now(timezone.utc).isoformat()},
+              open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 
 def _load(cfg: Config) -> list:
@@ -136,6 +164,23 @@ def assess_health(cfg: Config, record: bool = True) -> HealthReport:
 
     if rep.warnings:
         rep.status = "⚠️ schlechter"
+
+    # --- Automatisches Gegensteuern (Selbst-Regulierung) ------------------
+    # Verschlechtert sich die KI, wird sie vorsichtiger (höhere Kaufschwelle);
+    # erholt sie sich, lockert sie schrittweise wieder. Gedeckelt & reversibel.
+    rep.posture = load_posture(cfg)
+    if rep.warnings:                                  # strenger werden
+        new_off = min(_MAX_OFFSET, rep.posture + _STEP)
+    elif rep.status.startswith("📈") or (             # lockern, wenn wieder gut
+            rep.source == "live" and rep.base_rate == rep.base_rate
+            and rep.current >= rep.base_rate):
+        new_off = max(0.0, rep.posture - _STEP)
+    else:
+        new_off = rep.posture                         # stabil: halten
+    rep.posture_change = round(new_off - rep.posture, 4)
+    if record and new_off != rep.posture:
+        save_posture(cfg, new_off, reason=rep.status)
+    rep.posture = new_off
     return rep
 
 
@@ -165,6 +210,17 @@ def render_health(rep: HealthReport) -> str:
         lines.append("")
         for w in rep.warnings:
             lines.append(f"⚠️ {w}")
+
+    # Selbst-Regulierung transparent machen
+    if rep.posture_change > 0:
+        lines.append(f"\n🛡️ Gegensteuern: Kaufschwelle wird strenger "
+                     f"(+{rep.posture:.0%} statt +{rep.posture - rep.posture_change:.0%}).")
+    elif rep.posture_change < 0:
+        lines.append(f"\n🌤️ Erholung: Kaufschwelle wird gelockert "
+                     f"(jetzt +{rep.posture:.0%}).")
+    elif rep.posture > 0:
+        lines.append(f"\n🛡️ Aktuell vorsichtiger: Kaufschwelle +{rep.posture:.0%} "
+                     "(bis sich die Treffsicherheit erholt).")
 
     lines.append("\nℹ️ Keine Anlageberatung.")
     return "\n".join(lines)
