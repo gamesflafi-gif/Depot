@@ -643,6 +643,23 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_compare_command(tmp_path):
+    """/vergleich stellt zwei Werte gegenüber und kürt den stärkeren."""
+    from stockai import telegram_bot as tb
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAA", "BBB"]; cfg.etfs = []; cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    assert "zwei Symbole" in tb.handle_command(cfg, "/vergleich AAA", user="1")
+    out = tb.handle_command(cfg, "/vergleich AAA BBB", user="1")
+    assert "Vergleich" in out and "AAA" in out and "BBB" in out
+    assert "Stärker" in out or "gleichauf" in out
+
+
 def test_news_command(tmp_path):
     """/news zeigt Schlagzeilen + Stimmung; ohne Symbol einen Hinweis."""
     from stockai import telegram_bot as tb
