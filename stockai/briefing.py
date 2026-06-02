@@ -58,10 +58,10 @@ def market_regime(analyses) -> str:
     rsi = statistics.mean(a.rsi_14 for a in analyses)
     up = sum(1 for a in analyses if a.profit_probability >= 0.5) / len(analyses)
     if mom > 0.01 and rsi >= 52 and up >= 0.55:
-        return f"bullisch (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
+        return f"📈 bullisch (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
     if mom < -0.01 and rsi <= 48 and up <= 0.45:
-        return f"bärisch (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
-    return f"neutral (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
+        return f"📉 bärisch (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
+    return f"➖ neutral (Ø Momentum {mom:+.1%}, RSI {rsi:.0f})"
 
 
 def _state_path(cfg: Config) -> Path:
@@ -120,35 +120,35 @@ def build_briefing(cfg: Config, top_n: int = 5, use_cache: bool = False) -> Brie
 
 def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
     """Sauberer Telegram-Report – reiner Text, gut lesbar (kein Markdown-Wirrwarr)."""
-    lines = [f"Aktien-KI Briefing · {br.timestamp}"]
+    lines = [f"📊 Aktien-KI Briefing · {br.timestamp}"]
     if br.regime:
         lines.append(f"Marktlage: {br.regime}")
 
     # --- Was hat sich bewegt? ---------------------------------------------
     if br.has_changes:
         lines.append("")
-        lines.append("NEU SEIT DEM LETZTEN LAUF")
+        lines.append("⚡ NEU SEIT DEM LETZTEN LAUF")
         for t, p in br.new_buys:
-            lines.append(f"  Kaufsignal: {t}  ({p:.0%} Chance)")
+            lines.append(f"  🟢 Kaufsignal: {t}  ({p:.0%} Chance)")
         for t, p in br.new_sells:
-            lines.append(f"  Verkaufen/Meiden: {t}  ({p:.0%})")
+            lines.append(f"  🔴 Verkaufen/Meiden: {t}  ({p:.0%})")
         for t, o, n in br.prob_moves:
-            arrow = "↗" if n > o else "↘"
+            arrow = "↗︎" if n > o else "↘︎"
             lines.append(f"  {arrow} {t}: {o:.0%} → {n:.0%}")
     else:
         lines.append("")
-        lines.append("Keine neuen Signale seit dem letzten Lauf.")
+        lines.append("➖ Keine neuen Signale seit dem letzten Lauf.")
 
     # --- Beste Chancen -----------------------------------------------------
     lines.append("")
-    lines.append("BESTE CHANCEN HEUTE")
+    lines.append("🚀 BESTE CHANCEN HEUTE")
     if br.top_buys:
         for a in br.top_buys:
             er = (f"  ·  erwartet {a.expected_return:+.1%}"
                   if a.expected_return is not None else "")
-            conv = (f"  ·  Conv {a.conviction:.0f}"
+            conv = (f"  ·  🎯 {a.conviction:.0f}"
                     if a.conviction == a.conviction else "")
-            lines.append(f"  {a.ticker} ({_klass(a.asset_class)})  ·  "
+            lines.append(f"  🟢 {a.ticker} ({_klass(a.asset_class)})  ·  "
                          f"Chance {a.profit_probability:.0%}{er}{conv}")
     else:
         lines.append("  – aktuell keine klaren Kaufsignale")
@@ -156,13 +156,13 @@ def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
     # --- Verkaufen / Meiden ------------------------------------------------
     if br.top_sells:
         lines.append("")
-        lines.append("LIEBER MEIDEN")
+        lines.append("🔴 LIEBER MEIDEN")
         for a in br.top_sells:
             lines.append(f"  {a.ticker} ({_klass(a.asset_class)})  ·  {a.timing}")
 
     lines.append("")
-    lines.append("Befehle: /analyse NVDA · /top · /sparplan · /weakspots · /help")
-    lines.append("Keine Anlageberatung.")
+    lines.append("💬 Befehle: /analyse NVDA · /top · /sparplan · /weakspots · /help")
+    lines.append("ℹ️ Keine Anlageberatung.")
     return "\n".join(lines)
 
 
@@ -180,21 +180,21 @@ def build_top(cfg: Config, n: int = 5, use_cache: bool = False):
 def render_top(top: list, bottom: list, n: int = 5) -> str:
     """Wöchentlicher Überblick: Top-N Chancen und Top-N Risiken (sauberer Text)."""
     ts = _now_de().strftime("%d.%m.%Y")
-    lines = [f"Wochen-Überblick · {ts}", "",
-             f"TOP {n} CHANCEN (höchste Gewinn-Chance)"]
+    lines = [f"📅 Wochen-Überblick · {ts}", "",
+             f"🚀 TOP {n} CHANCEN (höchste Gewinn-Chance)"]
     for a in top:
         er = (f"  ·  erwartet {a.expected_return:+.1%}"
               if a.expected_return is not None else "")
-        lines.append(f"  {a.ticker} ({_klass(a.asset_class)})  ·  "
+        lines.append(f"  🟢 {a.ticker} ({_klass(a.asset_class)})  ·  "
                      f"Chance {a.profit_probability:.0%}{er}")
 
     lines.append("")
-    lines.append(f"TOP {n} RISIKEN (schwächste Werte)")
+    lines.append(f"🔻 TOP {n} RISIKEN (schwächste Werte)")
     for a in bottom:
-        lines.append(f"  {a.ticker} ({_klass(a.asset_class)})  ·  "
+        lines.append(f"  🔴 {a.ticker} ({_klass(a.asset_class)})  ·  "
                      f"Chance {a.profit_probability:.0%}")
 
     lines.append("")
-    lines.append("Mehr: /analyse SYM · /briefing · /help")
-    lines.append("Keine Anlageberatung.")
+    lines.append("💬 Mehr: /analyse SYM · /briefing · /help")
+    lines.append("ℹ️ Keine Anlageberatung.")
     return "\n".join(lines)

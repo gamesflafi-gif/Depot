@@ -34,11 +34,11 @@ _CHAT_ENV = "STOCKAI_TELEGRAM_CHAT_ID"
 _TG_LIMIT = 3900
 
 _HELP = (
-    "Aktien-KI Bot · deine Befehle\n"
+    "🤖 Aktien-KI Bot · deine Befehle\n"
     "\n"
-    "/menu   dein persönlicher Überblick (Depot, Alerts, Sparplan)\n"
+    "🏠 /menu   dein persönlicher Überblick (Depot, Alerts, Sparplan)\n"
     "\n"
-    "Analyse\n"
+    "📊 Analyse\n"
     "  /analyse SYM   Einzelanalyse (z.B. /analyse NVDA)\n"
     "  /chart SYM     Kurs-Chart mit Signalen als Bild\n"
     "  /live SYM      aktueller Live-Kurs\n"
@@ -49,23 +49,23 @@ _HELP = (
     "  /sektoren      Sektor-Rotation: welche Branchen führen\n"
     "  /watch         eigene Trigger (z.B. /watch add BTC-USD < 50000)\n"
     "\n"
-    "Persönlich\n"
+    "🎯 Persönlich\n"
     "  /chancen       deine Top-Chancen (nach Risiko-Profil)\n"
     "  /risiko        defensiv | ausgewogen | offensiv\n"
     "\n"
-    "Geld\n"
+    "💶 Geld\n"
     "  /sparplan [€]  Sparplan-Vorschlag (an dein Risiko angepasst)\n"
     "  /depot         dein Depot: G/V + KI-Bewertung\n"
     "  /depot add NVDA 10 850   Position eintragen\n"
     "\n"
-    "Selbstkontrolle der KI\n"
+    "🔍 Selbstkontrolle der KI\n"
     "  /track         traf die KI live richtig?\n"
     "  /weakspots     wo liegt die KI daneben?\n"
     "  /health        wird die KI besser oder schlechter?\n"
     "\n"
     "  /help          diese Übersicht\n"
     "\n"
-    "Keine Anlageberatung."
+    "ℹ️ Keine Anlageberatung."
 )
 
 
@@ -78,25 +78,25 @@ def _personal_overview(cfg: Config, user: str | None) -> str:
     nw = len(wt.load_watches(cfg, user))
     monthly = prefs.get("monthly")
 
-    lines = [f"Hallo {name}!" if name else "Hallo!", "", "Dein Überblick:"]
+    lines = [f"👋 Hallo {name}!" if name else "👋 Hallo!", "", "Dein Überblick:"]
     if nh:
-        lines.append(f"Depot: {nh} Position(en)  →  /depot")
+        lines.append(f"💼 Depot: {nh} Position(en)  →  /depot")
     else:
-        lines.append("Depot: noch leer  →  /depot add NVDA 10 850")
+        lines.append("💼 Depot: noch leer  →  /depot add NVDA 10 850")
     if nw:
-        lines.append(f"Eigene Trigger: {nw} aktiv  →  /watch")
+        lines.append(f"🔔 Eigene Trigger: {nw} aktiv  →  /watch")
     else:
-        lines.append("Eigene Trigger: keine  →  /watch add BTC-USD < 50000")
+        lines.append("🔔 Eigene Trigger: keine  →  /watch add BTC-USD < 50000")
     apct = float(prefs.get("alert_pct", 3.0))
     aon = "AN" if prefs.get("alerts_on", True) else "AUS"
-    lines.append(f"Live-Alerts: {aon}, ab {apct:g}%  →  /alerts")
+    lines.append(f"🚨 Live-Alerts: {aon}, ab {apct:g}%  →  /alerts")
     if monthly:
-        lines.append(f"Sparplan: {float(monthly):g}€/Monat  →  /sparplan")
+        lines.append(f"💶 Sparplan: {float(monthly):g}€/Monat  →  /sparplan")
     else:
-        lines.append("Sparplan: noch keiner  →  /sparplan 200")
-    lines.append(f"Risiko: {users.get_risk(cfg, user)}  →  /risiko")
+        lines.append("💶 Sparplan: noch keiner  →  /sparplan 200")
+    lines.append(f"🎚️ Risiko: {users.get_risk(cfg, user)}  →  /risiko")
     lines.append("")
-    lines.append("Deine Chancen: /chancen  ·  alle Befehle: /help")
+    lines.append("🎯 Deine Chancen: /chancen  ·  alle Befehle: /help")
     return "\n".join(lines)
 
 
@@ -105,23 +105,23 @@ def _onboarding_text(cfg: Config, user: str | None) -> str:
     from stockai import users
     prefs = users.load_prefs(cfg, user)
     name = prefs.get("name")
-    hi = f"Willkommen{', ' + name if name else ''}! In 10 Sekunden startklar."
+    hi = f"🤖 Willkommen{', ' + name if name else ''}! In 10 Sekunden startklar."
     return (f"{hi}\n\n"
             "Ich bin deine selbstlernende KI für Aktien, ETFs & Krypto.\n\n"
-            "1⃣ Wähle unten dein Risiko-Profil \n"
-            "2⃣ Lege dein Depot an:  /depot add NVDA 10 850\n"
-            "3⃣ Sieh deine Chancen:  /chancen\n\n"
-            "Jederzeit: /menu · alle Befehle: /help\n"
-            "Keine Anlageberatung.")
+            "1️⃣ Wähle unten dein Risiko-Profil 👇\n"
+            "2️⃣ Lege dein Depot an:  /depot add NVDA 10 850\n"
+            "3️⃣ Sieh deine Chancen:  /chancen\n\n"
+            "Jederzeit: 🏠 /menu · alle Befehle: /help\n"
+            "ℹ️ Keine Anlageberatung.")
 
 
 def _welcome(cfg: Config, user: str | None) -> str:
     """Freundliche Begrüßung beim /start – persönlich und mit Überblick."""
-    return ("Willkommen bei deiner Aktien-KI!\n"
+    return ("🤖 Willkommen bei deiner Aktien-KI!\n"
             "Ich analysiere Aktien, ETFs & Krypto, lerne laufend dazu und melde "
             "dir Chancen, Whale-Volumen und Depot-Warnungen.\n\n"
             + _personal_overview(cfg, user)
-            + "\n\nKeine Anlageberatung.")
+            + "\n\nℹ️ Keine Anlageberatung.")
 
 
 def handle_command(cfg: Config, text: str, user: str | None = None,
@@ -156,16 +156,16 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         a = (arg or "").lower()
         if a in ("on", "an", "ein"):
             users.set_pref(cfg, user, "alerts_on", True)
-            return "Live-Alerts sind AN. Schwelle ändern: /alerts 5"
+            return "🔔 Live-Alerts sind AN. Schwelle ändern: /alerts 5"
         if a in ("off", "aus"):
             users.set_pref(cfg, user, "alerts_on", False)
-            return "Live-Alerts sind AUS. Wieder an: /alerts on"
+            return "🔕 Live-Alerts sind AUS. Wieder an: /alerts on"
         if a:                                          # Zahl = neue Schwelle in %
             try:
                 pct = max(0.5, min(50.0, float(a.replace("%", "").replace(",", "."))))
                 users.set_pref(cfg, user, "alert_pct", pct)
                 users.set_pref(cfg, user, "alerts_on", True)
-                return (f"Live-Alerts ab {pct:g}% Bewegung (AN).\n"
+                return (f"✔ Live-Alerts ab {pct:g}% Bewegung (AN).\n"
                         "Aus: /alerts off · jetzt prüfen: /alerts")
             except ValueError:
                 return ("Nutzung: /alerts [on|off|PROZENT]\n"
@@ -177,7 +177,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         res = al.check_alerts(cfg, move_pct=pct, save_state=False)
         body = al.render_alerts(res) or f"Aktuell keine Bewegung ≥ {pct:g}%."
         status = "AN" if on else "AUS"
-        return f"{body}\n\nDeine Schwelle: {pct:g}% · Push: {status} (/alerts off|on|PROZENT)"
+        return f"{body}\n\n⚙️ Deine Schwelle: {pct:g}% · Push: {status} (/alerts off|on|PROZENT)"
 
     if cmd in ("whales", "whale", "volumen"):
         from stockai import whale as wh
@@ -213,18 +213,18 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
                         "      /watch add NVDA rsi < 30\n"
                         "      /watch add BTC-USD vol > 2")
             wt.add_watch(cfg, w, user=user)
-            return (f"Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} "
+            return (f"✔ Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} "
                     f"{w.value:g}\nAlle Alerts: /watch")
         if sub in ("remove", "del", "delete"):
             try:
                 idx = int(parts[2])
             except (IndexError, ValueError):
                 return "Nutzung: /watch remove NUMMER (siehe /watch)"
-            return ("entfernt." if wt.remove_watch(cfg, idx, user=user)
+            return ("✔ entfernt." if wt.remove_watch(cfg, idx, user=user)
                     else "Nummer nicht gefunden.")
         if sub == "clear":
             wt.save_watches(cfg, [], user=user)
-            return "Alle Alerts gelöscht."
+            return "✔ Alle Alerts gelöscht."
         return wt.render_watches(cfg, user=user)
 
     if cmd in ("depot", "portfolio", "wallet"):
@@ -236,15 +236,15 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
             except (IndexError, ValueError):
                 return "Nutzung: /depot add TICKER STÜCK KAUFKURS\nz.B. /depot add NVDA 10 850"
             hd.add_holding(cfg, tkr, qty, price, user=user)
-            return f"{tkr.upper()} hinzugefügt ({qty:g} @ {price:.2f}).\nSchau mit /depot"
+            return f"✔ {tkr.upper()} hinzugefügt ({qty:g} @ {price:.2f}).\nSchau mit /depot"
         if sub in ("remove", "del", "delete"):
             if len(parts) < 3:
                 return "Nutzung: /depot remove TICKER"
             ok = hd.remove_holding(cfg, parts[2], user=user)
-            return (f"{parts[2].upper()} entfernt." if ok else "Position nicht gefunden.")
+            return (f"✔ {parts[2].upper()} entfernt." if ok else "Position nicht gefunden.")
         if sub == "clear":
             hd.save_holdings(cfg, [], user=user)
-            return "Depot geleert."
+            return "✔ Depot geleert."
         return hd.render_depot(hd.build_depot_report(cfg, user=user, use_cache=cached))
 
     if cmd in ("weakspots", "schwachstellen", "schwaechen"):
@@ -264,10 +264,10 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
             if not lvl:
                 return ("Bitte defensiv, ausgewogen oder offensiv wählen.\n"
                         "z.B. /risiko offensiv")
-            return (f"Risiko-Profil: {lvl}.\nDas passt deinen Sparplan und die "
+            return (f"✔ Risiko-Profil: {lvl}.\nDas passt deinen Sparplan und die "
                     "Schwelle für Kauf-Chancen an (/sparplan, /chancen).")
         cur = users.get_risk(cfg, user)
-        return (f"Dein Risiko-Profil: {cur}\n\n"
+        return (f"🎚️ Dein Risiko-Profil: {cur}\n\n"
                 "Ändern mit:\n  /risiko defensiv – mehr ETF-Core, kein/wenig Krypto\n"
                 "  /risiko ausgewogen – ausgewogene Mischung\n"
                 "  /risiko offensiv – mehr Einzelaktien & Krypto\n\n"
@@ -282,17 +282,17 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
                 and a.conviction == a.conviction and a.conviction >= floor]
         buys.sort(key=lambda a: a.conviction, reverse=True)
         if not buys:
-            return (f"Aktuell keine Chance über deiner Schwelle "
+            return (f"🎯 Aktuell keine Chance über deiner Schwelle "
                     f"(Conviction ≥ {floor:.0f}, Profil {users.get_risk(cfg, user)}).\n"
                     "Profil ändern: /risiko")
-        lines = [f"Deine Top-Chancen (Conviction ≥ {floor:.0f}, "
+        lines = [f"🎯 Deine Top-Chancen (Conviction ≥ {floor:.0f}, "
                  f"Profil {users.get_risk(cfg, user)})", ""]
         for a in buys[:8]:
             er = (f" · erwartet {a.expected_return:+.1%}"
                   if a.expected_return is not None else "")
-            lines.append(f"• {a.ticker} ({a.asset_class}) · Conv {a.conviction:.0f} · "
+            lines.append(f"🟢 {a.ticker} ({a.asset_class}) · 🎯 {a.conviction:.0f} · "
                          f"Chance {a.profit_probability:.0%}{er}")
-        lines.append("\nKeine Anlageberatung.")
+        lines.append("\nℹ️ Keine Anlageberatung.")
         return "\n".join(lines)
 
     if cmd == "sparplan":
@@ -318,7 +318,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         if not q:
             return (f"Kein Live-Kurs für {arg.upper()} (Krypto ist frei; für "
                     f"Aktien einen Finnhub-Key in STOCKAI_FINNHUB_KEY setzen).")
-        return f"LIVE {q.ticker}: {q.price:.2f} ({q.change_pct:+.2f}% heute) – {q.source}"
+        return f"🔴 LIVE {q.ticker}: {q.price:.2f} ({q.change_pct:+.2f}% heute) – {q.source}"
 
     if cmd in ("analyse", "analyze", "aktie"):
         if not arg:
@@ -334,16 +334,16 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         er = f"{a.expected_return:+.1%}" if a.expected_return is not None else "–"
         hz = " · ".join(f"{h}T {p:.0%}" for h, p in sorted(a.horizon_probs.items()))
         q = get_quote(sym)
-        price_line = (f"Live: {q.price:.2f}  ({q.change_pct:+.2f}% heute · {q.source})\n"
+        price_line = (f"🔴 Live: {q.price:.2f}  ({q.change_pct:+.2f}% heute · {q.source})\n"
                       if q else f"Kurs: {a.last_price:.2f}\n")
-        return (f"{a.ticker} ({a.asset_class}) · {a.action}\n"
+        return (f"📊 {a.ticker} ({a.asset_class}) · {a.action}\n"
                 + price_line
                 + f"Gewinn-Chance: {a.profit_probability:.0%}  ·  erwartet: {er}\n"
                 + (f"Horizonte: {hz}\n" if hz else "")
                 + f"RSI: {a.rsi_14:.0f}  ·  News-Stimmung: {a.sentiment_mean:+.2f}\n"
                 + f"Timing: {a.timing}\n\n"
                 + render_conviction(a)
-                + f"\n\nChart: /chart {a.ticker}\nKeine Anlageberatung.")
+                + f"\n\n📈 Chart: /chart {a.ticker}\nℹ️ Keine Anlageberatung.")
 
     return "Unbekannter Befehl. /help zeigt die Übersicht."
 
@@ -407,21 +407,21 @@ def _remember_name(cfg: Config, chat_id: str, frm: dict) -> None:
 
 
 _BOT_COMMANDS = [
-    ("menu", "Dein persönlicher Überblick"),
-    ("chancen", "Deine Top-Chancen (nach Risiko)"),
-    ("briefing", "Marktüberblick & Bewegungen"),
-    ("analyse", "Einzelanalyse (z.B. /analyse NVDA)"),
-    ("chart", "Kurs-Chart als Bild"),
-    ("depot", "Dein Depot: G/V + KI-Bewertung"),
-    ("sparplan", "Sparplan-Vorschlag"),
-    ("risiko", "Risiko-Profil einstellen"),
-    ("alerts", "Live-Alerts einstellen"),
-    ("watch", "Eigene Trigger setzen"),
-    ("whales", "Auffälliges Volumen"),
-    ("sektoren", "Sektor-Rotation"),
-    ("track", "Trefferquote der KI"),
-    ("health", "Selbstcheck der KI"),
-    ("help", "Alle Befehle"),
+    ("menu", "🏠 Dein persönlicher Überblick"),
+    ("chancen", "🎯 Deine Top-Chancen (nach Risiko)"),
+    ("briefing", "📊 Marktüberblick & Bewegungen"),
+    ("analyse", "🔎 Einzelanalyse (z.B. /analyse NVDA)"),
+    ("chart", "📈 Kurs-Chart als Bild"),
+    ("depot", "💼 Dein Depot: G/V + KI-Bewertung"),
+    ("sparplan", "💶 Sparplan-Vorschlag"),
+    ("risiko", "🎚️ Risiko-Profil einstellen"),
+    ("alerts", "🚨 Live-Alerts einstellen"),
+    ("watch", "🔔 Eigene Trigger setzen"),
+    ("whales", "🐋 Auffälliges Volumen"),
+    ("sektoren", "🧭 Sektor-Rotation"),
+    ("track", "📒 Trefferquote der KI"),
+    ("health", "🩺 Selbstcheck der KI"),
+    ("help", "❓ Alle Befehle"),
 ]
 _BOT_ABOUT = ("Selbstlernende Aktien-, ETF- & Krypto-KI: Analysen, Chancen, "
               "Depot, Alerts & Charts. Keine Anlageberatung.")
@@ -545,7 +545,7 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
     for cid in allowed:                      # persönliche Startmeldung an alle Erlaubten
         from stockai import users
         nm = users.load_prefs(cfg, cid).get("name")
-        hi = f"Bot wieder online{', ' + nm if nm else ''}! Tippe Mein Menü."
+        hi = f"🤖 Bot wieder online{', ' + nm if nm else ''}! Tippe 🏠 Mein Menü."
         _send(token, cid, hi, keyboard=main_menu_markup())
 
     offset = None

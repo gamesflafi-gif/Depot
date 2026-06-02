@@ -169,7 +169,7 @@ def _fmt(metric: str, val: float) -> str:
 
 
 def _trigger_text(w: Watch, val: float) -> str:
-    arrow = "" if w.op == "<" else ""
+    arrow = "📉" if w.op == "<" else "📈"
     return (f"{arrow} {w.ticker}: {_LABEL[w.metric]} {_fmt(w.metric, val)} "
             f"{w.op} {_fmt(w.metric, w.value)} erreicht")
 
@@ -177,13 +177,13 @@ def _trigger_text(w: Watch, val: float) -> str:
 def render_watches(cfg: Config, user: str | None = None) -> str:
     watches = load_watches(cfg, user)
     if not watches:
-        return ("Keine Alerts gesetzt.\n"
+        return ("🔔 Keine Alerts gesetzt.\n"
                 "Beispiele:\n"
                 "  /watch add BTC-USD < 50000\n"
                 "  /watch add NVDA rsi < 30\n"
                 "  /watch add BTC-USD vol > 2\n"
                 "  /watch add NVDA pct < -5")
-    lines = ["Deine Alerts:"]
+    lines = ["🔔 Deine Alerts:"]
     for i, w in enumerate(watches):
         state = "scharf" if w.armed else "ausgelöst (wartet auf Reset)"
         lines.append(f"  [{i}] {w.ticker} {_LABEL[w.metric]} {w.op} "

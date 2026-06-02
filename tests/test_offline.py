@@ -310,7 +310,7 @@ def test_alerts_detects_move(tmp_path):
     json.dump({"AAA": 100.0}, open(tmp_path / "last_alerts.json", "w"))
     res = al.AlertResult(timestamp="t", moves=[("AAA", 106.0, 6.0, 6.0)], has_alerts=True)
     out = al.render_alerts(res)
-    assert "AAA" in out and "↑" in out
+    assert "AAA" in out and "📈" in out
     assert al.render_alerts(al.AlertResult(timestamp="t")) == ""
 
 
@@ -531,7 +531,7 @@ def test_health_detects_degradation(tmp_path):
     write(0.50)
     worse = hl.assess_health(cfg)
     assert worse.previous == worse.previous          # Vorwert gemerkt
-    assert worse.status == "schlechter" and worse.warnings
+    assert worse.status.startswith("⚠️") and worse.warnings
     assert "schlechter" in hl.render_health(worse)
 
 
@@ -870,7 +870,7 @@ def test_whale_signals(tmp_path):
     scan = wh.WhaleScan(signals=[dist, acc], n_scanned=20)
     out = wh.render_whales(scan)
     assert "Whale-Radar" in out and "Akkumulation" in out and "Distribution" in out
-    assert "Keine auffälligen" in wh.render_whales(wh.WhaleScan(n_scanned=5))
+    assert "🐋 Keine" in wh.render_whales(wh.WhaleScan(n_scanned=5))
 
     # Integration im Demo-Modus: scannt, liefert eine gültige Struktur
     cfg = load_config()

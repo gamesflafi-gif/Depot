@@ -38,19 +38,19 @@ def parse_chat_ids(raw: str | None) -> list[str]:
 def main_menu_markup() -> str:
     """Antippbares Hauptmenü (Telegram-Inline-Tastatur) – kein Tippen nötig."""
     kb = {"inline_keyboard": [
-        [{"text": "Mein Menü", "callback_data": "/menu"}],
-        [{"text": "Briefing", "callback_data": "/briefing"},
-         {"text": "Top 5", "callback_data": "/top 5"}],
-        [{"text": "Depot", "callback_data": "/depot"},
-         {"text": "Chancen", "callback_data": "/chancen"}],
-        [{"text": "Sparplan", "callback_data": "/sparplan"},
-         {"text": "Sektoren", "callback_data": "/sektoren"}],
-        [{"text": "Alerts", "callback_data": "/alerts"},
-         {"text": "Whales", "callback_data": "/whales"}],
-        [{"text": "Track", "callback_data": "/track"},
-         {"text": "Schwächen", "callback_data": "/weakspots"}],
-        [{"text": "Selbstcheck", "callback_data": "/health"},
-         {"text": "Hilfe", "callback_data": "/help"}],
+        [{"text": "🏠 Mein Menü", "callback_data": "/menu"}],
+        [{"text": "📊 Briefing", "callback_data": "/briefing"},
+         {"text": "🚀 Top 5", "callback_data": "/top 5"}],
+        [{"text": "💼 Depot", "callback_data": "/depot"},
+         {"text": "🎯 Chancen", "callback_data": "/chancen"}],
+        [{"text": "💶 Sparplan", "callback_data": "/sparplan"},
+         {"text": "🧭 Sektoren", "callback_data": "/sektoren"}],
+        [{"text": "🔔 Alerts", "callback_data": "/alerts"},
+         {"text": "🐋 Whales", "callback_data": "/whales"}],
+        [{"text": "📒 Track", "callback_data": "/track"},
+         {"text": "🔍 Schwächen", "callback_data": "/weakspots"}],
+        [{"text": "🩺 Selbstcheck", "callback_data": "/health"},
+         {"text": "❓ Hilfe", "callback_data": "/help"}],
     ]}
     return json.dumps(kb)
 
@@ -58,11 +58,11 @@ def main_menu_markup() -> str:
 def onboarding_markup() -> str:
     """Einsteiger-Tastatur: Risiko in einem Tipp wählen, dann weiter."""
     kb = {"inline_keyboard": [
-        [{"text": "Defensiv", "callback_data": "/risiko defensiv"},
-         {"text": "Ausgewogen", "callback_data": "/risiko ausgewogen"},
-         {"text": "Offensiv", "callback_data": "/risiko offensiv"}],
-        [{"text": "Chancen ansehen", "callback_data": "/chancen"},
-         {"text": "Menü", "callback_data": "/menu"}],
+        [{"text": "🛡️ Defensiv", "callback_data": "/risiko defensiv"},
+         {"text": "⚖️ Ausgewogen", "callback_data": "/risiko ausgewogen"},
+         {"text": "🔥 Offensiv", "callback_data": "/risiko offensiv"}],
+        [{"text": "🎯 Chancen ansehen", "callback_data": "/chancen"},
+         {"text": "🏠 Menü", "callback_data": "/menu"}],
     ]}
     return json.dumps(kb)
 
@@ -70,16 +70,16 @@ def onboarding_markup() -> str:
 def render_savings_plan(plan) -> str:
     """Erzeugt einen kompakten, sauber lesbaren Sparplan-Report (Telegram-tauglich)."""
     lines = [
-        "Sparplan-Update",
+        "📈 Sparplan-Update",
         f"Monatlich: {plan.monthly_amount:.2f}€  ·  Core/ETF-Anteil {plan.core_share:.0%}",
         "",
-        "CORE (ETFs)",
+        "🧱 CORE (ETFs)",
     ]
     for p in plan.core_positions:
         lines.append(f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%})")
     if not plan.core_positions:
         lines.append("  • (keine)")
-    lines += ["", "SATELLITEN (Aktien)"]
+    lines += ["", "🛰️ SATELLITEN (Aktien)"]
     for p in plan.satellite_positions:
         lines.append(
             f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
@@ -88,16 +88,16 @@ def render_savings_plan(plan) -> str:
     if not plan.satellite_positions:
         lines.append("  • (aktuell keine – defensiv im Core)")
     if plan.crypto_positions:
-        lines += ["", "KRYPTO (Beimischung, höheres Risiko)"]
+        lines += ["", "🪙 KRYPTO (Beimischung, höheres Risiko)"]
         for p in plan.crypto_positions:
             lines.append(
                 f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
                 f"– Chance {p.probability:.0%}"
             )
     if plan.notes:
-        lines += ["", "Hinweise"]
+        lines += ["", "ℹ️ Hinweise"]
         lines += [f"  • {n}" for n in plan.notes]
-    lines += ["", "Keine Anlageberatung."]
+    lines += ["", "ℹ️ Keine Anlageberatung."]
     return "\n".join(lines)
 
 

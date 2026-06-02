@@ -83,14 +83,14 @@ def whale_alert_text(cfg: Config, min_rel: float = 2.5) -> str | None:
 
 def render_whales(scan: WhaleScan) -> str:
     if not scan.signals:
-        return ("Keine auffälligen Volumen-Signale gerade "
+        return ("🐋 Keine auffälligen Volumen-Signale gerade "
                 f"({scan.n_scanned} Werte geprüft).")
-    lines = ["Whale-Radar – auffälliges Volumen (mögliche Smart-Money-Aktivität)", ""]
+    lines = ["🐋 Whale-Radar – auffälliges Volumen (mögliche Smart-Money-Aktivität)", ""]
     for s in scan.signals:
-        icon = {"Akkumulation": "+", "Distribution": "-", "neutral": "•"}[s.direction]
+        icon = {"Akkumulation": "🟢", "Distribution": "🔴", "neutral": "⚪"}[s.direction]
         lines.append(f"{icon} {s.ticker} ({s.asset_class}) · {s.rel_volume:.1f}× Volumen · "
                      f"{s.price_change:+.1%} · {s.direction}")
-    lines.append("\nAkkumulation = Volumen + steigender Kurs · "
-                 "Distribution = Volumen + fallender Kurs")
-    lines.append("Fußabdruck im Volumen, keine Garantie. Keine Anlageberatung.")
+    lines.append("\n🟢 Akkumulation = Volumen + steigender Kurs · "
+                 "🔴 Distribution = Volumen + fallender Kurs")
+    lines.append("ℹ️ Fußabdruck im Volumen, keine Garantie. Keine Anlageberatung.")
     return "\n".join(lines)

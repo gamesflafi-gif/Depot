@@ -205,18 +205,18 @@ def caution_for(lessons: list, feats: dict) -> list[str]:
 
 def render_weakspots(w: WeakSpots) -> str:
     if w.n < 50:
-        return ("Schwachstellen-Analyse: noch zu wenig Daten "
+        return ("🔍 Schwachstellen-Analyse: noch zu wenig Daten "
                 "(Universum/Historie prüfen).")
-    lines = [f"Schwachstellen-Analyse ({w.n} Prognosen, "
+    lines = [f"🔍 Schwachstellen-Analyse ({w.n} Prognosen, "
              f"Basisrate {w.base_rate:.0%})",
              "Trefferquote der Kaufsignale je Bedingung (niedrig = Schwachstelle):"]
     for s in w.segments:
-        flag = "" if s["gap"] < -0.03 else ("" if s["gap"] > 0.03 else "  ")
+        flag = "⚠️" if s["gap"] < -0.03 else ("✅" if s["gap"] > 0.03 else "  ")
         lines.append(f"  {flag} {s['dim']:24s} {s['group']:26s} "
                      f"{s['hit']:.0%} (n={s['count']}, {s['gap']:+.0%} vs Basis)")
     worst = w.segments[0] if w.segments else None
     if worst and worst["gap"] < -0.03:
         lines.append(f"\n→ Größte Schwäche: „{worst['group']}\" – hier liegt die KI "
                      f"{abs(worst['gap']):.0%} unter der Basisrate.")
-    lines.append("\nKeine Anlageberatung.")
+    lines.append("\nℹ️ Keine Anlageberatung.")
     return "\n".join(lines)

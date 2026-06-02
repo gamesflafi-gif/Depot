@@ -86,12 +86,12 @@ def check_alerts(cfg: Config, move_pct: float = 3.0, save_state: bool = True) ->
 
 
 def render_alerts(res: AlertResult) -> str:
-    lines = [f"Live-Alerts ({res.timestamp})"]
+    lines = [f"🚨 Live-Alerts ({res.timestamp})"]
     if not res.moves:
         return ""  # nichts zu melden
     for t, price, since, day in res.moves:
-        arrow = "↑" if since >= 0 else "↓"
+        arrow = "📈" if since >= 0 else "📉"
         lines.append(f"{arrow} {t}: {price:.2f}  ({since:+.1f}% seit letztem Check, "
                      f"{day:+.1f}% heute)")
-    lines.append("\nKeine Anlageberatung.")
+    lines.append("\nℹ️ Keine Anlageberatung.")
     return "\n".join(lines)
