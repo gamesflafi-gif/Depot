@@ -44,6 +44,8 @@ _HELP = (
     "\n"
     "💶 Geld\n"
     "  /sparplan [€]  Sparplan-Vorschlag (Standard 100€)\n"
+    "  /depot         dein Depot: G/V + KI-Bewertung\n"
+    "  /depot add NVDA 10 850   Position eintragen\n"
     "\n"
     "🔍 Selbstkontrolle der KI\n"
     "  /track         traf die KI live richtig?\n"
@@ -83,6 +85,26 @@ def handle_command(cfg: Config, text: str) -> str:
     if cmd in ("health", "check", "selbstcheck"):
         from stockai import health as hl
         return hl.render_health(hl.assess_health(cfg, record=False))
+
+    if cmd in ("depot", "portfolio", "wallet"):
+        from stockai import holdings as hd
+        sub = (parts[1].lower() if len(parts) > 1 else "")
+        if sub == "add":
+            try:
+                tkr, qty, price = parts[2], float(parts[3]), float(parts[4])
+            except (IndexError, ValueError):
+                return "Nutzung: /depot add TICKER STÜCK KAUFKURS\nz.B. /depot add NVDA 10 850"
+            hd.add_holding(cfg, tkr, qty, price)
+            return f"✔ {tkr.upper()} hinzugefügt ({qty:g} @ {price:.2f}).\nSchau mit /depot"
+        if sub in ("remove", "del", "delete"):
+            if len(parts) < 3:
+                return "Nutzung: /depot remove TICKER"
+            ok = hd.remove_holding(cfg, parts[2])
+            return (f"✔ {parts[2].upper()} entfernt." if ok else "Position nicht gefunden.")
+        if sub == "clear":
+            hd.save_holdings(cfg, [])
+            return "✔ Depot geleert."
+        return hd.render_depot(hd.build_depot_report(cfg))
 
     if cmd in ("weakspots", "schwachstellen", "schwaechen"):
         from stockai import weakspots as ws
