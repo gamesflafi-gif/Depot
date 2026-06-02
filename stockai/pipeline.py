@@ -445,6 +445,45 @@ def _combined_training_data(cfg: Config) -> pd.DataFrame:
     return combined
 
 
+def active_features(cfg: Config) -> list[str]:
+    """Aktive Feature-Liste: von 'evolve' ausgewählte Teilmenge oder alle.
+
+    Die gespeicherte Auswahl wird mit den aktuell verfügbaren FEATURE_COLUMNS
+    geschnitten (falls sich der Code geändert hat)."""
+    sel = ModelStore(cfg.model_dir).load_selected_features()
+    if sel:
+        keep = [f for f in sel if f in FEATURE_COLUMNS]
+        if len(keep) >= 5:
+            return keep
+    return FEATURE_COLUMNS
+
+
+def select_features(data: pd.DataFrame, model_type: str, random_state: int,
+                    horizon: int) -> tuple[list[str], float, float]:
+    """Wählt anhand der Permutation-Wichtigkeit eine schlanke Feature-Teilmenge.
+
+    Returns (ausgewählte_features, CV-AUC_voll, CV-AUC_ausgewählt). Wenn die
+    Auswahl nicht hilft, wird die volle Liste zurückgegeben.
+    """
+    full = FEATURE_COLUMNS
+    probe = Predictor(full, model_type=model_type, random_state=random_state)
+    res = probe.train(data, target_col="target")
+    imp = res.feature_importance or {}
+    if not imp:
+        return full, float("nan"), float("nan")
+    ranked = sorted(imp.items(), key=lambda kv: kv[1], reverse=True)
+    selected = [f for f, v in ranked if v > 0.005]
+    if len(selected) < 8:
+        selected = [f for f, _ in ranked[:8]]
+    selected = [f for f in full if f in selected]   # Reihenfolge beibehalten
+    if not selected or len(selected) >= len(full):
+        return full, float("nan"), float("nan")
+    full_auc = probe.cross_validate(data, purge_dates=horizon).get("cv_roc_auc_mean", float("nan"))
+    sel_auc = Predictor(selected, model_type=model_type, random_state=random_state) \
+        .cross_validate(data, purge_dates=horizon).get("cv_roc_auc_mean", float("nan"))
+    return selected, full_auc, sel_auc
+
+
 def resolve_model_type(
     cfg: Config, data: pd.DataFrame, feature_names: list[str] | None = None
 ) -> tuple[str, list | None]:
@@ -482,8 +521,9 @@ def train(cfg: Config) -> TrainResult:
     model_store = ModelStore(cfg.model_dir)
     # Getunte Hyperparameter anwenden, sofern vorhanden (siehe 'tune')
     tuned = model_store.load_tuned_params(model_type)
+    feats = active_features(cfg)
     predictor = Predictor(
-        feature_names=FEATURE_COLUMNS,
+        feature_names=feats,
         model_type=model_type,
         random_state=random_state,
         calibrate=bool(cfg.model.get("calibrate", False)),

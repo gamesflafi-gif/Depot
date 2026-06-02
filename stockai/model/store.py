@@ -92,6 +92,30 @@ class ModelStore:
         except Exception:
             return None
 
+    # --- ausgewählte Features (von 'evolve' bestimmt) ------------------- #
+    @property
+    def features_path(self) -> Path:
+        return self.model_dir / "selected_features.json"
+
+    def save_selected_features(self, features: list[str]) -> None:
+        with open(self.features_path, "w", encoding="utf-8") as fh:
+            json.dump({"features": list(features)}, fh, indent=2)
+
+    def clear_selected_features(self) -> None:
+        try:
+            self.features_path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def load_selected_features(self) -> list[str] | None:
+        if not self.features_path.exists():
+            return None
+        try:
+            feats = json.load(open(self.features_path, encoding="utf-8")).get("features")
+            return feats or None
+        except Exception:
+            return None
+
     def load_model(self) -> Predictor | None:
         if self.model_path.exists():
             return joblib.load(self.model_path)
