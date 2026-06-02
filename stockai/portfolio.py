@@ -31,12 +31,19 @@ class Portfolio:
 
 
 def _regime_exposure(analyses) -> float:
-    """Investitionsgrad je Marktlage: 1.0 (bullisch) … 0.4 (tiefer Abschwung)."""
+    """Investitionsgrad je Marktlage – **sanfte** Crash-Versicherung.
+
+    Greift nur in klaren Abschwüngen (Ø 5T-Momentum < −2 %) und reduziert dann
+    moderat (Untergrenze 60 %). In normalen/steigenden Märkten = voll investiert
+    (1.0), weil eine Bremse dort nachweislich Rendite kostet.
+    """
     if not analyses:
         return 1.0
     import statistics
     mom = statistics.mean(getattr(a, "momentum_5d", 0.0) for a in analyses)
-    return min(1.0, max(0.4, 1.0 + 20.0 * mom))
+    if mom >= -0.02:
+        return 1.0
+    return min(1.0, max(0.6, 1.0 + 20.0 * (mom + 0.02)))
 
 
 def build_portfolio(

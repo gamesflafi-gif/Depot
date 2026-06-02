@@ -136,7 +136,7 @@ def run_strategy_backtest(
     initial_capital: float = 1.0,
     retrain_every: int = 1,
     cost_bps: float = 10.0,
-    regime_filter: bool = True,
+    regime_filter: bool = False,
 ) -> StrategyResult:
     """Führt den Walk-Forward-Strategie-Backtest aus.
 
