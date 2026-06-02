@@ -41,6 +41,7 @@ _HELP = (
     "📊 Analyse\n"
     "  /analyse SYM   Einzelanalyse (z.B. /analyse NVDA)\n"
     "  /chart SYM     Kurs-Chart mit Signalen als Bild\n"
+    "  /news SYM      Schlagzeilen + Stimmung zum Wert\n"
     "  /live SYM      aktueller Live-Kurs\n"
     "  /briefing      aktuelles Briefing mit Bewegungen\n"
     "  /top [n]       Top-n Chancen & Risiken\n"
@@ -143,6 +144,30 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         return _HELP
     if cmd == "start":
         return _welcome(cfg, user)
+    if cmd in ("news", "nachrichten", "schlagzeilen"):
+        if not arg:
+            return "Bitte ein Symbol angeben, z.B. /news NVDA"
+        from stockai import pipeline
+        sym = arg.upper()
+        res = pipeline.analyze(cfg, universe_override=[sym], use_cache=cached)
+        if not res:
+            return f"Keine Daten für {sym} gefunden."
+        a = res[0]
+        heads = a.top_headlines or []
+        if not heads:
+            return (f"📰 {sym}: aktuell keine ausgewerteten Schlagzeilen "
+                    f"(Stimmung {a.sentiment_mean:+.2f}).\n"
+                    "News fließen täglich ins Lernen ein.")
+        lines = [f"📰 News zu {sym} · Gesamt-Stimmung {a.sentiment_mean:+.2f} "
+                 f"({a.news_count} Meldungen)", ""]
+        for h in heads:
+            s = float(h.get("sentiment", 0.0))
+            mark = "🟢" if s > 0.05 else ("🔴" if s < -0.05 else "⚪")
+            src = f" ({h['source']})" if h.get("source") else ""
+            lines.append(f"{mark} {s:+.2f}  {h.get('title', '')[:140]}{src}")
+        lines.append("\nℹ️ Keine Anlageberatung.")
+        return "\n".join(lines)
+
     if cmd in ("menu", "menü", "uebersicht", "übersicht"):
         return _personal_overview(cfg, user)
 
@@ -343,7 +368,8 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
                 + f"RSI: {a.rsi_14:.0f}  ·  News-Stimmung: {a.sentiment_mean:+.2f}\n"
                 + f"Timing: {a.timing}\n\n"
                 + render_conviction(a)
-                + f"\n\n📈 Chart: /chart {a.ticker}\nℹ️ Keine Anlageberatung.")
+                + f"\n\n📈 Chart: /chart {a.ticker}  ·  📰 News: /news {a.ticker}"
+                + "\nℹ️ Keine Anlageberatung.")
 
     return "Unbekannter Befehl. /help zeigt die Übersicht."
 
