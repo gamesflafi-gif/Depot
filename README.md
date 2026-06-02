@@ -144,6 +144,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
   eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
   antwortet der Bot allen (nicht empfohlen).
+- **Geführtes Onboarding:** Beim ersten `/start` (oder `/setup`) bekommen neue
+  Nutzer einen kurzen, geführten Einstieg mit **antippbaren Risiko-Buttons**
+  (defensiv/ausgewogen/offensiv) und den nächsten Schritten (Depot anlegen,
+  Chancen ansehen) – statt gleich der vollen Befehlsliste.
 - **Polierter Bot:** beim Start setzt der Bot automatisch das **Telegram-
   Befehlsmenü** (die „/"-Vorschläge) sowie Kurz-/Langbeschreibung über die API.
   Ein **Profilbild/Logo** erzeugt `logo` (`python -m stockai.cli logo`) – hochladen

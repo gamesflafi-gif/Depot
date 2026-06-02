@@ -643,6 +643,28 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_onboarding(tmp_path):
+    """Geführtes Onboarding: Text + Risiko-Buttons; nach Wahl nicht mehr 'neu'."""
+    import json
+    from stockai import telegram_bot as tb, users
+    from stockai.notify import onboarding_markup
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+
+    txt = tb._onboarding_text(cfg, "1")
+    assert "Willkommen" in txt and "Risiko-Profil" in txt
+    cbs = [b["callback_data"] for row in json.loads(onboarding_markup())["inline_keyboard"]
+           for b in row]
+    assert "/risiko defensiv" in cbs and "/menu" in cbs
+
+    assert "risk" not in users.load_prefs(cfg, "1")          # anfangs neu
+    tb.handle_command(cfg, "/risiko offensiv", user="1")     # Button-Auswahl
+    assert users.get_risk(cfg, "1") == "offensiv"            # gesetzt -> onboarded
+
+
 def test_bot_logo_and_commands():
     """Logo ist ein gültiges PNG; das Befehlsmenü ist wohlgeformt."""
     from stockai import charts
