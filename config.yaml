@@ -42,6 +42,20 @@ tickers:
   - KO     # Coca-Cola
   - DIS    # Disney
   - BA     # Boeing
+  - PG     # Procter & Gamble
+  - PEP    # PepsiCo
+  - COST   # Costco
+  - MCD    # McDonald's
+  - NKE    # Nike
+  - HD     # Home Depot
+  - UNH    # UnitedHealth
+  - PFE    # Pfizer
+  - CVX    # Chevron
+  - BAC    # Bank of America
+  - T      # AT&T
+  - CSCO   # Cisco
+  - TXN    # Texas Instruments
+  - IBM    # IBM
 
 # Branchen-Zuordnung (für Sektor-Diversifikation im Portfolio/Sparplan).
 # Nicht zugeordnete Ticker zählen als "Sonstige".
@@ -70,6 +84,20 @@ sectors:
   KO: ConsumerStaples
   DIS: Communication
   BA: Industrials
+  PG: ConsumerStaples
+  PEP: ConsumerStaples
+  COST: ConsumerStaples
+  MCD: ConsumerDiscretionary
+  NKE: ConsumerDiscretionary
+  HD: ConsumerDiscretionary
+  UNH: Healthcare
+  PFE: Healthcare
+  CVX: Energy
+  BAC: Financials
+  T: Communication
+  CSCO: Tech
+  TXN: Tech
+  IBM: Tech
 
 # ETFs/Fonds für den "Core" des Sparplans (breiter gestreut, geringeres Risiko).
 # US-Symbole sind über Stooq zuverlässig abrufbar. Für Xetra (z.B. VWCE.DE,
