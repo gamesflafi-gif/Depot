@@ -100,6 +100,21 @@ def _personal_overview(cfg: Config, user: str | None) -> str:
     return "\n".join(lines)
 
 
+def _onboarding_text(cfg: Config, user: str | None) -> str:
+    """Kurzer, geführter Einstieg für neue Nutzer."""
+    from stockai import users
+    prefs = users.load_prefs(cfg, user)
+    name = prefs.get("name")
+    hi = f"🤖 Willkommen{', ' + name if name else ''}! In 10 Sekunden startklar."
+    return (f"{hi}\n\n"
+            "Ich bin deine selbstlernende KI für Aktien, ETFs & Krypto.\n\n"
+            "1️⃣ Wähle unten dein Risiko-Profil 👇\n"
+            "2️⃣ Lege dein Depot an:  /depot add NVDA 10 850\n"
+            "3️⃣ Sieh deine Chancen:  /chancen\n\n"
+            "Jederzeit: 🏠 /menu · alle Befehle: /help\n"
+            "ℹ️ Keine Anlageberatung.")
+
+
 def _welcome(cfg: Config, user: str | None) -> str:
     """Freundliche Begrüßung beim /start – persönlich und mit Überblick."""
     return ("🤖 Willkommen bei deiner Aktien-KI!\n"
@@ -445,6 +460,18 @@ def _reply(cfg: Config, token: str, chat_id: str, text: str) -> None:
     from stockai.notify import main_menu_markup
     parts = text.strip().split()
     cmd0 = parts[0].lstrip("/").split("@")[0].lower() if parts else ""
+
+    # Neue Nutzer: geführtes Onboarding mit Risiko-Auswahl-Buttons
+    if cmd0 in ("start", "setup"):
+        from stockai import users
+        from stockai.notify import onboarding_markup, main_menu_markup
+        is_new = "risk" not in users.load_prefs(cfg, chat_id) or cmd0 == "setup"
+        if is_new:
+            _send(token, chat_id, _onboarding_text(cfg, chat_id),
+                  keyboard=onboarding_markup())
+            return
+        _send(token, chat_id, _welcome(cfg, chat_id), keyboard=main_menu_markup())
+        return
 
     # Chart-Befehl liefert ein Bild statt Text
     if cmd0 in ("chart", "grafik", "verlauf"):

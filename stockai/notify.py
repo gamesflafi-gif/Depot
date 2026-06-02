@@ -55,6 +55,18 @@ def main_menu_markup() -> str:
     return json.dumps(kb)
 
 
+def onboarding_markup() -> str:
+    """Einsteiger-Tastatur: Risiko in einem Tipp wählen, dann weiter."""
+    kb = {"inline_keyboard": [
+        [{"text": "🛡️ Defensiv", "callback_data": "/risiko defensiv"},
+         {"text": "⚖️ Ausgewogen", "callback_data": "/risiko ausgewogen"},
+         {"text": "🔥 Offensiv", "callback_data": "/risiko offensiv"}],
+        [{"text": "🎯 Chancen ansehen", "callback_data": "/chancen"},
+         {"text": "🏠 Menü", "callback_data": "/menu"}],
+    ]}
+    return json.dumps(kb)
+
+
 def render_savings_plan(plan) -> str:
     """Erzeugt einen kompakten, sauber lesbaren Sparplan-Report (Telegram-tauglich)."""
     lines = [
