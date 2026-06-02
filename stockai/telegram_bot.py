@@ -42,6 +42,7 @@ _HELP = (
     "  /analyse SYM   Einzelanalyse (z.B. /analyse NVDA)\n"
     "  /chart SYM     Kurs-Chart mit Signalen als Bild\n"
     "  /news SYM      Schlagzeilen + Stimmung zum Wert\n"
+    "  /vergleich A B zwei Werte gegenüberstellen\n"
     "  /live SYM      aktueller Live-Kurs\n"
     "  /briefing      aktuelles Briefing mit Bewegungen\n"
     "  /top [n]       Top-n Chancen & Risiken\n"
@@ -144,6 +145,32 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         return _HELP
     if cmd == "start":
         return _welcome(cfg, user)
+    if cmd in ("vergleich", "vergleiche", "vs", "compare"):
+        if len(parts) < 3:
+            return "Bitte zwei Symbole angeben, z.B. /vergleich NVDA AMD"
+        from stockai import pipeline
+        s1, s2 = parts[1].upper(), parts[2].upper()
+        res = {a.ticker: a for a in
+               pipeline.analyze(cfg, universe_override=[s1, s2], use_cache=cached)}
+        a, b = res.get(s1), res.get(s2)
+        if not a or not b:
+            fehlt = ", ".join(t for t, x in ((s1, a), (s2, b)) if not x)
+            return f"Keine Daten für {fehlt}."
+
+        def block(x):
+            er = f"{x.expected_return:+.1%}" if x.expected_return is not None else "–"
+            return (f"{x.ticker} ({x.asset_class}) · {x.action}\n"
+                    f"  Conviction {x.conviction:.0f}/100 · Chance {x.profit_probability:.0%}\n"
+                    f"  erwartet {er} · RSI {x.rsi_14:.0f} · Stimmung {x.sentiment_mean:+.2f}")
+        if a.conviction > b.conviction:
+            verdict = f"→ Stärker: {a.ticker} (Conviction {a.conviction:.0f} vs {b.conviction:.0f})"
+        elif b.conviction > a.conviction:
+            verdict = f"→ Stärker: {b.ticker} (Conviction {b.conviction:.0f} vs {a.conviction:.0f})"
+        else:
+            verdict = "→ Beide gleichauf (gleiche Conviction)."
+        return (f"⚖️ Vergleich\n\n{block(a)}\n\n{block(b)}\n\n{verdict}\n"
+                "ℹ️ Keine Anlageberatung.")
+
     if cmd in ("news", "nachrichten", "schlagzeilen"):
         if not arg:
             return "Bitte ein Symbol angeben, z.B. /news NVDA"

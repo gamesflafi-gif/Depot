@@ -74,6 +74,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 
 ### Wie wird die Präzision maximiert – und ehrlich gemessen?
 
+- **Direktvergleich:** `/vergleich NVDA AMD` stellt zwei Werte gegenüber
+  (Conviction, Chance, erwartete Rendite, RSI, Stimmung) und kürt den stärkeren –
+  beantwortet die Alltagsfrage „welcher von beiden?".
 - **News transparent:** `/news NVDA` zeigt die **konkreten Schlagzeilen** hinter
   der Stimmung – je Meldung mit Sentiment-Wert und Quelle. So ist nachvollziehbar,
   *warum* die News-Stimmung positiv oder negativ ist (Erklärbarkeit statt Blackbox).
