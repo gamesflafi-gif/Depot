@@ -246,6 +246,49 @@ def cmd_track(cfg, args) -> None:
               ("gesendet ✔" if ok else "nicht gesendet"))
 
 
+def cmd_watch(cfg, args) -> None:
+    """Smarte bedingte Alerts: eigene Trigger setzen und prüfen."""
+    from stockai import watch as wt
+    from stockai import notify
+
+    action = getattr(args, "watch_action", None)
+    rest = getattr(args, "rest", None) or []
+
+    if action == "add":
+        w = wt.parse_spec(rest)
+        if not w:
+            print("Nutzung: watch add TICKER [rsi|vol|pct] <|> WERT\n"
+                  "z.B. watch add BTC-USD < 50000  ·  watch add NVDA rsi < 30")
+            return
+        wt.add_watch(cfg, w)
+        print(f"✔ Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} {w.value:g}")
+        return
+    if action == "remove":
+        try:
+            idx = int(rest[0])
+        except (IndexError, ValueError):
+            print("Nutzung: watch remove NUMMER (siehe 'watch')")
+            return
+        print("✔ entfernt." if wt.remove_watch(cfg, idx) else "Nummer nicht gefunden.")
+        return
+    if action == "clear":
+        wt.save_watches(cfg, [])
+        print("✔ Alle Alerts gelöscht.")
+        return
+    if action == "check":
+        msgs = wt.check_watches(cfg, fire=True)
+        if msgs:
+            text = "🔔 Alert ausgelöst!\n" + "\n".join(msgs) + "\n\nℹ️ Keine Anlageberatung."
+            print(text)
+            if getattr(args, "notify", False):
+                notify.notify(text)
+        else:
+            print("Keine Bedingung erreicht.")
+        return
+
+    print(wt.render_watches(cfg))
+
+
 def cmd_depot(cfg, args) -> None:
     """Eigenes Depot: Positionen verwalten und von der KI bewerten lassen."""
     from stockai import holdings as hd
@@ -832,6 +875,13 @@ def build_parser() -> argparse.ArgumentParser:
     phl.add_argument("--no-record", action="store_true",
                      help="nur anzeigen, keinen Messpunkt speichern")
 
+    pwt = sub.add_parser("watch", help="Smarte bedingte Alerts (z.B. BTC-USD < 50000)")
+    pwt.add_argument("watch_action", nargs="?",
+                     choices=["add", "remove", "clear", "check"],
+                     help="add/remove/clear/check (ohne Angabe: Alerts anzeigen)")
+    pwt.add_argument("rest", nargs="*", help="Bedingung, z.B. BTC-USD < 50000")
+    pwt.add_argument("--notify", action="store_true", help="Treffer per Telegram senden")
+
     pdp = sub.add_parser("depot", help="Eigenes Depot: Positionen + KI-Bewertung & G/V")
     pdp.add_argument("depot_action", nargs="?", choices=["add", "remove", "clear"],
                      help="add/remove/clear (ohne Angabe: Depot anzeigen)")
@@ -923,6 +973,7 @@ _COMMANDS = {
     "track": cmd_track,
     "health": cmd_health,
     "depot": cmd_depot,
+    "watch": cmd_watch,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,
