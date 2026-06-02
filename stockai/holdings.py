@@ -170,24 +170,24 @@ def depot_alert_text(cfg: Config, user: str | None = None) -> str | None:
     flagged = [p for p in rep.positions if p.sell_warning]
     if not flagged:
         return None
-    lines = ["🔔 Depot-Warnung: Die KI sieht Positionen kritisch"]
+    lines = ["Depot-Warnung: Die KI sieht Positionen kritisch"]
     for p in flagged:
-        lines.append(f"  ⚠️ {p.ticker}: {p.action} – G/V {p.pnl_pct:+.1%}  "
+        lines.append(f"  {p.ticker}: {p.action} – G/V {p.pnl_pct:+.1%}  "
                      f"(Chance {p.probability:.0%})")
-    lines.append("\nℹ️ Keine Anlageberatung.")
+    lines.append("\nKeine Anlageberatung.")
     return "\n".join(lines)
 
 
 def render_depot(rep: DepotReport) -> str:
     if not rep.positions:
-        return ("💼 Dein Depot ist leer.\n"
+        return ("Dein Depot ist leer.\n"
                 "Positionen hinzufügen: /depot add TICKER STÜCK KAUFKURS\n"
                 "z.B.  /depot add NVDA 10 850")
 
-    lines = ["💼 Dein Depot – KI-Bewertung & Gewinn/Verlust", ""]
+    lines = ["Dein Depot – KI-Bewertung & Gewinn/Verlust", ""]
     for p in rep.positions:
-        gv = "🟢" if p.pnl >= 0 else "🔴"
-        flag = "  ⚠️ KI: verkaufen/meiden" if p.sell_warning else ""
+        gv = "+" if p.pnl >= 0 else "-"
+        flag = "  (!) KI: verkaufen/meiden" if p.sell_warning else ""
         er = (f" · erwartet {p.expected_return:+.1%}"
               if p.expected_return is not None else "")
         chance = f"{p.probability:.0%}" if p.probability == p.probability else "–"
@@ -198,10 +198,10 @@ def render_depot(rep: DepotReport) -> str:
             f"   KI: {p.action} · Chance {chance}{er}{flag}"
         )
     lines.append("")
-    sign = "🟢" if rep.total_pnl >= 0 else "🔴"
+    sign = "+" if rep.total_pnl >= 0 else "-"
     lines.append(f"{sign} Gesamt: Wert {rep.total_value:.2f} · "
                  f"G/V {rep.total_pnl:+.2f} ({rep.total_pnl_pct:+.1%})")
     if any(p.sell_warning for p in rep.positions):
-        lines.append("\n⚠️ Bei markierten Positionen ist die KI nicht mehr bullisch.")
-    lines.append("\nℹ️ Keine Anlageberatung.")
+        lines.append("\nBei markierten Positionen ist die KI nicht mehr bullisch.")
+    lines.append("\nKeine Anlageberatung.")
     return "\n".join(lines)

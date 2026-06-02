@@ -93,7 +93,7 @@ def price_chart(cfg: Config, ticker: str, days: int = 140) -> tuple[bytes, str] 
             a = res[0]
             title_verdict = (f"{a.action}  ·  Conviction {a.conviction:.0f}  ·  "
                              f"Chance {a.profit_probability:.0%}")
-            verdict = (f"{a.action} · 🎯 {a.conviction:.0f} · "
+            verdict = (f"{a.action} · Conv {a.conviction:.0f} · "
                        f"Chance {a.profit_probability:.0%}")
     except Exception:
         pass
@@ -132,8 +132,8 @@ def price_chart(cfg: Config, ticker: str, days: int = 140) -> tuple[bytes, str] 
     buf.seek(0)
 
     last = float(close.iloc[-1])
-    caption = (f"📈 {ticker} – {last:.2f}\n"
+    caption = (f"{ticker} – {last:.2f}\n"
                + (verdict + "\n" if verdict else "")
                + "▲ Kaufsignal / ▼ Verkaufssignal = SMA20×SMA50-Kreuzung.\n"
-               "ℹ️ Keine Anlageberatung.")
+               "Keine Anlageberatung.")
     return buf.getvalue(), caption

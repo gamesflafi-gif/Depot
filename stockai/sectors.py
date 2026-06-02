@@ -58,21 +58,21 @@ def sector_rotation(cfg: Config, analyses=None, use_cache: bool = False) -> list
 
 def render_sectors(stats: list[SectorStat]) -> str:
     if not stats:
-        return "🧭 Sektor-Rotation: noch keine Daten (Universum/Sektoren prüfen)."
-    lines = ["🧭 Sektor-Rotation – wohin fließt das Geld", ""]
+        return "Sektor-Rotation: noch keine Daten (Universum/Sektoren prüfen)."
+    lines = ["Sektor-Rotation – wohin fließt das Geld", ""]
     for i, s in enumerate(stats):
         if i == 0:
-            mark = "🥇"
+            mark = "›"            # Branchen-Leader
         elif i == len(stats) - 1 and len(stats) > 2:
-            mark = "🐌"
+            mark = "·"            # Schlusslicht
         else:
-            mark = "  "
+            mark = " "
         lines.append(
-            f"{mark} {s.sector:18s} 🎯 {s.mean_conviction:4.0f} · "
+            f"{mark} {s.sector:18s} Conv {s.mean_conviction:4.0f} · "
             f"Mom {s.mean_momentum:+.1%} · {s.pct_bullish:.0%} bullisch · "
             f"Top: {s.top_ticker}")
     lead = stats[0]
     lines.append(f"\n→ Stärkste Branche: {lead.sector} (Top-Wert {lead.top_ticker}, "
-                 f"🎯 {lead.top_conviction:.0f}).")
-    lines.append("ℹ️ Keine Anlageberatung.")
+                 f"Conv {lead.top_conviction:.0f}).")
+    lines.append("Keine Anlageberatung.")
     return "\n".join(lines)

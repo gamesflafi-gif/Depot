@@ -34,7 +34,7 @@ def cmd_train(cfg, args) -> None:
     model = ModelStore(cfg.model_dir).load_model()
     mtype = model.model_type if model else cfg.model.get("type")
     calib = " (kalibriert)" if model and model.calibrate else ""
-    print(f"\n✔ Training abgeschlossen ({result.n_train} Train / {result.n_test} Test)")
+    print(f"\nTraining abgeschlossen ({result.n_train} Train / {result.n_test} Test)")
     print(f"  Gewähltes Modell: {mtype}{calib}")
     cv = result.cv_metrics
     if cv:
@@ -64,7 +64,7 @@ def cmd_compare(cfg, args) -> None:
     for r in rows:
         auc = r.get("auc", float("nan"))
         print(f"  {r['interval']:12s}{r['n']:9d}{auc:9.3f}{r.get('acc', float('nan')):9.3f}"
-              + ("  ⚠ " + r["error"][:40] if r.get("error") else ""))
+              + ("  " + r["error"][:40] if r.get("error") else ""))
         if auc == auc:
             valid.append((r["interval"], auc))
     if len(valid) >= 2:
@@ -108,7 +108,7 @@ def cmd_alerts(cfg, args) -> None:
     if args.notify:
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_monitor(cfg, args) -> None:
@@ -228,7 +228,7 @@ def cmd_tune(cfg, args) -> None:
     for k, v in res.best_params.items():
         print(f"    {k}: {v}")
     ModelStore(cfg.model_dir).save_tuned_params(model_type, res.best_params, res.best_score)
-    print("\n  ✔ Gespeichert – werden beim nächsten 'train' automatisch angewandt.")
+    print("\n  Gespeichert – werden beim nächsten 'train' automatisch angewandt.")
 
 
 def cmd_weakspots(cfg, args) -> None:
@@ -243,12 +243,12 @@ def cmd_weakspots(cfg, args) -> None:
     print(report)
     if getattr(args, "save", False):
         n = ws.save_lessons(cfg, w)
-        print(f"\n  💾 {n} Lektion(en) gespeichert – fließen ab sofort in die "
+        print(f"\n  {n} Lektion(en) gespeichert – fließen ab sofort in die "
               "täglichen Empfehlungen ein.")
     if getattr(args, "notify", False):
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_track(cfg, args) -> None:
@@ -262,7 +262,7 @@ def cmd_track(cfg, args) -> None:
     if args.notify:
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_watch(cfg, args) -> None:
@@ -280,7 +280,7 @@ def cmd_watch(cfg, args) -> None:
                   "z.B. watch add BTC-USD < 50000  ·  watch add NVDA rsi < 30")
             return
         wt.add_watch(cfg, w)
-        print(f"✔ Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} {w.value:g}")
+        print(f"Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} {w.value:g}")
         return
     if action == "remove":
         try:
@@ -288,11 +288,11 @@ def cmd_watch(cfg, args) -> None:
         except (IndexError, ValueError):
             print("Nutzung: watch remove NUMMER (siehe 'watch')")
             return
-        print("✔ entfernt." if wt.remove_watch(cfg, idx) else "Nummer nicht gefunden.")
+        print("entfernt." if wt.remove_watch(cfg, idx) else "Nummer nicht gefunden.")
         return
     if action == "clear":
         wt.save_watches(cfg, [])
-        print("✔ Alle Alerts gelöscht.")
+        print("Alle Alerts gelöscht.")
         return
     if action == "check":
         # --all-users: jede Person bekommt nur ihre eigenen, frisch erreichten Alerts.
@@ -301,15 +301,15 @@ def cmd_watch(cfg, args) -> None:
             for u in users.all_users(cfg):
                 msgs = wt.check_watches(cfg, fire=True, user=u)
                 if msgs:
-                    text = "🔔 Alert ausgelöst!\n" + "\n".join(msgs) + \
-                           "\n\nℹ️ Keine Anlageberatung."
+                    text = "Alert ausgelöst!\n" + "\n".join(msgs) + \
+                           "\n\nKeine Anlageberatung."
                     print(f"[{u}]\n{text}")
                     notify.send_telegram(text, chat_id=u,
                                          reply_markup=notify.main_menu_markup())
             return
         msgs = wt.check_watches(cfg, fire=True)
         if msgs:
-            text = "🔔 Alert ausgelöst!\n" + "\n".join(msgs) + "\n\nℹ️ Keine Anlageberatung."
+            text = "Alert ausgelöst!\n" + "\n".join(msgs) + "\n\nKeine Anlageberatung."
             print(text)
             if getattr(args, "notify", False):
                 notify.notify(text)
@@ -362,7 +362,7 @@ def cmd_chart(cfg, args) -> None:
     print(f"Chart gespeichert: {path}")
     if getattr(args, "notify", False):
         ok = notify.send_telegram_photo(png, caption, reply_markup=notify.main_menu_markup())
-        print("Per Telegram gesendet ✔" if ok else "Nicht gesendet (Kanal/Netz prüfen).")
+        print("Per Telegram gesendet " if ok else "Nicht gesendet (Kanal/Netz prüfen).")
 
 
 def cmd_sectors(cfg, args) -> None:
@@ -376,7 +376,7 @@ def cmd_sectors(cfg, args) -> None:
     if getattr(args, "notify", False):
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_whales(cfg, args) -> None:
@@ -399,7 +399,7 @@ def cmd_whales(cfg, args) -> None:
     if getattr(args, "notify", False):
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_depot(cfg, args) -> None:
@@ -413,15 +413,15 @@ def cmd_depot(cfg, args) -> None:
             print("Nutzung: depot add TICKER STÜCK KAUFKURS  (z.B. depot add NVDA 10 850)")
             return
         hd.add_holding(cfg, args.ticker, args.qty, args.price)
-        print(f"✔ {args.ticker.upper()} hinzugefügt ({args.qty:g} @ {args.price:.2f}).")
+        print(f"{args.ticker.upper()} hinzugefügt ({args.qty:g} @ {args.price:.2f}).")
         return
     if action == "remove":
         ok = hd.remove_holding(cfg, args.ticker or "")
-        print(f"✔ {args.ticker.upper()} entfernt." if ok else "Position nicht gefunden.")
+        print(f"{args.ticker.upper()} entfernt." if ok else "Position nicht gefunden.")
         return
     if action == "clear":
         hd.save_holdings(cfg, [])
-        print("✔ Depot geleert.")
+        print("Depot geleert.")
         return
 
     if getattr(args, "alert_only", False):
@@ -450,7 +450,7 @@ def cmd_depot(cfg, args) -> None:
     if getattr(args, "notify", False):
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_health(cfg, args) -> None:
@@ -465,7 +465,7 @@ def cmd_health(cfg, args) -> None:
     if args.notify or rep.warnings:
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet"))
+              ("gesendet " if ok else "nicht gesendet"))
 
 
 def cmd_scorecard(cfg, args) -> None:
@@ -611,7 +611,7 @@ def cmd_analyze(cfg, args) -> None:
     selling = [r for r in results if r.action == "VERKAUFEN"]
 
     if booming:
-        print("\n🚀 Boom-/Kauf-Kandidaten (wohin das Geld tendiert):")
+        print("\nBoom-/Kauf-Kandidaten (wohin das Geld tendiert):")
         for r in booming:
             print(f"\n  {r.ticker}  [{r.action}, Konfidenz {r.confidence:.0%}]")
             if r.horizon_probs:
@@ -622,7 +622,7 @@ def cmd_analyze(cfg, args) -> None:
                 print(f"      • {reason}")
 
     if selling:
-        print("\n💰 Verkaufs-/Gewinnmitnahme-Kandidaten:")
+        print("\nVerkaufs-/Gewinnmitnahme-Kandidaten:")
         for r in selling:
             print(f"\n  {r.ticker}  [VERKAUFEN, Konfidenz {r.confidence:.0%}]")
             print(f"    Timing: {r.timing}")
@@ -630,7 +630,7 @@ def cmd_analyze(cfg, args) -> None:
                 print(f"      • {reason}")
 
     if args.headlines:
-        print("\n📰 Wichtigste Schlagzeilen:")
+        print("\nWichtigste Schlagzeilen:")
         for r in results:
             if r.top_headlines:
                 print(f"\n  {r.ticker}:")
@@ -640,22 +640,22 @@ def cmd_analyze(cfg, args) -> None:
 
 def cmd_snapshot(cfg, args) -> None:
     n = pipeline.snapshot_live(cfg)
-    print(f"✔ {n} Snapshot-Zeilen in den Feature-Store geschrieben.")
+    print(f"{n} Snapshot-Zeilen in den Feature-Store geschrieben.")
 
 
 def cmd_label(cfg, args) -> None:
     n = pipeline.label_pending(cfg)
-    print(f"✔ {n} fällige Snapshots mit realer Rendite gelabelt.")
+    print(f"{n} fällige Snapshots mit realer Rendite gelabelt.")
 
 
 def cmd_learn(cfg, args) -> None:
     """Ein kompletter Lernzyklus: labeln, snapshotten, neu trainieren."""
     labeled = pipeline.label_pending(cfg)
     snap = pipeline.snapshot_live(cfg)
-    print(f"✔ {labeled} Zeilen gelabelt, {snap} neue Snapshots gesichert.")
+    print(f"{labeled} Zeilen gelabelt, {snap} neue Snapshots gesichert.")
     result = pipeline.train(cfg)
     auc = result.metrics.get("roc_auc", result.metrics.get("accuracy"))
-    print(f"✔ Neu trainiert – aktuelle Güte (AUC/Acc): {auc:.3f}")
+    print(f"Neu trainiert – aktuelle Güte (AUC/Acc): {auc:.3f}")
 
 
 def cmd_simulate(cfg, args) -> None:
@@ -770,7 +770,7 @@ def cmd_briefing(cfg, args) -> None:
     if args.notify:
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
+              ("gesendet " if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
 def cmd_evolve(cfg, args) -> None:
@@ -832,7 +832,7 @@ def cmd_evolve(cfg, args) -> None:
         "metrics": result.metrics, "cv_metrics": result.cv_metrics,
     })
     auc = result.metrics.get("roc_auc", result.metrics.get("accuracy"))
-    print(f"\n  ✔ Neu trainiert & übernommen (finale Güte ~{auc:.3f}).")
+    print(f"\n  Neu trainiert & übernommen (finale Güte ~{auc:.3f}).")
     print("  Die KI hat ihre Konfiguration selbst verbessert.")
 
     # Aus Fehlern lernen: Schwachstellen analysieren und als Lektionen sichern.
@@ -843,10 +843,10 @@ def cmd_evolve(cfg, args) -> None:
         w = ws.analyze_weakspots(cfg)
         n_lessons = ws.save_lessons(cfg, w)
         if n_lessons:
-            print(f"  🔍 {n_lessons} Schwachstelle(n) gelernt – Empfehlungen werden "
+            print(f"  {n_lessons} Schwachstelle(n) gelernt – Empfehlungen werden "
                   "dort jetzt vorsichtiger.")
         else:
-            print("  🔍 Keine systematischen Schwachstellen gefunden.")
+            print("  Keine systematischen Schwachstellen gefunden.")
     except Exception as exc:
         print(f"  (Schwachstellen-Analyse übersprungen: {exc})")
 
@@ -871,7 +871,7 @@ def cmd_top(cfg, args) -> None:
     if args.notify:
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
+              ("gesendet " if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
 def cmd_sparplan(cfg, args) -> None:
@@ -909,7 +909,7 @@ def cmd_sparplan(cfg, args) -> None:
         report = notify.render_savings_plan(plan)
         ok, channel = notify.notify(report)
         print(f"\n  Benachrichtigung ({channel}): " +
-              ("gesendet ✔" if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
+              ("gesendet " if ok else "nicht gesendet (Kanal/Netz prüfen, siehe 'doctor')"))
 
 
 def cmd_backtest(cfg, args) -> None:

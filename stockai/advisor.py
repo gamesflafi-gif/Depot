@@ -105,7 +105,7 @@ def recommend(
     weak = bool(weak_conditions)
     if weak:
         for w in weak_conditions:
-            reasons.append(f"⚠️ Schwachstelle gelernt – {w}")
+            reasons.append(f"Schwachstelle gelernt – {w}")
 
     if strong_signal and momentum_up and not_overheated and not er_negative:
         if positive_news:

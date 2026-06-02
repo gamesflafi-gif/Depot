@@ -74,9 +74,9 @@ def build_track_record(cfg: Config, prob_threshold: float = 0.55,
 
 
 def render_track_record(tr: TrackRecord) -> str:
-    title = "📒 Live-Track-Record (echte Prognosen vs. Ergebnis)"
+    title = "Live-Track-Record (echte Prognosen vs. Ergebnis)"
     if tr.scope:
-        title = f"📒 Track-Record · {tr.scope} (echte Prognosen vs. Ergebnis)"
+        title = f"Track-Record · {tr.scope} (echte Prognosen vs. Ergebnis)"
     lines = [title]
     if tr.n_labeled < 5:
         extra = f" für {tr.scope}" if tr.scope else ""

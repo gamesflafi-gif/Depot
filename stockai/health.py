@@ -30,7 +30,7 @@ _MAX_OFFSET = 0.06    # max. Anhebung der Kaufschwelle (defensiv gedeckelt)
 
 @dataclass
 class HealthReport:
-    status: str = "🟡 zu wenig Daten"
+    status: str = "zu wenig Daten"
     source: str = ""              # "live" oder "modell"
     metric_name: str = ""         # "Accuracy" oder "AUC"
     current: float = float("nan")
@@ -140,16 +140,16 @@ def assess_health(cfg: Config, record: bool = True) -> HealthReport:
     if rep.previous == rep.previous:                 # nicht NaN
         delta = rep.current - rep.previous
         if delta <= -_DROP:
-            rep.status = "⚠️ schlechter"
+            rep.status = "schlechter"
             rep.warnings.append(
                 f"{rep.metric_name} fiel {abs(delta):.1%} (von {rep.previous:.1%} "
                 f"auf {rep.current:.1%}).")
         elif delta >= _GAIN:
-            rep.status = "📈 besser"
+            rep.status = "besser"
         else:
-            rep.status = "✅ stabil"
+            rep.status = "stabil"
     else:
-        rep.status = "✅ erster Messpunkt"
+        rep.status = "erster Messpunkt"
 
     # harte Warnungen (unabhängig vom Trend)
     if rep.source == "live":
@@ -163,7 +163,7 @@ def assess_health(cfg: Config, record: bool = True) -> HealthReport:
         rep.warnings.append("Modell-AUC unter 0.5 – schlechter als Zufall.")
 
     if rep.warnings:
-        rep.status = "⚠️ schlechter"
+        rep.status = "schlechter"
 
     # --- Automatisches Gegensteuern (Selbst-Regulierung) ------------------
     # Verschlechtert sich die KI, wird sie vorsichtiger (höhere Kaufschwelle);
@@ -171,7 +171,7 @@ def assess_health(cfg: Config, record: bool = True) -> HealthReport:
     rep.posture = load_posture(cfg)
     if rep.warnings:                                  # strenger werden
         new_off = min(_MAX_OFFSET, rep.posture + _STEP)
-    elif rep.status.startswith("📈") or (             # lockern, wenn wieder gut
+    elif rep.status.startswith("") or (             # lockern, wenn wieder gut
             rep.source == "live" and rep.base_rate == rep.base_rate
             and rep.current >= rep.base_rate):
         new_off = max(0.0, rep.posture - _STEP)
@@ -185,7 +185,7 @@ def assess_health(cfg: Config, record: bool = True) -> HealthReport:
 
 
 def render_health(rep: HealthReport) -> str:
-    lines = ["🩺 Selbstcheck der KI"]
+    lines = ["Selbstcheck der KI"]
     if rep.current != rep.current:                   # NaN
         lines.append("\nNoch keine Messung möglich – einfach weiterlaufen lassen.")
         for n in rep.notes:
@@ -198,7 +198,7 @@ def render_health(rep: HealthReport) -> str:
     lines.append(f"Quelle: {src}{extra}")
     cur = f"{rep.metric_name}: {rep.current:.1%}"
     if rep.previous == rep.previous:
-        arrow = "↗︎" if rep.current >= rep.previous else "↘︎"
+        arrow = "↗" if rep.current >= rep.previous else "↘"
         cur += f"  ({arrow} vorher {rep.previous:.1%})"
     lines.append(cur)
     if rep.base_rate == rep.base_rate:
@@ -209,18 +209,18 @@ def render_health(rep: HealthReport) -> str:
     if rep.warnings:
         lines.append("")
         for w in rep.warnings:
-            lines.append(f"⚠️ {w}")
+            lines.append(f"{w}")
 
     # Selbst-Regulierung transparent machen
     if rep.posture_change > 0:
-        lines.append(f"\n🛡️ Gegensteuern: Kaufschwelle wird strenger "
+        lines.append(f"\nGegensteuern: Kaufschwelle wird strenger "
                      f"(+{rep.posture:.0%} statt +{rep.posture - rep.posture_change:.0%}).")
     elif rep.posture_change < 0:
-        lines.append(f"\n🌤️ Erholung: Kaufschwelle wird gelockert "
+        lines.append(f"\nErholung: Kaufschwelle wird gelockert "
                      f"(jetzt +{rep.posture:.0%}).")
     elif rep.posture > 0:
-        lines.append(f"\n🛡️ Aktuell vorsichtiger: Kaufschwelle +{rep.posture:.0%} "
+        lines.append(f"\nAktuell vorsichtiger: Kaufschwelle +{rep.posture:.0%} "
                      "(bis sich die Treffsicherheit erholt).")
 
-    lines.append("\nℹ️ Keine Anlageberatung.")
+    lines.append("\nKeine Anlageberatung.")
     return "\n".join(lines)
