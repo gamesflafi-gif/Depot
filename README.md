@@ -157,8 +157,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   treffsicher die Empfehlungen je Aktion (BOOM/KAUFEN/VERKAUFEN …) waren und ob
   die Wahrscheinlichkeiten gut **kalibriert** sind (vorhergesagt ≈ tatsächlich).
 - **Schwachstellen-Analyse:** `weakspots` zeigt, **unter welchen Bedingungen**
-  (RSI-Zone, News-Sentiment, Marktlage) das Modell am häufigsten danebenliegt –
-  gezielte Selbstkritik für weiteres Nachbessern.
+  (RSI-Zone, News-Sentiment, Marktlage, **Momentum, Volatilität, Anlageklasse**)
+  das Modell am häufigsten danebenliegt – gezielte Selbstkritik für weiteres
+  Nachbessern. `--period 10y` analysiert eine lange Historie (mehr aus der
+  Vergangenheit lernen), `--save` übernimmt die Schwächen sofort als Lektionen.
 - **Selbstkorrektur (lernt aus Fehlern):** `evolve` speichert die erkannten
   Schwachstellen als „Lektionen". Die tägliche Empfehlung liest sie und wird in
   genau diesen Lagen **eine Stufe vorsichtiger** (BOOM→KAUFEN, KAUFEN→HALTEN) –

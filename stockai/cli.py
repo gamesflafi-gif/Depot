@@ -215,10 +215,21 @@ def cmd_tune(cfg, args) -> None:
 def cmd_weakspots(cfg, args) -> None:
     """Schwachstellen-Analyse: wo liegt das Modell am häufigsten daneben?"""
     from stockai import weakspots as ws
+    from stockai import notify
 
-    print("Analysiere Schwachstellen (Walk-Forward) …\n")
-    w = ws.analyze_weakspots(cfg)
-    print(ws.render_weakspots(w))
+    period = getattr(args, "period", None)
+    print(f"Analysiere Schwachstellen (Walk-Forward{', Historie ' + period if period else ''}) …\n")
+    w = ws.analyze_weakspots(cfg, period=period)
+    report = ws.render_weakspots(w)
+    print(report)
+    if getattr(args, "save", False):
+        n = ws.save_lessons(cfg, w)
+        print(f"\n  💾 {n} Lektion(en) gespeichert – fließen ab sofort in die "
+              "täglichen Empfehlungen ein.")
+    if getattr(args, "notify", False):
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
 
 
 def cmd_track(cfg, args) -> None:
@@ -765,7 +776,11 @@ def build_parser() -> argparse.ArgumentParser:
     psw.add_argument("--retrain-every", type=int, default=5)
     psw.add_argument("--train-frac", type=float, default=0.3)
 
-    sub.add_parser("weakspots", help="Schwachstellen-Analyse: wo liegt das Modell daneben?")
+    pws = sub.add_parser("weakspots", help="Schwachstellen-Analyse: wo liegt das Modell daneben?")
+    pws.add_argument("--period", default=None,
+                     help="längere Historie analysieren (z.B. 10y), mehr aus der Vergangenheit lernen")
+    pws.add_argument("--save", action="store_true", help="erkannte Schwächen als Lektionen speichern")
+    pws.add_argument("--notify", action="store_true", help="Report per Telegram senden")
 
     ptr = sub.add_parser("track", help="Live-Track-Record (echte Prognosen vs. Ergebnis)")
     ptr.add_argument("--threshold", type=float, default=0.55)
