@@ -268,6 +268,9 @@ class TickerAnalysis:
     confidence: float = 0.5
     reasons: list[str] = field(default_factory=list)
     timing: str = ""
+    rel_volume: float = 1.0
+    weak_segment: bool = False
+    conviction: float = float("nan")
 
 
 # --------------------------------------------------------------------------- #
@@ -754,28 +757,31 @@ def analyze(
             weak_conditions=weak_conditions,
             caution_offset=caution_offset,
         )
-        results.append(
-            TickerAnalysis(
-                ticker=ticker,
-                last_price=last_price,
-                profit_probability=proba,
-                asset_class=asset_class(cfg, ticker),
-                sentiment_mean=row.get("sent_mean", 0.0),
-                news_count=int(row.get("news_count", 0)),
-                rsi_14=row.get("rsi_14", 50.0),
-                momentum_5d=row.get("ret_5d", 0.0),
-                price_vs_high_20=row.get("price_vs_high_20", 1.0),
-                volatility=float(row.get("vol_20d", 0.02) or 0.02),
-                expected_return=expected_return,
-                horizon_probs=horizon_probs,
-                top_headlines=headlines,
-                signal=_signal(proba),
-                action=rec.action,
-                confidence=rec.confidence,
-                reasons=rec.reasons,
-                timing=rec.timing,
-            )
+        ta = TickerAnalysis(
+            ticker=ticker,
+            last_price=last_price,
+            profit_probability=proba,
+            asset_class=asset_class(cfg, ticker),
+            sentiment_mean=row.get("sent_mean", 0.0),
+            news_count=int(row.get("news_count", 0)),
+            rsi_14=row.get("rsi_14", 50.0),
+            momentum_5d=row.get("ret_5d", 0.0),
+            price_vs_high_20=row.get("price_vs_high_20", 1.0),
+            volatility=float(row.get("vol_20d", 0.02) or 0.02),
+            expected_return=expected_return,
+            horizon_probs=horizon_probs,
+            top_headlines=headlines,
+            signal=_signal(proba),
+            action=rec.action,
+            confidence=rec.confidence,
+            reasons=rec.reasons,
+            timing=rec.timing,
+            rel_volume=float(row.get("rel_volume", 1.0) or 1.0),
+            weak_segment=bool(weak_conditions),
         )
+        from stockai.conviction import compute_conviction
+        ta.conviction = compute_conviction(ta).score
+        results.append(ta)
 
     results.sort(key=lambda r: r.profit_probability, reverse=True)
     if use_cache:

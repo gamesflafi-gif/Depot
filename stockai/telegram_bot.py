@@ -136,6 +136,13 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
 
     if cmd in ("track", "trackrecord", "bilanz"):
         from stockai import track as tk
+        from stockai import holdings as hd
+        mine = [h.ticker for h in hd.load_holdings(cfg, user)]
+        if mine:                       # persönlich: nur deine Depot-Werte
+            tr = tk.build_track_record(cfg, tickers=mine, scope="deine Depot-Werte")
+            if tr.n_labeled >= 5:
+                return tk.render_track_record(tr)
+            # noch zu wenig persönliche Daten -> Gesamtbild zeigen
         return tk.render_track_record(tk.build_track_record(cfg))
 
     if cmd in ("health", "check", "selbstcheck"):
@@ -230,6 +237,7 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         if not res:
             return f"Keine Daten für {sym} gefunden."
         a = res[0]
+        from stockai.conviction import render_conviction
         er = f"{a.expected_return:+.1%}" if a.expected_return is not None else "–"
         hz = " · ".join(f"{h}T {p:.0%}" for h, p in sorted(a.horizon_probs.items()))
         q = get_quote(sym)
@@ -240,7 +248,8 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
                 + f"Gewinn-Chance: {a.profit_probability:.0%}  ·  erwartet: {er}\n"
                 + (f"Horizonte: {hz}\n" if hz else "")
                 + f"RSI: {a.rsi_14:.0f}  ·  News-Stimmung: {a.sentiment_mean:+.2f}\n"
-                f"Timing: {a.timing}\n\nℹ️ Keine Anlageberatung.")
+                + f"Timing: {a.timing}\n\n"
+                + render_conviction(a) + "\n\nℹ️ Keine Anlageberatung.")
 
     return "Unbekannter Befehl. /help zeigt die Übersicht."
 

@@ -74,6 +74,13 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 
 ### Wie wird die Präzision maximiert – und ehrlich gemessen?
 
+- **Conviction-Score:** bündelt **alle** Signale (Modell-Wahrscheinlichkeit,
+  Mehr-Horizont-Übereinstimmung, erwartete Rendite, News-Sentiment, Volumen-/
+  Whale-Bestätigung, Abzug bei gelernten Schwachstellen) zu **einer transparenten
+  Kennzahl 0–100** – die besten Chancen im Briefing werden danach gerankt, und
+  `/analyse` zeigt die Beiträge offen (erklärbar, kein Black-Box-Score).
+- **Persönlicher Track-Record:** `/track` zeigt – sobald genug gesammelt –, wie
+  gut die KI **auf genau deinen Depot-Werten** trifft (Beweis statt Behauptung).
 - **Viele Signale:** technische Indikatoren (Renditen über mehrere Horizonte,
   RSI, MACD inkl. Histogramm, gleitende Durchschnitte, Bollinger %B, ATR,
   Stochastik) plus **volumengewichtete „Smart-Money"-Signale** (relatives
