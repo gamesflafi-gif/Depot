@@ -643,6 +643,22 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_news_command(tmp_path):
+    """/news zeigt Schlagzeilen + Stimmung; ohne Symbol einen Hinweis."""
+    from stockai import telegram_bot as tb
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.tickers = ["AAPL"]; cfg.etfs = []; cfg.crypto = []
+    cfg.model = {"type": "logistic", "random_state": 42}
+    cfg.paths = {"store_dir": str(tmp_path / "s"), "model_dir": str(tmp_path / "m")}
+
+    assert "Symbol" in tb.handle_command(cfg, "/news", user="1")
+    out = tb.handle_command(cfg, "/news AAPL", user="1")
+    assert "AAPL" in out and "Stimmung" in out
+
+
 def test_onboarding(tmp_path):
     """Geführtes Onboarding: Text + Risiko-Buttons; nach Wahl nicht mehr 'neu'."""
     import json

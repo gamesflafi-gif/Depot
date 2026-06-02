@@ -74,6 +74,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 
 ### Wie wird die Präzision maximiert – und ehrlich gemessen?
 
+- **News transparent:** `/news NVDA` zeigt die **konkreten Schlagzeilen** hinter
+  der Stimmung – je Meldung mit Sentiment-Wert und Quelle. So ist nachvollziehbar,
+  *warum* die News-Stimmung positiv oder negativ ist (Erklärbarkeit statt Blackbox).
 - **Conviction-Score:** bündelt **alle** Signale (Modell-Wahrscheinlichkeit,
   Mehr-Horizont-Übereinstimmung, erwartete Rendite, News-Sentiment, Volumen-/
   Whale-Bestätigung, Abzug bei gelernten Schwachstellen) zu **einer transparenten
