@@ -28,13 +28,20 @@ class TrackRecord:
     calibration: list = field(default_factory=list)
     since: str = ""
     until: str = ""
+    scope: str = ""             # leer = gesamt, sonst z.B. "deine Depot-Werte"
 
 
-def build_track_record(cfg: Config, prob_threshold: float = 0.55) -> TrackRecord:
+def build_track_record(cfg: Config, prob_threshold: float = 0.55,
+                       tickers: list[str] | None = None,
+                       scope: str = "") -> TrackRecord:
     df = FeatureStore(cfg.store_dir).load()
-    tr = TrackRecord()
+    tr = TrackRecord(scope=scope)
     if df.empty or "pred_proba" not in df.columns or "target" not in df.columns:
         return tr
+    if tickers and "ticker" in df.columns:
+        df = df[df["ticker"].isin([t.upper() for t in tickers])]
+        if df.empty:
+            return tr
     tr.n_pending = int(df["target"].isna().sum())
     d = df.dropna(subset=["pred_proba", "target"])
     tr.n_labeled = int(len(d))
@@ -67,9 +74,13 @@ def build_track_record(cfg: Config, prob_threshold: float = 0.55) -> TrackRecord
 
 
 def render_track_record(tr: TrackRecord) -> str:
-    lines = ["📒 Live-Track-Record (echte Prognosen vs. Ergebnis)"]
+    title = "📒 Live-Track-Record (echte Prognosen vs. Ergebnis)"
+    if tr.scope:
+        title = f"📒 Track-Record · {tr.scope} (echte Prognosen vs. Ergebnis)"
+    lines = [title]
     if tr.n_labeled < 5:
-        lines.append(f"\nNoch zu wenig gesammelt: {tr.n_labeled} ausgewertet, "
+        extra = f" für {tr.scope}" if tr.scope else ""
+        lines.append(f"\nNoch zu wenig gesammelt{extra}: {tr.n_labeled} ausgewertet, "
                      f"{tr.n_pending} laufen noch.\nKommt mit der Zeit – einfach "
                      "weiterlaufen lassen.")
         return "\n".join(lines)

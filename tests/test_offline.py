@@ -643,6 +643,57 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_conviction_score():
+    """Conviction bündelt Signale transparent zu einer Kennzahl (0..100)."""
+    from stockai.conviction import compute_conviction, render_conviction
+    from stockai.pipeline import TickerAnalysis
+
+    strong = TickerAnalysis(
+        ticker="X", last_price=10, profit_probability=0.72, sentiment_mean=0.3,
+        news_count=3, expected_return=0.03, horizon_probs={1: 0.6, 5: 0.65, 20: 0.7},
+        momentum_5d=0.03, rel_volume=2.5)
+    weak = TickerAnalysis(
+        ticker="Y", last_price=10, profit_probability=0.5, sentiment_mean=-0.3,
+        news_count=3, expected_return=-0.02, horizon_probs={1: 0.45, 5: 0.4, 20: 0.48},
+        momentum_5d=-0.03, rel_volume=2.5, weak_segment=True)
+
+    cs, cw = compute_conviction(strong), compute_conviction(weak)
+    assert cs.score > 70 and cs.label in ("hoch", "sehr hoch")
+    assert cw.score < 40
+    assert 0 <= cs.score <= 100 and 0 <= cw.score <= 100
+    out = render_conviction(strong, cs)
+    assert "Conviction" in out and "Modell-Wahrscheinlichkeit" in out
+    # Volumen + steigender Kurs = positiver Beitrag, mit fallendem Kurs negativ
+    assert dict(cs.parts)["Volumen-Bestätigung"] > 0
+    assert dict(cw.parts)["Volumen-Bestätigung"] < 0
+
+
+def test_personal_track_record(tmp_path):
+    """Track-Record lässt sich auf die eigenen Depot-Werte einschränken."""
+    import numpy as np
+    import pandas as pd
+    from stockai import track
+    from stockai.config import load_config
+    from stockai.model.store import _FEATURE_STORE_FILE
+
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+    rng = np.random.default_rng(0)
+    rows = []
+    for tkr in ("NVDA", "TSLA"):
+        proba = rng.uniform(0, 1, 40)
+        target = (proba + rng.normal(0, 0.3, 40) > 0.5).astype(float)
+        rows.append(pd.DataFrame({"ticker": [tkr] * 40,
+                                  "date": pd.date_range("2026-01-01", periods=40).astype(str),
+                                  "pred_proba": proba, "target": target}))
+    pd.concat(rows).to_csv(tmp_path / _FEATURE_STORE_FILE, index=False)
+
+    full = track.build_track_record(cfg)
+    mine = track.build_track_record(cfg, tickers=["NVDA"], scope="deine Depot-Werte")
+    assert full.n_labeled == 80 and mine.n_labeled == 40   # gefiltert auf NVDA
+    assert "deine Depot-Werte" in track.render_track_record(mine)
+
+
 def test_analyze_cache(tmp_path):
     """Kurzzeit-Cache: zweiter Aufruf liefert dasselbe Ergebnis sofort; ohne
     Cache bzw. nach Leeren wird neu gerechnet."""

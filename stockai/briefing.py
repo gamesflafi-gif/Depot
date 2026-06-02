@@ -94,7 +94,11 @@ def build_briefing(cfg: Config, top_n: int = 5, use_cache: bool = False) -> Brie
     ts = _now_de().strftime("%d.%m.%Y, %H:%M Uhr")
     br = Briefing(timestamp=ts)
     br.regime = market_regime(analyses)
-    br.top_buys = [a for a in analyses if a.action in _BUY][:top_n]
+    # beste Chancen nach Conviction-Score ranken (bündelt alle Signale)
+    buys = [a for a in analyses if a.action in _BUY]
+    buys.sort(key=lambda a: (a.conviction if a.conviction == a.conviction else 0.0),
+              reverse=True)
+    br.top_buys = buys[:top_n]
     br.top_sells = [a for a in analyses if a.action in _SELL][:top_n]
 
     for a in analyses:
@@ -142,8 +146,10 @@ def render_briefing(br: Briefing, cfg: Config | None = None) -> str:
         for a in br.top_buys:
             er = (f"  ·  erwartet {a.expected_return:+.1%}"
                   if a.expected_return is not None else "")
+            conv = (f"  ·  🎯 {a.conviction:.0f}"
+                    if a.conviction == a.conviction else "")
             lines.append(f"  🟢 {a.ticker} ({_klass(a.asset_class)})  ·  "
-                         f"Chance {a.profit_probability:.0%}{er}")
+                         f"Chance {a.profit_probability:.0%}{er}{conv}")
     else:
         lines.append("  – aktuell keine klaren Kaufsignale")
 
