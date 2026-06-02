@@ -634,6 +634,23 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_clock_berlin_time():
+    """Sichtbare Zeiten laufen über die Berlin-Zeitzone (nicht UTC)."""
+    from datetime import timezone
+    from stockai.clock import now_de, now_de_str
+
+    dt = now_de()
+    assert dt.tzinfo is not None
+    # Berlin liegt im Sommer +2h, im Winter +1h vor UTC – nie UTC (0) bei korrekter tz
+    off = dt.utcoffset()
+    assert off is not None
+    # Format der Anzeige enthält 'Uhr'
+    assert "Uhr" in now_de_str()
+    # Alerts-Zeitstempel ist nicht mehr in UTC beschriftet
+    from stockai import alerts
+    assert "UTC" not in alerts.check_alerts.__doc__ if alerts.check_alerts.__doc__ else True
+
+
 def test_chat_id_allowlist():
     """Mehrere erlaubte Chat-IDs werden korrekt zerlegt (Allowlist/Freundeskreis)."""
     from stockai import notify

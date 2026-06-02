@@ -46,8 +46,9 @@ def check_alerts(cfg: Config, move_pct: float = 3.0) -> AlertResult:
     from stockai.data.live import get_quote
     from stockai import pipeline
 
+    from stockai.clock import now_de_str
     prev = _load(cfg)
-    res = AlertResult(timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    res = AlertResult(timestamp=now_de_str())
     current: dict = {}
     for t in pipeline.universe(cfg):
         q = get_quote(t)
