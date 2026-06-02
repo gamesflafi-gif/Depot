@@ -219,6 +219,8 @@ def test_briefing_and_moves(tmp_path):
     assert br1.has_changes is False          # erster Lauf: kein Vorzustand
     report = bf.render_briefing(br1, cfg)
     assert "Briefing" in report
+    # sauberes Telegram-Format: keine rohen Markdown-Zeichen
+    assert "**" not in report and "# " not in report and "_K" not in report
 
     # Vorzustand künstlich verändern -> zweiter Lauf muss Moves erkennen
     import json
@@ -376,7 +378,7 @@ def test_top_report(tmp_path):
     assert top[0].profit_probability >= top[-1].profit_probability
     assert top[0].profit_probability >= bottom[0].profit_probability
     report = bf.render_top(top, bottom, 3)
-    assert "Top 3 Chancen" in report and "Top 3 Risiken" in report
+    assert "TOP 3 CHANCEN" in report and "TOP 3 RISIKEN" in report
 
 
 def test_crypto_support():

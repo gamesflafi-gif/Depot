@@ -6,9 +6,13 @@ auf die in ``STOCKAI_TELEGRAM_CHAT_ID`` hinterlegte Chat-ID (deine eigene).
 
 Befehle:
     /analyse SYM   – Einzelanalyse eines Wertes (z.B. /analyse NVDA)
+    /live SYM      – aktueller Live-Kurs
     /briefing      – aktuelles Briefing mit Moves
     /top [n]       – Top-n Chancen und Risiken
+    /alerts        – starke Live-Bewegungen
     /sparplan [€]  – Sparplan-Vorschlag (Standard 100€)
+    /track         – Live-Track-Record: traf die KI richtig?
+    /weakspots     – Schwachstellen-Analyse: wo liegt die KI daneben?
     /help          – diese Übersicht
 """
 from __future__ import annotations
@@ -29,15 +33,25 @@ _CHAT_ENV = "STOCKAI_TELEGRAM_CHAT_ID"
 _TG_LIMIT = 3900
 
 _HELP = (
-    "🤖 Aktien-KI Bot – Befehle:\n"
-    "/analyse SYM – Einzelanalyse (z.B. /analyse NVDA)\n"
-    "/live SYM – aktueller Live-Kurs (Krypto frei, Aktien via Finnhub-Key)\n"
-    "/briefing – aktuelles Briefing mit Moves\n"
-    "/alerts – starke Live-Bewegungen\n"
-    "/top [n] – Top-n Chancen & Risiken\n"
-    "/sparplan [€] – Sparplan-Vorschlag\n"
-    "/help – diese Übersicht\n\n"
-    "_Keine Anlageberatung._"
+    "🤖 Aktien-KI Bot · deine Befehle\n"
+    "\n"
+    "📊 Analyse\n"
+    "  /analyse SYM   Einzelanalyse (z.B. /analyse NVDA)\n"
+    "  /live SYM      aktueller Live-Kurs\n"
+    "  /briefing      aktuelles Briefing mit Bewegungen\n"
+    "  /top [n]       Top-n Chancen & Risiken\n"
+    "  /alerts        starke Live-Bewegungen\n"
+    "\n"
+    "💶 Geld\n"
+    "  /sparplan [€]  Sparplan-Vorschlag (Standard 100€)\n"
+    "\n"
+    "🔍 Selbstkontrolle der KI\n"
+    "  /track         traf die KI live richtig?\n"
+    "  /weakspots     wo liegt die KI daneben?\n"
+    "\n"
+    "  /help          diese Übersicht\n"
+    "\n"
+    "ℹ️ Keine Anlageberatung."
 )
 
 
@@ -60,6 +74,14 @@ def handle_command(cfg: Config, text: str) -> str:
         from stockai import alerts as al
         res = al.check_alerts(cfg)
         return al.render_alerts(res) or "Aktuell keine starken Bewegungen."
+
+    if cmd in ("track", "trackrecord", "bilanz"):
+        from stockai import track as tk
+        return tk.render_track_record(tk.build_track_record(cfg))
+
+    if cmd in ("weakspots", "schwachstellen", "schwaechen"):
+        from stockai import weakspots as ws
+        return ws.render_weakspots(ws.analyze_weakspots(cfg))
 
     if cmd == "top":
         from stockai import briefing as bf
@@ -99,14 +121,14 @@ def handle_command(cfg: Config, text: str) -> str:
         er = f"{a.expected_return:+.1%}" if a.expected_return is not None else "–"
         hz = " · ".join(f"{h}T {p:.0%}" for h, p in sorted(a.horizon_probs.items()))
         q = get_quote(sym)
-        price_line = (f"🔴 LIVE: {q.price:.2f} ({q.change_pct:+.2f}% heute, {q.source})\n"
+        price_line = (f"🔴 Live: {q.price:.2f}  ({q.change_pct:+.2f}% heute · {q.source})\n"
                       if q else f"Kurs: {a.last_price:.2f}\n")
-        return (f"📊 {a.ticker} [{a.asset_class}] – {a.action}\n"
+        return (f"📊 {a.ticker} ({a.asset_class}) · {a.action}\n"
                 + price_line
-                + f"P(Profit): {a.profit_probability:.0%} | E[Rendite]: {er}\n"
+                + f"Gewinn-Chance: {a.profit_probability:.0%}  ·  erwartet: {er}\n"
                 + (f"Horizonte: {hz}\n" if hz else "")
-                + f"RSI: {a.rsi_14:.0f} | Sentiment: {a.sentiment_mean:+.2f}\n"
-                f"Timing: {a.timing}\n\n_Keine Anlageberatung._")
+                + f"RSI: {a.rsi_14:.0f}  ·  News-Stimmung: {a.sentiment_mean:+.2f}\n"
+                f"Timing: {a.timing}\n\nℹ️ Keine Anlageberatung.")
 
     return "Unbekannter Befehl. /help zeigt die Übersicht."
 
