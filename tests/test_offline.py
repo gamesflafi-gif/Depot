@@ -48,6 +48,14 @@ def test_technical_features_created():
     assert (df["vol_ratio"].iloc[60:] > 0).all()
 
 
+def test_features_no_infinity():
+    """±inf (z.B. pct_change aus Volumen 0) wird neutralisiert -> kein Trainings-Crash."""
+    df = _synthetic_prices(120)
+    df.loc[df.index[40], "Volume"] = 0          # provoziert volume_change = inf
+    out = add_technical_features(df)
+    assert np.isinf(out[TECHNICAL_FEATURES].values).sum() == 0
+
+
 def test_sentiment_scoring():
     assert score_text("Great profits, strong growth and record sales") > 0
     assert score_text("Terrible crash, huge losses and bankruptcy fears") < 0

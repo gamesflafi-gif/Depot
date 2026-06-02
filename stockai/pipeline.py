@@ -244,6 +244,8 @@ def add_market_features(df: pd.DataFrame) -> pd.DataFrame:
     df["mkt_trend"] = g["dist_sma50"].transform("mean") if "dist_sma50" in df else 0.0
     df["mkt_vol"] = g["vol_20d"].transform("mean") if "vol_20d" in df else 0.0
     df[["mkt_trend", "mkt_vol"]] = df[["mkt_trend", "mkt_vol"]].fillna(0.0)
+    # ±inf neutralisieren (Division durch 0 in Quer­schnitts-Features)
+    df[MARKET_FEATURES] = df[MARKET_FEATURES].replace([np.inf, -np.inf], np.nan)
     return df
 
 
@@ -324,6 +326,7 @@ def build_history_dataset(cfg: Config) -> pd.DataFrame:
         return pd.DataFrame()
     data = pd.concat(frames, ignore_index=True)
     data = add_market_features(data)
+    data[FEATURE_COLUMNS] = data[FEATURE_COLUMNS].replace([np.inf, -np.inf], np.nan)
     # Letzte ``horizon`` Zeilen je Ticker haben kein gültiges Label -> entfernen
     return data.dropna(subset=FEATURE_COLUMNS + ["target"])
 
