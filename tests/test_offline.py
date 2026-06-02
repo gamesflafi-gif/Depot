@@ -445,6 +445,36 @@ def test_weakspots_render():
     assert "zu wenig" in render_weakspots(WeakSpots(n=10))
 
 
+def test_weakspots_self_correction(tmp_path):
+    """Schwachstellen werden als Lektionen gespeichert und dämpfen Empfehlungen."""
+    from stockai import advisor, weakspots as ws
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+    # eine erkannte Schwachstelle (gap < -3 %) und eine starke Stelle (wird ignoriert)
+    w = ws.WeakSpots(n=300, base_rate=0.5, segments=[
+        {"dim": "Kaufsignal × RSI", "group": "RSI>70 (überkauft)", "kind": "rsi_high",
+         "count": 50, "hit": 0.42, "base": 0.5, "gap": -0.08},
+        {"dim": "Kaufsignal × Sentiment", "group": "News positiv", "kind": "sent_pos",
+         "count": 60, "hit": 0.6, "base": 0.5, "gap": 0.10},
+    ])
+    assert ws.save_lessons(cfg, w) == 1            # nur die schwache Bedingung
+    lessons = ws.load_lessons(cfg)
+    assert lessons and lessons[0]["kind"] == "rsi_high"
+
+    # passt die Lage auf die Lektion -> Warnung; sonst nicht
+    assert ws.caution_for(lessons, rsi=75, sent=0.0, regime=0.0)
+    assert not ws.caution_for(lessons, rsi=50, sent=0.0, regime=0.0)
+
+    # BOOM-Lage wird bei gelernter Schwachstelle auf KAUFEN gedämpft
+    strong = dict(profit_probability=0.70, rsi_14=60, momentum_5d=0.03,
+                  price_vs_high_20=0.9, macd_hist=0.02, sentiment_mean=0.3)
+    assert advisor.recommend(**strong).action == "BOOM"
+    cautious = advisor.recommend(**strong, weak_conditions=["RSI>70: nur 42%"])
+    assert cautious.action == "KAUFEN"
+
+
 def test_track_record(tmp_path):
     """Live-Track-Record aus gesammelten Snapshots (Prognose vs. Ergebnis)."""
     import numpy as np

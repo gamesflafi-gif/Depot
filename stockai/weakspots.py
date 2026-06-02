@@ -7,30 +7,50 @@ Umständen* die KI falsch deutet, und kann gezielt nachbessern.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from stockai.config import Config
 
+_LESSONS_FILE = "lessons.json"
+_FLAG = -0.03   # Trefferquote >3 %-Punkte unter Basis = Schwachstelle
+
 
 @dataclass
 class WeakSpots:
     n: int = 0
-    segments: list = field(default_factory=list)   # {dim, group, count, hit, base, gap}
+    segments: list = field(default_factory=list)   # {dim, group, kind, count, hit, base, gap}
     base_rate: float = float("nan")
 
 
+# maschinenlesbare Prüfungen je Bedingung (für die tägliche Selbstkorrektur)
+def _matches(kind: str, rsi: float, sent: float, regime: float) -> bool:
+    return {
+        "rsi_low":  rsi < 30,
+        "rsi_mid":  30 <= rsi <= 70,
+        "rsi_high": rsi > 70,
+        "sent_neg": sent < -0.1,
+        "sent_neu": -0.1 <= sent <= 0.1,
+        "sent_pos": sent > 0.1,
+        "regime_down": regime < 0,
+        "regime_up":   regime >= 0,
+    }.get(kind, False)
+
+
 def _segment(df: pd.DataFrame, dim: str, labels: dict) -> list:
+    """labels: key -> (mask, kind) – kind macht die Bedingung später prüfbar."""
     out = []
     base = df["target"].mean()
-    for key, mask in labels.items():
+    for key, (mask, kind) in labels.items():
         grp = df[mask]
         if len(grp) < 20:
             continue
         hit = float(grp["target"].mean())
-        out.append({"dim": dim, "group": key, "count": int(len(grp)),
+        out.append({"dim": dim, "group": key, "kind": kind, "count": int(len(grp)),
                     "hit": hit, "base": float(base), "gap": hit - float(base)})
     return out
 
@@ -76,22 +96,74 @@ def analyze_weakspots(cfg: Config, train_frac: float = 0.4) -> WeakSpots:
     seg = []
     # nur Fälle, in denen das Modell KAUFEN würde (proba hoch) – dort zählt's
     df["buy"] = df["proba"] >= 0.55
-    seg += _segment(df[df["buy"]], "Kaufsignal × RSI", {
-        "RSI<30 (überverkauft)": df[df["buy"]]["rsi"] < 30,
-        "RSI 30–70": (df[df["buy"]]["rsi"] >= 30) & (df[df["buy"]]["rsi"] <= 70),
-        "RSI>70 (überkauft)": df[df["buy"]]["rsi"] > 70,
+    b = df[df["buy"]]
+    seg += _segment(b, "Kaufsignal × RSI", {
+        "RSI<30 (überverkauft)": (b["rsi"] < 30, "rsi_low"),
+        "RSI 30–70": ((b["rsi"] >= 30) & (b["rsi"] <= 70), "rsi_mid"),
+        "RSI>70 (überkauft)": (b["rsi"] > 70, "rsi_high"),
     })
-    seg += _segment(df[df["buy"]], "Kaufsignal × Sentiment", {
-        "News negativ": df[df["buy"]]["sent"] < -0.1,
-        "News neutral": (df[df["buy"]]["sent"] >= -0.1) & (df[df["buy"]]["sent"] <= 0.1),
-        "News positiv": df[df["buy"]]["sent"] > 0.1,
+    seg += _segment(b, "Kaufsignal × Sentiment", {
+        "News negativ": (b["sent"] < -0.1, "sent_neg"),
+        "News neutral": ((b["sent"] >= -0.1) & (b["sent"] <= 0.1), "sent_neu"),
+        "News positiv": (b["sent"] > 0.1, "sent_pos"),
     })
-    seg += _segment(df[df["buy"]], "Kaufsignal × Marktlage", {
-        "Abschwung (Markt<SMA50)": df[df["buy"]]["regime"] < 0,
-        "Aufschwung (Markt>SMA50)": df[df["buy"]]["regime"] >= 0,
+    seg += _segment(b, "Kaufsignal × Marktlage", {
+        "Abschwung (Markt<SMA50)": (b["regime"] < 0, "regime_down"),
+        "Aufschwung (Markt>SMA50)": (b["regime"] >= 0, "regime_up"),
     })
     res.segments = sorted(seg, key=lambda s: s["hit"])   # schlechteste zuerst
     return res
+
+
+# --------------------------------------------------------------------------- #
+# Selbstkorrektur: Schwachstellen als „Lektionen" speichern und täglich anwenden
+# --------------------------------------------------------------------------- #
+def _lessons_path(cfg: Config) -> Path:
+    return Path(cfg.store_dir) / _LESSONS_FILE
+
+
+def save_lessons(cfg: Config, w: WeakSpots) -> int:
+    """Speichert die als schwach erkannten Bedingungen (gap < -3 %) als Lektionen.
+
+    Diese werden bei der täglichen Empfehlung gelesen: Fällt ein Kaufkandidat in
+    eine solche Bedingung, wird die KI vorsichtiger – sie *lernt* aus ihren
+    Fehlern, statt sie zu wiederholen. Gibt die Anzahl gespeicherter Lektionen
+    zurück.
+    """
+    lessons = [
+        {"kind": s["kind"], "group": s["group"], "dim": s["dim"],
+         "hit": round(s["hit"], 4), "gap": round(s["gap"], 4)}
+        for s in w.segments
+        if s.get("kind") and s["gap"] < _FLAG
+    ]
+    p = _lessons_path(cfg)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    json.dump({"base_rate": round(w.base_rate, 4) if w.base_rate == w.base_rate else None,
+               "n": w.n, "lessons": lessons},
+              open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    return len(lessons)
+
+
+def load_lessons(cfg: Config) -> list:
+    """Lädt die gespeicherten Schwachstellen-Lektionen (leer, falls keine)."""
+    p = _lessons_path(cfg)
+    if not p.exists():
+        return []
+    try:
+        return json.load(open(p, encoding="utf-8")).get("lessons", [])
+    except Exception:
+        return []
+
+
+def caution_for(lessons: list, rsi: float, sent: float, regime: float) -> list[str]:
+    """Liefert Klartext-Warnungen für die Bedingungen, in denen die KI hier
+    historisch schwach war (für transparente Begründung der Empfehlung)."""
+    out = []
+    for le in lessons:
+        if _matches(le.get("kind", ""), rsi, sent, regime):
+            out.append(f"{le['group']}: hier traf die KI zuletzt nur "
+                       f"{le['hit']:.0%} ({le['gap']:+.0%} vs. Schnitt)")
+    return out
 
 
 def render_weakspots(w: WeakSpots) -> str:

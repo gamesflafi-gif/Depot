@@ -157,6 +157,11 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 - **Schwachstellen-Analyse:** `weakspots` zeigt, **unter welchen Bedingungen**
   (RSI-Zone, News-Sentiment, Marktlage) das Modell am häufigsten danebenliegt –
   gezielte Selbstkritik für weiteres Nachbessern.
+- **Selbstkorrektur (lernt aus Fehlern):** `evolve` speichert die erkannten
+  Schwachstellen als „Lektionen". Die tägliche Empfehlung liest sie und wird in
+  genau diesen Lagen **eine Stufe vorsichtiger** (BOOM→KAUFEN, KAUFEN→HALTEN) –
+  transparent begründet. So wiederholt die KI ihre systematischen Fehler nicht,
+  sondern dämpft sie automatisch.
 - **Live-Track-Record:** `track` vergleicht die **tatsächlich gespeicherten**
   Live-Prognosen mit dem real eingetretenen Ergebnis (wächst über die Zeit).
 - **News-Ablation:** `ablation` misst den tatsächlichen Beitrag der News

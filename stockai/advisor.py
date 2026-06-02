@@ -30,6 +30,7 @@ def recommend(
     macd_hist: float,
     sentiment_mean: float,
     expected_return: float | None = None,
+    weak_conditions: list[str] | None = None,
 ) -> Recommendation:
     """Leitet eine Handlungsempfehlung ab.
 
@@ -44,6 +45,10 @@ def recommend(
         expected_return: optionale erwartete Folge-Rendite (vom Regressor).
             Ist sie klar negativ, wird trotz positiver Wahrscheinlichkeit kein
             Kaufsignal gegeben (Konsistenz beider Modelle).
+        weak_conditions: Klartext-Warnungen aus der Schwachstellen-Analyse
+            (``weakspots``). Trifft die aktuelle Lage auf eine Bedingung, in der
+            die KI historisch danebenlag, wird ein Kaufsignal um eine Stufe
+            gedämpft (BOOM→KAUFEN, KAUFEN→HALTEN) – die KI lernt aus Fehlern.
     """
     reasons: list[str] = []
 
@@ -87,11 +92,24 @@ def recommend(
     if er_negative:
         reasons.append(f"Erwartete Rendite {expected_return:+.1%} negativ → kein Kauf")
 
+    # Aus Fehlern gelernt: in historisch schwachen Bedingungen eine Stufe
+    # vorsichtiger werden (transparent begründet).
+    weak = bool(weak_conditions)
+    if weak:
+        for w in weak_conditions:
+            reasons.append(f"⚠️ Schwachstelle gelernt – {w}")
+
     if strong_signal and momentum_up and not_overheated and not er_negative:
         if positive_news:
             reasons.append(f"Positives News-Sentiment ({sentiment_mean:+.2f})")
         reasons.append(f"Modell: {profit_probability:.0%} Profit-Wahrscheinlichkeit")
         reasons.append("Aufwärtsmomentum (MACD+ & 5T-Rendite+)")
+        if weak:   # BOOM → KAUFEN herabstufen
+            return Recommendation(
+                action="KAUFEN", confidence=profit_probability * 0.9, reasons=reasons,
+                timing="Einstieg möglich, aber vorsichtig: ähnliche Lagen liefen "
+                       "zuletzt unterdurchschnittlich. Klein starten.",
+            )
         return Recommendation(
             action="BOOM",
             confidence=profit_probability,
@@ -101,6 +119,12 @@ def recommend(
 
     if profit_probability >= 0.55 and not_overheated and not er_negative:
         reasons.append(f"Modell: {profit_probability:.0%} Profit-Wahrscheinlichkeit")
+        if weak:   # KAUFEN → HALTEN: in schwacher Lage lieber abwarten
+            return Recommendation(
+                action="HALTEN", confidence=0.5, reasons=reasons,
+                timing="Abwarten – Signal ok, aber in dieser Lage lag die KI "
+                       "zuletzt häufiger daneben.",
+            )
         return Recommendation(
             action="KAUFEN",
             confidence=profit_probability,
