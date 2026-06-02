@@ -76,9 +76,28 @@ def cmd_compare(cfg, args) -> None:
 
 
 def cmd_alerts(cfg, args) -> None:
-    """Prüft Live-Kurse auf starke Bewegungen; optional per Telegram."""
+    """Prüft Live-Kurse auf starke Bewegungen; optional per Telegram.
+
+    Mit ``--all-users`` bekommt jeder Nutzer nur, was seiner eigenen Schwelle
+    entspricht (und nur, wenn er Live-Alerts aktiviert hat).
+    """
     from stockai import alerts as al
     from stockai import notify
+
+    if getattr(args, "all_users", False):
+        from stockai import users
+        ts, moves = al.scan_moves(cfg, save_state=True)   # einmal erfassen
+        for u in users.all_users(cfg):
+            prefs = users.load_prefs(cfg, u)
+            if not prefs.get("alerts_on", True):
+                continue
+            pct = float(prefs.get("alert_pct", args.move_pct))
+            res = al.filter_result(ts, moves, move_pct=pct)
+            text = al.render_alerts(res)
+            if text:
+                print(f"[{u}] {len(res.moves)} Bewegung(en) ≥ {pct:g}%")
+                notify.send_telegram(text, chat_id=u, reply_markup=notify.main_menu_markup())
+        return
 
     res = al.check_alerts(cfg, move_pct=args.move_pct)
     report = al.render_alerts(res)
@@ -887,6 +906,8 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("alerts", help="Live-Alerts: starke Bewegungen melden")
     pa.add_argument("--move-pct", type=float, default=3.0, help="Schwelle in %")
     pa.add_argument("--notify", action="store_true")
+    pa.add_argument("--all-users", action="store_true",
+                    help="je Nutzer eigene Schwelle/an-aus, an seinen Chat (Cron)")
 
     pm = sub.add_parser("monitor", help="Near-realtime-Überwachung (Dauerschleife)")
     pm.add_argument("--interval", type=int, default=10, help="Minuten zwischen Checks")
