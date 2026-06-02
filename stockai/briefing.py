@@ -27,11 +27,8 @@ _PROB_JUMP = 0.10
 
 def _now_de() -> datetime:
     """Aktuelle Zeit in deutscher Lokalzeit (Fallback: UTC)."""
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Europe/Berlin"))
-    except Exception:
-        return datetime.now(timezone.utc)
+    from stockai.clock import now_de
+    return now_de()
 
 
 def _klass(asset_class: str) -> str:
