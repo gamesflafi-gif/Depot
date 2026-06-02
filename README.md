@@ -92,9 +92,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   Conviction-Schwelle – defensiver verlangt mehr Überzeugung).
 - **Persönlicher Track-Record:** `/track` zeigt – sobald genug gesammelt –, wie
   gut die KI **auf genau deinen Depot-Werten** trifft (Beweis statt Behauptung).
-- **Viele Signale:** technische Indikatoren (Renditen über mehrere Horizonte,
-  RSI, MACD inkl. Histogramm, gleitende Durchschnitte, Bollinger %B, ATR,
-  Stochastik) plus **volumengewichtete „Smart-Money"-Signale** (relatives
+- **Viele Signale:** technische Indikatoren (Renditen über mehrere Horizonte
+  inkl. **3-Monats-Momentum**, RSI, MACD, gleitende Durchschnitte, **200-Tage-
+  Trendfilter**, Bollinger %B, ATR, Stochastik, **52-Wochen-Hoch-Nähe**,
+  **Volatilitäts-Regime**) plus **volumengewichtete „Smart-Money"-Signale** (relatives
   Volumen, On-Balance-Volume-Trend = Akkumulation/Distribution, Money-Flow-Index)
   und **Tail-Risiko** (Schiefe der Renditen). Dazu **Markt-/Querschnitts-Features**
   (relative Stärke + Perzentil-Ränge von Momentum & Sentiment im Universum –

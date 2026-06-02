@@ -41,6 +41,11 @@ def test_technical_features_created():
         assert np.isfinite(vals).all()
     assert (df["rel_volume"].iloc[60:] > 0).all()        # Verhältnis > 0
     assert df["mfi_14"].iloc[60:].between(0, 100).all()  # MFI in [0,100]
+    # neue Faktor-Features sind endlich und plausibel
+    for col in ("ret_60d", "vol_ratio", "dist_sma200", "price_vs_high_252"):
+        assert np.isfinite(df[col].iloc[60:].values).all()
+    assert df["price_vs_high_252"].iloc[60:].le(1.0 + 1e-9).all()   # ≤ Jahreshoch
+    assert (df["vol_ratio"].iloc[60:] > 0).all()
 
 
 def test_sentiment_scoring():
