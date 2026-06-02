@@ -104,7 +104,9 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
 - **Interaktiver Telegram-Bot:** `bot` startet einen Bot, dem du direkt
-  schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`.
+  schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`,
+  `/track`, `/weakspots`. **Antippbare Buttons** (Inline-Menü) machen Tippen
+  optional; jede Nachricht (auch das tägliche Push-Briefing) hat das Menü dabei.
   Reagiert nur auf die eigene Chat-ID. Dauerbetrieb via `deploy/install_bot.sh`
   (systemd-Dienst).
 - **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und

@@ -25,48 +25,61 @@ _TG_CHAT_ENV = "STOCKAI_TELEGRAM_CHAT_ID"
 _TG_LIMIT = 4000  # Telegram-Nachrichtenlimit (~4096), mit Puffer
 
 
+def main_menu_markup() -> str:
+    """Antippbares Hauptmenü (Telegram-Inline-Tastatur) – kein Tippen nötig."""
+    kb = {"inline_keyboard": [
+        [{"text": "📊 Briefing", "callback_data": "/briefing"},
+         {"text": "🚀 Top 5", "callback_data": "/top 5"}],
+        [{"text": "💶 Sparplan", "callback_data": "/sparplan"},
+         {"text": "🔔 Alerts", "callback_data": "/alerts"}],
+        [{"text": "📒 Track", "callback_data": "/track"},
+         {"text": "🔍 Schwächen", "callback_data": "/weakspots"}],
+        [{"text": "❓ Hilfe", "callback_data": "/help"}],
+    ]}
+    return json.dumps(kb)
+
+
 def render_savings_plan(plan) -> str:
-    """Erzeugt einen kompakten Markdown-Report eines Sparplans."""
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    """Erzeugt einen kompakten, sauber lesbaren Sparplan-Report (Telegram-tauglich)."""
     lines = [
-        f"# 📈 Sparplan-Update ({ts})",
-        f"Monatlicher Sparbetrag: **{plan.monthly_amount:.2f}€** "
-        f"(Core/ETF-Anteil {plan.core_share:.0%})",
+        "📈 Sparplan-Update",
+        f"Monatlich: {plan.monthly_amount:.2f}€  ·  Core/ETF-Anteil {plan.core_share:.0%}",
         "",
-        "## Core (ETFs)",
+        "🧱 CORE (ETFs)",
     ]
     for p in plan.core_positions:
-        lines.append(f"- **{p.instrument}**: {p.monthly:.2f}€/Monat ({p.weight:.0%})")
+        lines.append(f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%})")
     if not plan.core_positions:
-        lines.append("- (keine)")
-    lines += ["", "## Satelliten (Aktien)"]
+        lines.append("  • (keine)")
+    lines += ["", "🛰️ SATELLITEN (Aktien)"]
     for p in plan.satellite_positions:
         lines.append(
-            f"- **{p.instrument}**: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
-            f"– {p.action}, P(Profit) {p.probability:.0%}"
+            f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
+            f"– {p.action}, Chance {p.probability:.0%}"
         )
     if not plan.satellite_positions:
-        lines.append("- (aktuell keine – defensiv im Core)")
+        lines.append("  • (aktuell keine – defensiv im Core)")
     if plan.crypto_positions:
-        lines += ["", "## Krypto (Beimischung, höheres Risiko)"]
+        lines += ["", "🪙 KRYPTO (Beimischung, höheres Risiko)"]
         for p in plan.crypto_positions:
             lines.append(
-                f"- **{p.instrument}**: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
-                f"– P(Profit) {p.probability:.0%}"
+                f"  • {p.instrument}: {p.monthly:.2f}€/Monat ({p.weight:.0%}) "
+                f"– Chance {p.probability:.0%}"
             )
     if plan.notes:
-        lines += ["", "## Hinweise"]
-        lines += [f"- {n}" for n in plan.notes]
-    lines += ["", "_Keine Anlageberatung._"]
+        lines += ["", "ℹ️ Hinweise"]
+        lines += [f"  • {n}" for n in plan.notes]
+    lines += ["", "ℹ️ Keine Anlageberatung."]
     return "\n".join(lines)
 
 
-def send_telegram(text: str, token: str | None = None, chat_id: str | None = None) -> bool:
+def send_telegram(text: str, token: str | None = None, chat_id: str | None = None,
+                  reply_markup: str | None = None) -> bool:
     """Sendet eine Nachricht an einen Telegram-Chat. Liefert Erfolg.
 
     Einrichtung: bei @BotFather einen Bot anlegen -> Token; die eigene Chat-ID
     z.B. über @userinfobot ermitteln. Ohne Token/Chat-ID (oder Netz) passiert
-    nichts (kein Fehler).
+    nichts (kein Fehler). ``reply_markup`` hängt eine Inline-Tastatur an.
     """
     token = token or os.environ.get(_TG_TOKEN_ENV)
     chat_id = chat_id or os.environ.get(_TG_CHAT_ENV)
@@ -74,9 +87,11 @@ def send_telegram(text: str, token: str | None = None, chat_id: str | None = Non
         return False
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode(
-            {"chat_id": chat_id, "text": text[:_TG_LIMIT], "disable_web_page_preview": "true"}
-        ).encode("utf-8")
+        params = {"chat_id": chat_id, "text": text[:_TG_LIMIT],
+                  "disable_web_page_preview": "true"}
+        if reply_markup:
+            params["reply_markup"] = reply_markup
+        data = urllib.parse.urlencode(params).encode("utf-8")
         req = urllib.request.Request(url, data=data)
         with urllib.request.urlopen(req, timeout=10) as resp:
             return 200 <= resp.status < 300
@@ -85,9 +100,12 @@ def send_telegram(text: str, token: str | None = None, chat_id: str | None = Non
 
 
 def notify(text: str) -> tuple[bool, str]:
-    """Sendet über den konfigurierten Kanal. Returns (Erfolg, Kanalname)."""
+    """Sendet über den konfigurierten Kanal. Returns (Erfolg, Kanalname).
+
+    Bei Telegram werden die antippbaren Menü-Buttons automatisch angehängt.
+    """
     if telegram_configured():
-        return send_telegram(text), "Telegram"
+        return send_telegram(text, reply_markup=main_menu_markup()), "Telegram"
     if webhook_configured():
         return send_webhook(text), "Webhook"
     return False, "kein Kanal konfiguriert"
