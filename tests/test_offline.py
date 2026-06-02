@@ -305,6 +305,24 @@ def test_preferred_model_roundtrip(tmp_path):
     assert ms.load_preferred_model() == "stacking"
 
 
+def test_selected_features_and_active(tmp_path):
+    from stockai.model.store import ModelStore
+    from stockai import pipeline
+    from stockai.config import load_config
+    ms = ModelStore(tmp_path)
+    assert ms.load_selected_features() is None
+    ms.save_selected_features(["rsi_14", "ret_20d", "sent_mean", "macd", "vol_20d", "stoch_k"])
+    assert ms.load_selected_features() == ["rsi_14", "ret_20d", "sent_mean", "macd", "vol_20d", "stoch_k"]
+
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+    feats = pipeline.active_features(cfg)
+    assert feats == ["rsi_14", "ret_20d", "sent_mean", "macd", "vol_20d", "stoch_k"]
+    ms.clear_selected_features()
+    # Fallback auf alle Features
+    assert pipeline.active_features(cfg) == pipeline.FEATURE_COLUMNS
+
+
 def test_top_report(tmp_path):
     """Wöchentlicher Top-N-Überblick (beide Richtungen)."""
     from stockai import briefing as bf

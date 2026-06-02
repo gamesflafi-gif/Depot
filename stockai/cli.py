@@ -550,11 +550,27 @@ def cmd_evolve(cfg, args) -> None:
     if res.best_params:
         store.save_tuned_params(best_type, res.best_params, res.best_score)
         print(f"  Beste Parameter (CV-AUC {res.best_score:.3f}): {res.best_params}")
-    # Gewähltes Modell als bevorzugt speichern + finales Training
     store.save_preferred_model(best_type)
+
+    # Feature-Auswahl: schlanke Teilmenge testen (weniger Rauschen)
+    print("  Prüfe schlankere Feature-Auswahl …")
+    store.clear_selected_features()
+    selected, full_auc, sel_auc = pipeline.select_features(
+        data, best_type, rs, cfg.horizon_days)
+    chosen_feats = "alle"
+    if (sel_auc == sel_auc and full_auc == full_auc        # nicht NaN
+            and sel_auc >= full_auc - 0.003 and len(selected) < len(pipeline.FEATURE_COLUMNS)):
+        store.save_selected_features(selected)
+        chosen_feats = f"{len(selected)}/{len(pipeline.FEATURE_COLUMNS)}"
+        print(f"    → schlanker: {len(selected)} Features (AUC {sel_auc:.3f} "
+              f"vs voll {full_auc:.3f}) übernommen.")
+    else:
+        print("    → volle Feature-Liste bleibt am besten.")
+
+    # finales Training (nutzt Champion + getunte Params + Feature-Auswahl)
     result = pipeline.train(cfg)
     store.append_history({
-        "event": "evolve", "chosen_model": best_type,
+        "event": "evolve", "chosen_model": best_type, "features": chosen_feats,
         "candidate_ranking": scored,
         "metrics": result.metrics, "cv_metrics": result.cv_metrics,
     })
