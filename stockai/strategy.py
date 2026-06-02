@@ -101,6 +101,7 @@ def _build_panel(cfg: Config, period: str | None = None) -> pd.DataFrame:
         return pd.DataFrame()
     panel = pd.concat(rows, ignore_index=True)
     panel = add_market_features(panel)
+    panel[FEATURE_COLUMNS] = panel[FEATURE_COLUMNS].replace([np.inf, -np.inf], np.nan)
     return panel.dropna(subset=FEATURE_COLUMNS + ["fwd_ret"])
 
 

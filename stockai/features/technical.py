@@ -156,4 +156,8 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     out["month"] = idx.month.astype(float)        # 1..12
     out["hour"] = idx.hour.astype(float)          # Intraday: Tageszeit (0 bei Tagesdaten)
 
+    # Unendlich-Werte neutralisieren (z.B. pct_change aus Volumen 0 -> inf), damit
+    # sie als NaN behandelt und sauber rausgefiltert werden statt das Training zu
+    # sprengen ("Input X contains infinity").
+    out[TECHNICAL_FEATURES] = out[TECHNICAL_FEATURES].replace([np.inf, -np.inf], np.nan)
     return out
