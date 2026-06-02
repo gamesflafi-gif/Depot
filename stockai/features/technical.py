@@ -14,14 +14,17 @@ TECHNICAL_FEATURES: list[str] = [
     "ret_5d",
     "ret_10d",
     "ret_20d",
+    "ret_60d",
     "vol_10d",
     "vol_20d",
+    "vol_ratio",
     "rsi_14",
     "macd",
     "macd_signal",
     "macd_hist",
     "sma_ratio",
     "dist_sma50",
+    "dist_sma200",
     "volume_change",
     "volume_z",
     "rel_volume",
@@ -29,6 +32,7 @@ TECHNICAL_FEATURES: list[str] = [
     "mfi_14",
     "ret_skew_20",
     "price_vs_high_20",
+    "price_vs_high_252",
     "bb_pctb",
     "atr_pct",
     "stoch_k",
@@ -62,11 +66,15 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     out["ret_5d"] = close.pct_change(5)
     out["ret_10d"] = close.pct_change(10)
     out["ret_20d"] = close.pct_change(20)
+    out["ret_60d"] = close.pct_change(60)        # 3-Monats-Momentum (Faktor)
 
     # Volatilität (rollierende Std der Tagesrenditen)
     daily_ret = close.pct_change()
     out["vol_10d"] = daily_ret.rolling(10).std()
     out["vol_20d"] = daily_ret.rolling(20).std()
+    # Volatilitäts-Regime: kurzfristige vs. längerfristige Schwankung (>1 = steigend)
+    vol_60d = daily_ret.rolling(60, min_periods=30).std()
+    out["vol_ratio"] = out["vol_20d"] / vol_60d.replace(0, np.nan)
 
     # RSI
     out["rsi_14"] = _rsi(close, 14)
@@ -83,6 +91,9 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     sma50 = close.rolling(50).mean()
     out["sma_ratio"] = sma20 / sma50
     out["dist_sma50"] = close / sma50 - 1.0
+    # Langfrist-Trendfilter: Abstand zur 200-Tage-Linie (oberhalb = Aufwärtstrend)
+    sma200 = close.rolling(200, min_periods=60).mean()
+    out["dist_sma200"] = close / sma200 - 1.0
 
     # Volumen: Veränderung + z-Score
     out["volume_change"] = volume.pct_change(5)
@@ -117,6 +128,9 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
     # Abstand zum 20-Tage-Hoch
     high20 = close.rolling(20).max()
     out["price_vs_high_20"] = close / high20
+    # Nähe zum 52-Wochen-Hoch: starker Momentum-Faktor (1.0 = am Jahreshoch)
+    high252 = close.rolling(252, min_periods=60).max()
+    out["price_vs_high_252"] = close / high252
 
     # Bollinger %B (20, 2σ): Position im Band, 0 = unteres, 1 = oberes Band
     std20 = close.rolling(20).std()
