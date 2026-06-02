@@ -643,6 +643,30 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_sector_rotation():
+    """Sektor-Rotation aggregiert Analysen je Branche und rankt nach Conviction."""
+    from stockai import sectors as sc
+    from stockai.pipeline import TickerAnalysis
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.sectors = {"AAPL": "Tech", "NVDA": "Tech", "JPM": "Financials", "XOM": "Energy"}
+
+    def mk(t, conv, mom, action="KAUFEN"):
+        return TickerAnalysis(ticker=t, last_price=10, profit_probability=0.6,
+                              sentiment_mean=0.0, news_count=0, momentum_5d=mom,
+                              action=action, conviction=conv)
+    analyses = [mk("AAPL", 70, 0.03), mk("NVDA", 80, 0.04),
+                mk("JPM", 40, -0.02, "HALTEN"), mk("XOM", 55, 0.01)]
+    stats = sc.sector_rotation(cfg, analyses=analyses)
+    assert stats[0].sector == "Tech"                 # stärkste Branche zuerst
+    assert stats[0].top_ticker == "NVDA"             # bester Wert der Branche
+    assert stats[0].mean_conviction == 75            # (70+80)/2
+    out = sc.render_sectors(stats)
+    assert "Sektor-Rotation" in out and "Tech" in out
+    assert "noch keine Daten" in sc.render_sectors([])
+
+
 def test_configurable_alerts(tmp_path):
     """Live-Alerts pro Nutzer einstellbar: Schwelle, an/aus, Filterung."""
     from stockai import alerts as al

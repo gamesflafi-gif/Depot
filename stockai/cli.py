@@ -320,6 +320,20 @@ def cmd_watch(cfg, args) -> None:
     print(wt.render_watches(cfg))
 
 
+def cmd_sectors(cfg, args) -> None:
+    """Sektor-Rotation: welche Branchen führen, welche fallen zurück."""
+    from stockai import sectors as sc
+    from stockai import notify
+
+    print("Analysiere Sektor-Rotation …\n")
+    report = sc.render_sectors(sc.sector_rotation(cfg))
+    print(report)
+    if getattr(args, "notify", False):
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
+
+
 def cmd_whales(cfg, args) -> None:
     """Whale-Radar: auffälliges Volumen (Smart-Money-Spur) im Universum."""
     from stockai import whale as wh
@@ -951,6 +965,9 @@ def build_parser() -> argparse.ArgumentParser:
     pwt.add_argument("--all-users", action="store_true",
                      help="für alle Nutzer prüfen und jedem an seinen Chat senden (Cron)")
 
+    pse = sub.add_parser("sectors", help="Sektor-Rotation: welche Branchen führen")
+    pse.add_argument("--notify", action="store_true", help="Report per Telegram senden")
+
     pwh = sub.add_parser("whales", help="Whale-Radar: auffälliges Volumen (Smart-Money-Spur)")
     pwh.add_argument("--min", type=float, default=2.0, help="Mindest-rel.-Volumen (Standard 2.0)")
     pwh.add_argument("--notify", action="store_true", help="Report per Telegram senden")
@@ -1054,6 +1071,7 @@ _COMMANDS = {
     "depot": cmd_depot,
     "watch": cmd_watch,
     "whales": cmd_whales,
+    "sectors": cmd_sectors,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,
