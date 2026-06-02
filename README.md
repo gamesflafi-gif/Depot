@@ -107,12 +107,18 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   Konfiguration mit wachsender Datenbasis.
 - **Größeres Universum:** je mehr beobachtete Werte, desto stärker die
   Querschnitts-/relative-Stärke-Features (Standard: 24 Aktien + ETFs).
+- **Eigenes Depot:** `depot` verfolgt deine **echten Positionen** (Ticker,
+  Stückzahl, Kaufkurs) und zeigt je Position **Gewinn/Verlust + die aktuelle
+  KI-Bewertung** – inkl. Warnung, wenn die KI nicht mehr bullisch ist. Eintragen
+  per `depot add NVDA 10 850` (CLI oder `/depot add …` im Chat). Der Tageslauf
+  meldet automatisch, sobald die KI eine deiner Positionen kritisch sieht
+  (`depot --alert-only`). Daten bleiben lokal (`holdings.json`).
 - **Interaktiver Telegram-Bot:** `bot` startet einen Bot, dem du direkt
   schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`,
-  `/track`, `/weakspots`. **Antippbare Buttons** (Inline-Menü) machen Tippen
-  optional; jede Nachricht (auch das tägliche Push-Briefing) hat das Menü dabei.
-  Reagiert nur auf die eigene Chat-ID. Dauerbetrieb via `deploy/install_bot.sh`
-  (systemd-Dienst).
+  `/depot`, `/track`, `/weakspots`, `/health`. **Antippbare Buttons** (Inline-Menü)
+  machen Tippen optional; jede Nachricht (auch das tägliche Push-Briefing) hat das
+  Menü dabei. Reagiert nur auf die eigene Chat-ID. Dauerbetrieb via
+  `deploy/install_bot.sh` (systemd-Dienst).
 - **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und
   Verkaufssignale zusammen und meldet gezielt **Veränderungen seit dem letzten
   Lauf** (neue Kauf-/Verkaufssignale, große Wahrscheinlichkeits-Sprünge) – ideal

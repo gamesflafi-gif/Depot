@@ -246,6 +246,47 @@ def cmd_track(cfg, args) -> None:
               ("gesendet ✔" if ok else "nicht gesendet"))
 
 
+def cmd_depot(cfg, args) -> None:
+    """Eigenes Depot: Positionen verwalten und von der KI bewerten lassen."""
+    from stockai import holdings as hd
+    from stockai import notify
+
+    action = getattr(args, "depot_action", None)
+    if action == "add":
+        if not (args.ticker and args.qty is not None and args.price is not None):
+            print("Nutzung: depot add TICKER STÜCK KAUFKURS  (z.B. depot add NVDA 10 850)")
+            return
+        hd.add_holding(cfg, args.ticker, args.qty, args.price)
+        print(f"✔ {args.ticker.upper()} hinzugefügt ({args.qty:g} @ {args.price:.2f}).")
+        return
+    if action == "remove":
+        ok = hd.remove_holding(cfg, args.ticker or "")
+        print(f"✔ {args.ticker.upper()} entfernt." if ok else "Position nicht gefunden.")
+        return
+    if action == "clear":
+        hd.save_holdings(cfg, [])
+        print("✔ Depot geleert.")
+        return
+
+    if getattr(args, "alert_only", False):
+        # Nur senden, wenn die KI bei einer Position kritisch ist (für den Cron).
+        text = hd.depot_alert_text(cfg)
+        if text:
+            print(text)
+            notify.notify(text)
+        else:
+            print("Keine Depot-Warnungen.")
+        return
+
+    print("Bewerte dein Depot (Live-Kurse + KI) …\n")
+    report = hd.render_depot(hd.build_depot_report(cfg))
+    print(report)
+    if getattr(args, "notify", False):
+        ok, channel = notify.notify(report)
+        print(f"\n  Benachrichtigung ({channel}): " +
+              ("gesendet ✔" if ok else "nicht gesendet"))
+
+
 def cmd_health(cfg, args) -> None:
     """Selbstcheck: Wird die KI besser oder schlechter? Warnt bei Verschlechterung."""
     from stockai import health as hl
@@ -791,6 +832,16 @@ def build_parser() -> argparse.ArgumentParser:
     phl.add_argument("--no-record", action="store_true",
                      help="nur anzeigen, keinen Messpunkt speichern")
 
+    pdp = sub.add_parser("depot", help="Eigenes Depot: Positionen + KI-Bewertung & G/V")
+    pdp.add_argument("depot_action", nargs="?", choices=["add", "remove", "clear"],
+                     help="add/remove/clear (ohne Angabe: Depot anzeigen)")
+    pdp.add_argument("ticker", nargs="?", help="Ticker, z.B. NVDA")
+    pdp.add_argument("qty", nargs="?", type=float, help="Stückzahl (bei add)")
+    pdp.add_argument("price", nargs="?", type=float, help="Kaufkurs (bei add)")
+    pdp.add_argument("--notify", action="store_true", help="Bericht per Telegram senden")
+    pdp.add_argument("--alert-only", action="store_true",
+                     help="nur melden, wenn die KI eine Position kritisch sieht (für Cron)")
+
     psc = sub.add_parser("scorecard", help="Treffsicherheit der Empfehlungen bewerten")
     psc.add_argument("--threshold", type=float, default=0.55)
 
@@ -871,6 +922,7 @@ _COMMANDS = {
     "weakspots": cmd_weakspots,
     "track": cmd_track,
     "health": cmd_health,
+    "depot": cmd_depot,
     "scorecard": cmd_scorecard,
     "analyze": cmd_analyze,
     "snapshot": cmd_snapshot,

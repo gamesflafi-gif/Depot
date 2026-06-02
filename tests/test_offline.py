@@ -526,6 +526,37 @@ def test_health_detects_degradation(tmp_path):
     assert "schlechter" in hl.render_health(worse)
 
 
+def test_holdings_tracking(tmp_path):
+    """Eigenes Depot: Ø-Einstand beim Nachkauf, G/V-Mathematik, Verkaufswarnung."""
+    from stockai import holdings as hd
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+
+    hd.add_holding(cfg, "nvda", 10, 90.0)
+    hd.add_holding(cfg, "NVDA", 10, 110.0)        # nachkaufen -> Ø 100
+    hd.add_holding(cfg, "AAPL", 5, 200.0)
+    hs = {h.ticker: h for h in hd.load_holdings(cfg)}
+    assert hs["NVDA"].qty == 20 and abs(hs["NVDA"].buy_price - 100.0) < 1e-9
+
+    assert hd.remove_holding(cfg, "AAPL") is True
+    assert hd.remove_holding(cfg, "AAPL") is False
+    assert [h.ticker for h in hd.load_holdings(cfg)] == ["NVDA"]
+
+    # G/V-Mathematik einer Position
+    pos = hd.Position(ticker="NVDA", qty=20, buy_price=100.0, price=120.0,
+                      action="VERKAUFEN", probability=0.4)
+    assert pos.value == 2400 and pos.cost == 2000
+    assert pos.pnl == 400 and abs(pos.pnl_pct - 0.2) < 1e-9
+    assert pos.sell_warning is True
+
+    rep = hd.DepotReport(positions=[pos], total_value=2400, total_cost=2000)
+    out = hd.render_depot(rep)
+    assert "NVDA" in out and "+20.0%" in out and "verkaufen/meiden" in out
+    assert "leer" in hd.render_depot(hd.DepotReport())
+
+
 def test_health_self_regulation(tmp_path):
     """Bei Verschlechterung steigt die Vorsicht (Kaufschwelle), Erholung lockert."""
     import numpy as np

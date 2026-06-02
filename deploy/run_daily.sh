@@ -23,4 +23,6 @@ STAMP="$(date +%Y-%m-%d)"
   "$PY" -m stockai.cli --source live sparplan \
         --monthly "${STOCKAI_MONTHLY:-100}" \
         --report "$PROJECT_DIR/sparplan.md" --notify || echo "sparplan fehlgeschlagen"
+  # 4) Eigenes Depot prüfen – nur melden, wenn die KI eine Position kritisch sieht
+  "$PY" -m stockai.cli --source live depot --alert-only || echo "depot-check fehlgeschlagen"
 } >> "$LOG_DIR/daily-$STAMP.log" 2>&1
