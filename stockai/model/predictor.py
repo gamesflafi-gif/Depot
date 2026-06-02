@@ -14,6 +14,7 @@ Die Bewertung erfolgt out-of-sample, sodass Fortschritt messbar ist.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,6 +38,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+
+log = logging.getLogger(__name__)
 
 # Modelltypen, die bei ``type: auto`` gegeneinander antreten.
 AUTO_CANDIDATES = ["hist_gradient_boosting", "gradient_boosting", "random_forest", "logistic"]
@@ -318,7 +321,7 @@ class Predictor:
         reg = getattr(self, "regressor", None)
         if reg is None:
             return None
-        return reg.predict(df[self.feature_names].values)
+        return reg.predict(self._matrix(df))
 
     def fit_horizon(self, horizon: int, df: pd.DataFrame, target_col: str) -> bool:
         """Trainiert einen schnellen Klassifizierer für einen Zeithorizont."""
@@ -337,7 +340,7 @@ class Predictor:
     def predict_horizons(self, df: pd.DataFrame) -> dict[int, float]:
         """P(profitabel) je trainiertem Horizont für die erste Zeile."""
         out: dict[int, float] = {}
-        X = df[self.feature_names].values
+        X = self._matrix(df)
         for h, est in sorted(getattr(self, "horizon_models", {}).items()):
             try:
                 out[h] = float(est.predict_proba(X)[:, 1][0])
@@ -363,12 +366,23 @@ class Predictor:
         self.is_fitted = True
 
     # ------------------------------------------------------------------ #
+    def _matrix(self, df: pd.DataFrame) -> np.ndarray:
+        """Feature-Matrix in der erwarteten Reihenfolge. Fehlende Spalten (z.B.
+        weil ein laufender alter Prozess ein neueres Modell lädt) werden neutral
+        mit 0.0 ergänzt, statt mit 'not in index' abzustürzen."""
+        missing = [c for c in self.feature_names if c not in df.columns]
+        if missing:
+            log.warning("Fehlende Features bei Vorhersage (mit 0 ersetzt): %s", missing)
+            df = df.copy()
+            for c in missing:
+                df[c] = 0.0
+        return df[self.feature_names].values
+
     def predict_proba(self, df: pd.DataFrame) -> np.ndarray:
         """Wahrscheinlichkeit der Klasse 'profitabel' (1)."""
         if not self.is_fitted:
             raise RuntimeError("Modell ist noch nicht trainiert.")
-        X = df[self.feature_names].values
-        proba = self.estimator.predict_proba(X)
+        proba = self.estimator.predict_proba(self._matrix(df))
         return proba[:, 1]
 
     # ------------------------------------------------------------------ #

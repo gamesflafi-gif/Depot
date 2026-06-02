@@ -29,6 +29,21 @@ def _synthetic_prices(n: int = 300, seed: int = 0) -> pd.DataFrame:
     )
 
 
+def test_predict_robust_missing_feature():
+    """Fehlt eine Feature-Spalte (z.B. altes Code/neues Modell), crasht die
+    Vorhersage nicht mehr ('not in index'), sondern ersetzt sie neutral."""
+    feats = ["ret_1d", "ret_5d", "ret_60d", "rsi_14", "vol_20d", "dist_sma200"]
+    df = add_technical_features(_synthetic_prices(160))
+    df["target"] = (df["ret_5d"].shift(-5) > 0).astype(float)
+    df = df.dropna(subset=feats + ["target"]).copy()
+    pred = Predictor(feats, model_type="logistic")
+    pred.train(df, target_col="target", test_size=0.2)
+    # zwei vom Modell erwartete Spalten entfernen -> dürfen neutral ersetzt werden
+    reduced = df.drop(columns=["ret_60d", "dist_sma200"]).iloc[[-1]]
+    out = pred.predict_proba(reduced)         # darf nicht werfen ('not in index')
+    assert 0.0 <= float(out[0]) <= 1.0
+
+
 def test_technical_features_created():
     df = add_technical_features(_synthetic_prices())
     for col in TECHNICAL_FEATURES:
