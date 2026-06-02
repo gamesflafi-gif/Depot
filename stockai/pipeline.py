@@ -490,7 +490,8 @@ def train(cfg: Config) -> TrainResult:
         params=tuned,
     )
     # Ehrliche Präzisionsschätzung per Zeitreihen-CV (vor dem finalen Fit)
-    cv_metrics = predictor.cross_validate(data, target_col="target")
+    cv_metrics = predictor.cross_validate(
+        data, target_col="target", purge_dates=cfg.horizon_days)
     result = predictor.train(
         data, target_col="target", test_size=float(cfg.model.get("test_size", 0.2))
     )
