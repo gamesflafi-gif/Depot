@@ -643,6 +643,32 @@ def test_legacy_holdings_migrate_to_owner(tmp_path, monkeypatch):
     assert hd.load_holdings(cfg, "666") == []                             # anderer leer
 
 
+def test_configurable_alerts(tmp_path):
+    """Live-Alerts pro Nutzer einstellbar: Schwelle, an/aus, Filterung."""
+    from stockai import alerts as al
+    from stockai import telegram_bot as tb, users
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.raw["data_source"] = "demo"
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+
+    # Schwelle setzen / an / aus pro Nutzer
+    tb.handle_command(cfg, "/alerts 5", user="1")
+    assert users.load_prefs(cfg, "1")["alert_pct"] == 5.0
+    assert users.load_prefs(cfg, "1")["alerts_on"] is True
+    tb.handle_command(cfg, "/alerts off", user="1")
+    assert users.load_prefs(cfg, "1")["alerts_on"] is False
+    # zweiter Nutzer unabhängig
+    assert "alert_pct" not in users.load_prefs(cfg, "2")
+
+    # Filter-Logik: gleiche Bewegungen, verschiedene Schwellen
+    moves = [("AAA", 100.0, 6.0, 2.0), ("BBB", 50.0, 1.0, 1.0)]
+    assert len(al.filter_result("t", moves, move_pct=3.0).moves) == 1   # nur AAA
+    assert len(al.filter_result("t", moves, move_pct=10.0).moves) == 0
+    assert len(al.filter_result("t", moves, move_pct=0.5).moves) == 2
+
+
 def test_risk_profile(tmp_path):
     """Risiko-Profil wird gespeichert und steuert Sparplan-Aufteilung & Schwelle."""
     from stockai import users

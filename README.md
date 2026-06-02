@@ -150,6 +150,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   meldet nur starke Signale (`whales --alert-only`); im Chat jederzeit per
   `/whales` bzw. Button 🐋. Ehrlich: sichtbar ist der *Volumen-Fußabdruck*, nicht
   die einzelne Wallet – ein Frühsignal, keine Garantie.
+- **Einstellbare Live-Alerts (pro Nutzer):** `/alerts 5` setzt die Schwelle auf
+  5 % Bewegung, `/alerts off` schaltet ab, `/alerts on` wieder an, `/alerts` zeigt
+  die aktuellen Bewegungen nach **deiner** Schwelle. Der Cron (`alerts --all-users`)
+  erfasst die Kurse einmal und sendet jedem nur, was seiner Einstellung entspricht.
 - **Smarte bedingte Alerts:** `watch` lässt dich **eigene Trigger** setzen –
   `watch add BTC-USD < 50000`, `watch add NVDA rsi < 30`, `watch add BTC-USD vol > 2`
   (ungewöhnliches Volumen) oder `watch add NVDA pct < -5`. Der Cron prüft sie

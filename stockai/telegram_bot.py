@@ -43,7 +43,7 @@ _HELP = (
     "  /live SYM      aktueller Live-Kurs\n"
     "  /briefing      aktuelles Briefing mit Bewegungen\n"
     "  /top [n]       Top-n Chancen & Risiken\n"
-    "  /alerts        starke Live-Bewegungen\n"
+    "  /alerts        Live-Bewegungen (einstellbar: /alerts 5, /alerts off)\n"
     "  /whales        auffälliges Volumen (Smart-Money-Spur)\n"
     "  /watch         eigene Trigger (z.B. /watch add BTC-USD < 50000)\n"
     "\n"
@@ -82,9 +82,12 @@ def _personal_overview(cfg: Config, user: str | None) -> str:
     else:
         lines.append("💼 Depot: noch leer  →  /depot add NVDA 10 850")
     if nw:
-        lines.append(f"🔔 Alerts: {nw} aktiv  →  /watch")
+        lines.append(f"🔔 Eigene Trigger: {nw} aktiv  →  /watch")
     else:
-        lines.append("🔔 Alerts: keine  →  /watch add BTC-USD < 50000")
+        lines.append("🔔 Eigene Trigger: keine  →  /watch add BTC-USD < 50000")
+    apct = float(prefs.get("alert_pct", 3.0))
+    aon = "AN" if prefs.get("alerts_on", True) else "AUS"
+    lines.append(f"🚨 Live-Alerts: {aon}, ab {apct:g}%  →  /alerts")
     if monthly:
         lines.append(f"💶 Sparplan: {float(monthly):g}€/Monat  →  /sparplan")
     else:
@@ -130,10 +133,34 @@ def handle_command(cfg: Config, text: str, user: str | None = None,
         from stockai import briefing as bf
         return bf.render_briefing(bf.build_briefing(cfg, use_cache=cached))
 
-    if cmd == "alerts":
+    if cmd in ("alerts", "alert-config"):
         from stockai import alerts as al
-        res = al.check_alerts(cfg)
-        return al.render_alerts(res) or "Aktuell keine starken Bewegungen."
+        from stockai import users
+        a = (arg or "").lower()
+        if a in ("on", "an", "ein"):
+            users.set_pref(cfg, user, "alerts_on", True)
+            return "🔔 Live-Alerts sind AN. Schwelle ändern: /alerts 5"
+        if a in ("off", "aus"):
+            users.set_pref(cfg, user, "alerts_on", False)
+            return "🔕 Live-Alerts sind AUS. Wieder an: /alerts on"
+        if a:                                          # Zahl = neue Schwelle in %
+            try:
+                pct = max(0.5, min(50.0, float(a.replace("%", "").replace(",", "."))))
+                users.set_pref(cfg, user, "alert_pct", pct)
+                users.set_pref(cfg, user, "alerts_on", True)
+                return (f"✔ Live-Alerts ab {pct:g}% Bewegung (AN).\n"
+                        "Aus: /alerts off · jetzt prüfen: /alerts")
+            except ValueError:
+                return ("Nutzung: /alerts [on|off|PROZENT]\n"
+                        "z.B. /alerts 5  ·  /alerts off")
+        # ohne Argument: aktuelle Bewegungen nach DEINER Schwelle zeigen
+        prefs = users.load_prefs(cfg, user)
+        pct = float(prefs.get("alert_pct", 3.0))
+        on = prefs.get("alerts_on", True)
+        res = al.check_alerts(cfg, move_pct=pct, save_state=False)
+        body = al.render_alerts(res) or f"Aktuell keine Bewegung ≥ {pct:g}%."
+        status = "AN" if on else "AUS"
+        return f"{body}\n\n⚙️ Deine Schwelle: {pct:g}% · Push: {status} (/alerts off|on|PROZENT)"
 
     if cmd in ("whales", "whale", "volumen"):
         from stockai import whale as wh
