@@ -30,6 +30,15 @@ class Portfolio:
     sells: list[str]       # Ticker mit Verkaufs-/Meiden-Signal
 
 
+def _regime_exposure(analyses) -> float:
+    """Investitionsgrad je Marktlage: 1.0 (bullisch) … 0.4 (tiefer Abschwung)."""
+    if not analyses:
+        return 1.0
+    import statistics
+    mom = statistics.mean(getattr(a, "momentum_5d", 0.0) for a in analyses)
+    return min(1.0, max(0.4, 1.0 + 20.0 * mom))
+
+
 def build_portfolio(
     analyses,
     capital: float = 10_000.0,
@@ -83,6 +92,11 @@ def build_portfolio(
     weights = _apply_cap(weights, max_position_pct)
     if sectors:
         weights = _apply_sector_cap(weights, sectors, max_sector_pct, max_position_pct)
+
+    # Regime-Bremse: in Abschwungphasen weniger investieren (Rest = Cash)
+    exposure = _regime_exposure(analyses)
+    if exposure < 0.999:
+        weights = {t: w * exposure for t, w in weights.items()}
 
     allocations: list[Allocation] = []
     invested = 0.0

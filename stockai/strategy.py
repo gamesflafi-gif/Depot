@@ -136,6 +136,7 @@ def run_strategy_backtest(
     initial_capital: float = 1.0,
     retrain_every: int = 1,
     cost_bps: float = 10.0,
+    regime_filter: bool = True,
 ) -> StrategyResult:
     """Führt den Walk-Forward-Strategie-Backtest aus.
 
@@ -216,6 +217,13 @@ def run_strategy_backtest(
         total_cost += cost
         prev_weights = new_weights
         strat_ret -= cost
+
+        # Regime-Bremse: in Abschwungphasen (breiter Markt unter SMA50) wird die
+        # Position verkleinert (Rest = Cash) -> geringerer Drawdown.
+        if regime_filter and "mkt_trend" in today.columns:
+            regime = float(today["mkt_trend"].mean())
+            exposure = min(1.0, max(0.3, 1.0 + 14.0 * regime))
+            strat_ret *= exposure
 
         strat_returns.append(strat_ret)
         bench_returns.append(bench_ret)

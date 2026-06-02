@@ -101,7 +101,19 @@ def build_savings_plan(
         core_share = 0.0
 
     # --- Satelliten: beste Aktien laut Modell ---------------------------- #
+    # Regime-Bremse: in Abschwüngen weniger in Einzelaktien, mehr in den ETF-Core.
+    from stockai.portfolio import _regime_exposure
+    exposure = _regime_exposure(analyses)
     sat_budget_share = max(0.0, 1.0 - core_share - crypto_share)
+    if exposure < 0.999 and core_etfs:
+        defensiv = sat_budget_share * (1.0 - exposure)
+        sat_budget_share -= defensiv
+        # freigewordenen Anteil gleichmäßig in die ETFs umlenken
+        for p in plan.core_positions:
+            p.weight += defensiv / len(core_etfs)
+            p.monthly = round(monthly_amount * p.weight, 2)
+        plan.notes.append(
+            f"Defensiv (Marktlage): {defensiv:.0%} von Aktien in ETF-Core verschoben.")
     candidates = [
         by_ticker[t] for t in stocks
         if t in by_ticker and by_ticker[t].action in _BUY
