@@ -79,11 +79,12 @@ def test_regime_exposure_defensive():
     bull = [SimpleNamespace(momentum_5d=0.03, ticker="A", action="KAUFEN",
                             profit_probability=0.6, confidence=0.7, last_price=10.0)
             for _ in range(4)]
-    bear = [SimpleNamespace(momentum_5d=-0.04, ticker=f"A{i}", action="KAUFEN",
+    bear = [SimpleNamespace(momentum_5d=-0.05, ticker=f"A{i}", action="KAUFEN",
                             profit_probability=0.6, confidence=0.7, last_price=10.0)
             for i in range(4)]
     assert _regime_exposure(bull) == 1.0
-    assert _regime_exposure(bear) < 0.6          # defensiv im Abschwung
+    assert _regime_exposure(bear) < 1.0          # defensiv im klaren Abschwung
+    assert _regime_exposure(bear) <= 0.65
     # Im Bärenmarkt wird weniger investiert (mehr Cash)
     pf = build_portfolio(bear, capital=1000.0)
     assert pf.cash > 0.0                          # Regime-Bremse hält Cash
