@@ -602,6 +602,21 @@ def cmd_evolve(cfg, args) -> None:
     print(f"\n  ✔ Neu trainiert & übernommen (finale Güte ~{auc:.3f}).")
     print("  Die KI hat ihre Konfiguration selbst verbessert.")
 
+    # Aus Fehlern lernen: Schwachstellen analysieren und als Lektionen sichern.
+    # Diese dämpfen ab sofort die täglichen Empfehlungen in genau den Lagen,
+    # in denen die KI historisch danebenlag.
+    try:
+        from stockai import weakspots as ws
+        w = ws.analyze_weakspots(cfg)
+        n_lessons = ws.save_lessons(cfg, w)
+        if n_lessons:
+            print(f"  🔍 {n_lessons} Schwachstelle(n) gelernt – Empfehlungen werden "
+                  "dort jetzt vorsichtiger.")
+        else:
+            print("  🔍 Keine systematischen Schwachstellen gefunden.")
+    except Exception as exc:
+        print(f"  (Schwachstellen-Analyse übersprungen: {exc})")
+
 
 def cmd_bot(cfg, args) -> None:
     """Startet den interaktiven Telegram-Bot (läuft dauerhaft)."""

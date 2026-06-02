@@ -664,6 +664,10 @@ def analyze(
     # Markt-/relative-Stärke-Features über alle Ticker ergänzen
     _augment_with_market(rows)
 
+    # gelernte Schwachstellen einmalig laden (für die Selbstkorrektur)
+    from stockai import weakspots as _ws
+    lessons = _ws.load_lessons(cfg)
+
     # 2. Durchgang: Vorhersage + Empfehlung
     results: list[TickerAnalysis] = []
     for ticker, row, scored_news, last_price in collected:
@@ -685,6 +689,9 @@ def analyze(
         ]
 
         macd_hist = row.get("macd", 0.0) - row.get("macd_signal", 0.0)
+        weak_conditions = _ws.caution_for(
+            lessons, row.get("rsi_14", 50.0), row.get("sent_mean", 0.0),
+            row.get("mkt_trend", 0.0)) if lessons else None
         rec = recommend(
             profit_probability=proba,
             rsi_14=row.get("rsi_14", 50.0),
@@ -693,6 +700,7 @@ def analyze(
             macd_hist=macd_hist,
             sentiment_mean=row.get("sent_mean", 0.0),
             expected_return=expected_return,
+            weak_conditions=weak_conditions,
         )
         results.append(
             TickerAnalysis(
