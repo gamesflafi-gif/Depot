@@ -117,8 +117,12 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   schreiben kannst – `/analyse NVDA`, `/top`, `/sparplan 200`, `/briefing`,
   `/depot`, `/track`, `/weakspots`, `/health`. **Antippbare Buttons** (Inline-Menü)
   machen Tippen optional; jede Nachricht (auch das tägliche Push-Briefing) hat das
-  Menü dabei. Reagiert nur auf die eigene Chat-ID. Dauerbetrieb via
-  `deploy/install_bot.sh` (systemd-Dienst).
+  Menü dabei. Dauerbetrieb via `deploy/install_bot.sh` (systemd-Dienst).
+- **Mehrere Nutzer (Allowlist):** In `STOCKAI_TELEGRAM_CHAT_ID` mehrere Chat-IDs
+  komma-getrennt eintragen (`123456,789012`) → alle dürfen den Bot nutzen und
+  bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
+  eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
+  antwortet der Bot allen (nicht empfohlen).
 - **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und
   Verkaufssignale zusammen und meldet gezielt **Veränderungen seit dem letzten
   Lauf** (neue Kauf-/Verkaufssignale, große Wahrscheinlichkeits-Sprünge) – ideal

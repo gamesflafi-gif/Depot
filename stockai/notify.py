@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -23,6 +24,15 @@ _WEBHOOK_ENV = "STOCKAI_WEBHOOK_URL"
 _TG_TOKEN_ENV = "STOCKAI_TELEGRAM_TOKEN"
 _TG_CHAT_ENV = "STOCKAI_TELEGRAM_CHAT_ID"
 _TG_LIMIT = 4000  # Telegram-Nachrichtenlimit (~4096), mit Puffer
+
+
+def parse_chat_ids(raw: str | None) -> list[str]:
+    """Zerlegt eine Chat-ID-Liste (komma-/leerzeichengetrennt) in einzelne IDs.
+
+    So kann ``STOCKAI_TELEGRAM_CHAT_ID`` mehrere erlaubte Empfänger enthalten
+    (du + Freunde) – z.B. ``"123456,789012"``.
+    """
+    return [c for c in re.split(r"[,\s]+", (raw or "").strip()) if c]
 
 
 def main_menu_markup() -> str:
@@ -77,28 +87,33 @@ def render_savings_plan(plan) -> str:
 
 def send_telegram(text: str, token: str | None = None, chat_id: str | None = None,
                   reply_markup: str | None = None) -> bool:
-    """Sendet eine Nachricht an einen Telegram-Chat. Liefert Erfolg.
+    """Sendet eine Nachricht an einen oder mehrere Telegram-Chats. Liefert Erfolg.
 
     Einrichtung: bei @BotFather einen Bot anlegen -> Token; die eigene Chat-ID
-    z.B. über @userinfobot ermitteln. Ohne Token/Chat-ID (oder Netz) passiert
-    nichts (kein Fehler). ``reply_markup`` hängt eine Inline-Tastatur an.
+    z.B. über @userinfobot ermitteln. ``STOCKAI_TELEGRAM_CHAT_ID`` darf mehrere
+    IDs (komma-/leerzeichengetrennt) enthalten – dann geht die Nachricht an alle.
+    Ohne Token/Chat-ID (oder Netz) passiert nichts (kein Fehler). ``reply_markup``
+    hängt eine Inline-Tastatur an.
     """
     token = token or os.environ.get(_TG_TOKEN_ENV)
-    chat_id = chat_id or os.environ.get(_TG_CHAT_ENV)
-    if not token or not chat_id:
+    ids = parse_chat_ids(chat_id or os.environ.get(_TG_CHAT_ENV))
+    if not token or not ids:
         return False
-    try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        params = {"chat_id": chat_id, "text": text[:_TG_LIMIT],
-                  "disable_web_page_preview": "true"}
-        if reply_markup:
-            params["reply_markup"] = reply_markup
-        data = urllib.parse.urlencode(params).encode("utf-8")
-        req = urllib.request.Request(url, data=data)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return 200 <= resp.status < 300
-    except Exception:
-        return False
+    ok_any = False
+    for cid in ids:
+        try:
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            params = {"chat_id": cid, "text": text[:_TG_LIMIT],
+                      "disable_web_page_preview": "true"}
+            if reply_markup:
+                params["reply_markup"] = reply_markup
+            data = urllib.parse.urlencode(params).encode("utf-8")
+            req = urllib.request.Request(url, data=data)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                ok_any = ok_any or (200 <= resp.status < 300)
+        except Exception:
+            continue
+    return ok_any
 
 
 def notify(text: str) -> tuple[bool, str]:
@@ -138,4 +153,4 @@ def webhook_configured() -> bool:
 
 
 def telegram_configured() -> bool:
-    return bool(os.environ.get(_TG_TOKEN_ENV) and os.environ.get(_TG_CHAT_ENV))
+    return bool(os.environ.get(_TG_TOKEN_ENV) and parse_chat_ids(os.environ.get(_TG_CHAT_ENV)))
