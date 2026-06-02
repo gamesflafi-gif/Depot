@@ -191,15 +191,24 @@ def _reply(cfg: Config, token: str, chat_id: str, text: str) -> None:
 
 
 def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
-    """Startet die Long-Polling-Schleife (läuft dauerhaft)."""
-    from stockai.notify import main_menu_markup
+    """Startet die Long-Polling-Schleife (läuft dauerhaft).
+
+    ``STOCKAI_TELEGRAM_CHAT_ID`` darf mehrere erlaubte IDs enthalten (Allowlist,
+    komma-/leerzeichengetrennt). Nur diese dürfen den Bot nutzen; ist keine ID
+    gesetzt, antwortet der Bot allen (nicht empfohlen).
+    """
+    from stockai.notify import main_menu_markup, parse_chat_ids
     token = os.environ.get(_TOKEN_ENV)
-    owner = os.environ.get(_CHAT_ENV)
+    allowed = parse_chat_ids(os.environ.get(_CHAT_ENV))
     if not token:
         raise RuntimeError(f"{_TOKEN_ENV} nicht gesetzt (siehe .env / doctor).")
-    log.info("Telegram-Bot gestartet (Polling).")
-    if owner:
-        _send(token, owner, "🤖 Aktien-KI Bot ist online. Tippe einen Button "
+    log.info("Telegram-Bot gestartet (Polling). Erlaubte Chats: %d", len(allowed))
+
+    def _authorized(cid: str) -> bool:
+        return (not allowed) or (cid in allowed)
+
+    for cid in allowed:                      # Startmeldung an alle Erlaubten
+        _send(token, cid, "🤖 Aktien-KI Bot ist online. Tippe einen Button "
               "oder /help.", keyboard=main_menu_markup())
 
     offset = None
@@ -221,7 +230,7 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
                              {"callback_query_id": cb.get("id", "")}, timeout=10)
                     except Exception:
                         pass
-                    if owner and cb_chat != str(owner):
+                    if not _authorized(cb_chat):
                         continue
                     _reply(cfg, token, cb_chat, cb.get("data", "/help"))
                     continue
@@ -232,8 +241,10 @@ def run_bot(cfg: Config, poll_timeout: int = 30) -> None:
                 chat_id = str(msg.get("chat", {}).get("id", ""))
                 if not text:
                     continue
-                if owner and chat_id != str(owner):
-                    _send(token, chat_id, "Nicht autorisiert.")
+                if not _authorized(chat_id):
+                    _send(token, chat_id,
+                          "Nicht autorisiert. Deine Chat-ID: " + chat_id +
+                          "\nGib sie dem Betreiber, damit er dich freischaltet.")
                     continue
                 _reply(cfg, token, chat_id, text)
         except Exception as exc:

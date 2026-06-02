@@ -557,6 +557,18 @@ def test_holdings_tracking(tmp_path):
     assert "leer" in hd.render_depot(hd.DepotReport())
 
 
+def test_chat_id_allowlist():
+    """Mehrere erlaubte Chat-IDs werden korrekt zerlegt (Allowlist/Freundeskreis)."""
+    from stockai import notify
+
+    assert notify.parse_chat_ids("123,456") == ["123", "456"]
+    assert notify.parse_chat_ids("  111, 222 ,333 ") == ["111", "222", "333"]
+    assert notify.parse_chat_ids("999") == ["999"]
+    assert notify.parse_chat_ids("") == [] and notify.parse_chat_ids(None) == []
+    # ohne Token/IDs wird nichts gesendet (kein Fehler)
+    assert notify.send_telegram("x", token=None, chat_id="123,456") is False
+
+
 def test_health_self_regulation(tmp_path):
     """Bei Verschlechterung steigt die Vorsicht (Kaufschwelle), Erholung lockert."""
     import numpy as np
