@@ -166,6 +166,10 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   sondern dämpft sie automatisch.
 - **Live-Track-Record:** `track` vergleicht die **tatsächlich gespeicherten**
   Live-Prognosen mit dem real eingetretenen Ergebnis (wächst über die Zeit).
+- **Selbstüberwachung:** `health` misst wöchentlich die Treffsicherheit, merkt
+  sich den Verlauf und **warnt automatisch** (per Telegram), wenn die KI spürbar
+  schlechter wird oder schlechter als die Basisrate trifft. Solange noch wenig
+  live gesammelt ist, dient die Modellgüte (Holdout-AUC) als Ersatzsignal.
 - **News-Ablation:** `ablation` misst den tatsächlichen Beitrag der News
   (Technik vs. News vs. kombiniert) – statt zu behaupten, dass News helfen,
   wird es nachgewiesen. (News tragen real meist einen *kleinen* Mehrwert, da

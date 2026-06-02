@@ -11,6 +11,8 @@ mkdir -p logs
   "$PY" -m stockai.cli evolve || echo "evolve fehlgeschlagen"
   # Live-Track-Record (echte Prognosen vs. Ergebnis) per Telegram
   "$PY" -m stockai.cli track --notify || echo "track fehlgeschlagen"
+  # Selbstcheck: meldet automatisch, wenn die KI schlechter wird
+  "$PY" -m stockai.cli health --notify || echo "health fehlgeschlagen"
   # Wochen-Top-5 in beide Richtungen
   "$PY" -m stockai.cli top --n 5 --notify || echo "weekly fehlgeschlagen"
 } >> "logs/weekly-$(date +%Y-%m-%d).log" 2>&1
