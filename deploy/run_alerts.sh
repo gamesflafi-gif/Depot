@@ -6,4 +6,8 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 PY="$PROJECT_DIR/.venv/bin/python"; [ -x "$PY" ] || PY="python3"
 mkdir -p logs
-"$PY" -m stockai.cli alerts --notify >> "logs/alerts-$(date +%Y-%m-%d).log" 2>&1
+LOG="logs/alerts-$(date +%Y-%m-%d).log"
+# 1) allgemeine starke Bewegungen
+"$PY" -m stockai.cli alerts --notify >> "$LOG" 2>&1
+# 2) eigene bedingte Alerts (Crossing-Logik, nur bei frisch erreichtem Trigger)
+"$PY" -m stockai.cli watch check --notify >> "$LOG" 2>&1

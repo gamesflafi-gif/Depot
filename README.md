@@ -123,6 +123,12 @@ Dashboard-Tab „Lernfortschritt“ sichtbar.
   bekommen die täglichen Nachrichten. Wer nicht freigeschaltet ist, bekommt seine
   eigene Chat-ID genannt (zum Weitergeben an den Betreiber). Ist keine ID gesetzt,
   antwortet der Bot allen (nicht empfohlen).
+- **Smarte bedingte Alerts:** `watch` lässt dich **eigene Trigger** setzen –
+  `watch add BTC-USD < 50000`, `watch add NVDA rsi < 30`, `watch add BTC-USD vol > 2`
+  (ungewöhnliches Volumen) oder `watch add NVDA pct < -5`. Der Cron prüft sie
+  regelmäßig und meldet per Telegram, sobald eine Bedingung **frisch erreicht**
+  wird – mit Crossing-Logik (erst wieder, wenn sie zwischendurch nicht mehr galt,
+  also kein Dauer-Spam). Auch im Chat: `/watch`, `/watch add …`, `/watch remove N`.
 - **Tägliches Briefing & Moves-Alerts:** `briefing` fasst die besten Chancen und
   Verkaufssignale zusammen und meldet gezielt **Veränderungen seit dem letzten
   Lauf** (neue Kauf-/Verkaufssignale, große Wahrscheinlichkeits-Sprünge) – ideal

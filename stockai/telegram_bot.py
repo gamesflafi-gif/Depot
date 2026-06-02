@@ -41,6 +41,7 @@ _HELP = (
     "  /briefing      aktuelles Briefing mit Bewegungen\n"
     "  /top [n]       Top-n Chancen & Risiken\n"
     "  /alerts        starke Live-Bewegungen\n"
+    "  /watch         eigene Trigger (z.B. /watch add BTC-USD < 50000)\n"
     "\n"
     "💶 Geld\n"
     "  /sparplan [€]  Sparplan-Vorschlag (Standard 100€)\n"
@@ -85,6 +86,30 @@ def handle_command(cfg: Config, text: str) -> str:
     if cmd in ("health", "check", "selbstcheck"):
         from stockai import health as hl
         return hl.render_health(hl.assess_health(cfg, record=False))
+
+    if cmd in ("watch", "alert", "trigger"):
+        from stockai import watch as wt
+        sub = (parts[1].lower() if len(parts) > 1 else "")
+        if sub == "add":
+            w = wt.parse_spec(parts[2:])
+            if not w:
+                return ("Nutzung: /watch add TICKER [rsi|vol|pct] <|> WERT\n"
+                        "z.B. /watch add BTC-USD < 50000\n"
+                        "      /watch add NVDA rsi < 30\n"
+                        "      /watch add BTC-USD vol > 2")
+            wt.add_watch(cfg, w)
+            return (f"✔ Alert gesetzt: {w.ticker} {wt._LABEL[w.metric]} {w.op} "
+                    f"{w.value:g}\nAlle Alerts: /watch")
+        if sub in ("remove", "del", "delete"):
+            try:
+                idx = int(parts[2])
+            except (IndexError, ValueError):
+                return "Nutzung: /watch remove NUMMER (siehe /watch)"
+            return ("✔ entfernt." if wt.remove_watch(cfg, idx) else "Nummer nicht gefunden.")
+        if sub == "clear":
+            wt.save_watches(cfg, [])
+            return "✔ Alle Alerts gelöscht."
+        return wt.render_watches(cfg)
 
     if cmd in ("depot", "portfolio", "wallet"):
         from stockai import holdings as hd

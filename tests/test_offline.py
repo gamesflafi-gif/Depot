@@ -557,6 +557,35 @@ def test_holdings_tracking(tmp_path):
     assert "leer" in hd.render_depot(hd.DepotReport())
 
 
+def test_watch_alerts(tmp_path, monkeypatch):
+    """Bedingte Alerts: Parsing + Crossing-Logik (kein Dauer-Spam)."""
+    from stockai import watch as wt
+    from stockai.config import load_config
+
+    cfg = load_config()
+    cfg.paths = {"store_dir": str(tmp_path), "model_dir": str(tmp_path)}
+
+    # Parsing der Bedingungen
+    assert wt.parse_spec(["BTC-USD", "<", "50000"]).metric == "price"
+    assert wt.parse_spec(["NVDA", "rsi", "<", "30"]).metric == "rsi"
+    assert wt.parse_spec(["BTC-USD", "vol", ">", "2"]).op == ">"
+    assert wt.parse_spec(["X", "bad"]) is None
+    assert wt.parse_spec(["X", "=", "1"]) is None      # nur < oder >
+
+    wt.add_watch(cfg, wt.Watch("BTC-USD", "price", "<", 50000))
+
+    # gemockte Kursfolge: unter, unter, über (Reset), unter
+    seq = iter([49000.0, 48000.0, 51000.0, 47000.0])
+    monkeypatch.setattr(wt, "_current_value", lambda c, t, m: next(seq))
+    assert wt.check_watches(cfg)            # feuert
+    assert wt.check_watches(cfg) == []      # bleibt unten -> kein zweites Feuern
+    assert wt.check_watches(cfg) == []      # über Schwelle -> macht wieder scharf
+    assert wt.check_watches(cfg)            # wieder unten -> feuert erneut
+
+    assert wt.remove_watch(cfg, 0) is True
+    assert "Keine Alerts" in wt.render_watches(cfg)
+
+
 def test_chat_id_allowlist():
     """Mehrere erlaubte Chat-IDs werden korrekt zerlegt (Allowlist/Freundeskreis)."""
     from stockai import notify
