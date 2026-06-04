@@ -85,7 +85,11 @@ def build_index(cfg: Config, prefer: str = "auto", batch: int = 256,
 
 
 class SearchEngine:
-    """Lädt den Index in den Speicher und beantwortet Suchanfragen."""
+    """Lädt den Index in den Speicher und beantwortet Suchanfragen.
+
+    Ranking: semantische Ähnlichkeit + Stichwort + Zitationen + Aktualität,
+    gewichtet vom Gehirn (gelernte Gewichte, sonst Cold-Start-Defaults).
+    """
 
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
@@ -94,32 +98,36 @@ class SearchEngine:
         self.vecs: np.ndarray = np.load(d / "vectors.npy")
         self.meta: list = json.load(open(d / "meta.json", encoding="utf-8"))
         self.embedder = get_embedder(prefer=info.get("embedder", "auto"))
-        # Token-Mengen für den Stichwort-Bonus (hybrid)
-        self._tokens = [set(_tokenize(f"{m['title']}")) for m in self.meta]
+        self._tokens = [set(_tokenize(m["title"])) for m in self.meta]
+        from synapse.ranking import load_weights
+        self.weights = load_weights(cfg.data_dir)
 
-    def search(self, query: str, k: int = 10) -> list[SearchHit]:
+    def search(self, query: str, k: int = 10, candidates: int = 100) -> list[SearchHit]:
+        from synapse.ranking import make_features, score
         qv = self.embedder.embed([query]).astype("float32")[0]
         n = np.linalg.norm(qv)
         if n > 0:
             qv = qv / n
-        sims = self.vecs @ qv                      # Cosinus-Ähnlichkeit
-
-        # leichter Hybrid-Bonus: Stichwort-Überlappung im Titel
+        sims = self.vecs @ qv                       # Cosinus-Ähnlichkeit
         q_tokens = set(_tokenize(query))
-        if q_tokens:
-            overlap = np.array([
-                len(q_tokens & t) / len(q_tokens) for t in self._tokens
-            ], dtype="float32")
-            scores = 0.85 * sims + 0.15 * overlap
-        else:
-            scores = sims
 
-        top = np.argsort(-scores)[:k]
+        # nur die besten Kandidaten voll bewerten (schnell)
+        n_cand = min(candidates, len(sims))
+        cand_idx = np.argpartition(-sims, n_cand - 1)[:n_cand]
+
+        scored = []
+        for i in cand_idx:
+            i = int(i)
+            m = self.meta[i]
+            kw = (len(q_tokens & self._tokens[i]) / len(q_tokens)) if q_tokens else 0.0
+            feats = make_features(float(sims[i]), kw, m["cited_by_count"], m["year"])
+            scored.append((score(feats, self.weights), i))
+
+        scored.sort(key=lambda t: t[0], reverse=True)
         hits = []
-        for i in top:
-            m = self.meta[int(i)]
+        for sc, i in scored[:k]:
+            m = self.meta[i]
             hits.append(SearchHit(
                 id=m["id"], title=m["title"], year=m["year"], doi=m["doi"],
-                venue=m["venue"], cited_by_count=m["cited_by_count"],
-                score=float(scores[int(i)])))
+                venue=m["venue"], cited_by_count=m["cited_by_count"], score=float(sc)))
         return hits

@@ -95,6 +95,16 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
+def cmd_brain(cfg, args) -> None:
+    from synapse import brain
+    print("Trainiere Ranking-Gehirn aus Klick-Feedback …")
+    res = brain.train(cfg)
+    print(f"  Klicks ausgewertet: {res.n_clicks}")
+    print(f"  Status: {res.note}")
+    if res.weights:
+        print("  Gewichte:", {k: res.weights[k] for k in res.weights})
+
+
 def cmd_serve(cfg, args) -> None:
     import uvicorn
     from synapse.web import create_app
@@ -103,7 +113,8 @@ def cmd_serve(cfg, args) -> None:
 
 
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
-            "index": cmd_index, "search": cmd_search, "serve": cmd_serve}
+            "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
+            "brain": cmd_brain}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -131,6 +142,8 @@ def main(argv: list[str] | None = None) -> None:
     pse = sub.add_parser("serve", help="Web-Oberfläche starten")
     pse.add_argument("--host", default="0.0.0.0")
     pse.add_argument("--port", type=int, default=8000)
+
+    sub.add_parser("brain", help="Ranking-Gehirn aus Klick-Feedback trainieren")
 
     args = parser.parse_args(argv)
     cfg = load_config()

@@ -7,7 +7,7 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 
 ➡️ Gesamtplan & Architektur: **`PROJECT_PLAN_SYNAPSE.md`**
 
-## Status: Phase 0 (Fundament) ✅ · Phase 1 (Suche) ✅ · Phase 1.5 (Web) ✅
+## Status: Phase 0 ✅ · Phase 1 Suche ✅ · Phase 1.5 Web ✅ · Phase 2 Gehirn ✅
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
@@ -43,6 +43,17 @@ export SYNAPSE_MAILTO="du@example.org"
 - `index [--embedder auto|fastembed|hash]` – semantischen Index bauen
 - `search "FRAGE" [--k N]` – semantische Suche (hybrid: Vektor + Stichwort)
 - `serve [--host H] [--port P]` – Web-Oberfläche im Browser starten
+- `brain` – Ranking-Gehirn aus Klick-Feedback trainieren (Phase 2)
+
+## Lernendes Ranking-Gehirn (Phase 2)
+Das Ranking kombiniert mehrere Signale (semantische Nähe, Stichwort, Zitationen,
+Aktualität). Anfangs mit sinnvollen Cold-Start-Gewichten; sobald genug Klicks
+gesammelt sind, lernt das Gehirn die Gewichte aus echtem Feedback neu:
+```bash
+.venv/bin/python -m synapse.cli brain     # justiert Gewichte aus Klicks (ab ~15 Klicks)
+```
+Je mehr genutzt wird, desto besser das Ranking – der eigentliche Burggraben.
+Sinnvoll wöchentlich per Cron aufrufen.
 
 ## Web-Oberfläche (Phase 1.5)
 ```bash

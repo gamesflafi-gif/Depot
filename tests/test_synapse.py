@@ -96,6 +96,36 @@ def test_web_api(tmp_path):
         assert store.count_events("click") == 1 and store.count_events("search") >= 1
 
 
+def test_brain_learns_from_clicks(tmp_path):
+    """Phase 2: aus Klicks werden Ranking-Gewichte gelernt und angewandt."""
+    from synapse import brain
+    from synapse.ingest import ingest
+    from synapse.index import build_index, SearchEngine
+    from synapse.storage import SynapseStore
+    from synapse.ranking import load_weights
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+
+    # zu wenig Klicks -> Cold-Start bleibt
+    assert brain.train(cfg, prefer="hash").trained is False
+
+    # genug Klick-Feedback protokollieren (thematisch passend angeklickt)
+    with SynapseStore(cfg) as store:
+        for _ in range(8):
+            store.log_event("click", "protein structure neural network", "W1001", 0)
+            store.log_event("click", "attention sequence modeling", "W1002", 0)
+
+    res = brain.train(cfg, prefer="hash")
+    assert res.n_clicks >= 16 and res.trained is True
+    w = load_weights(cfg.data_dir)
+    assert w["semantic"] == 1.0 and set(w) == {"semantic", "keyword", "citations", "recency"}
+
+    # Suche nutzt die gelernten Gewichte und bleibt sinnvoll
+    eng = SearchEngine(cfg)
+    assert eng.search("protein structure prediction", k=3)[0].id == "W1001"
+
+
 def test_ingest_sample_idempotent(tmp_path):
     """Sample laden -> 3 gültige Werke + 1 Dead-Letter; erneuter Lauf = keine Duplikate."""
     from synapse.ingest import ingest
