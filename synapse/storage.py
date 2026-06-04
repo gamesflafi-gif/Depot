@@ -114,6 +114,16 @@ class SynapseStore:
                        open_access=int(row[2] or 0), with_abstract=int(row[3] or 0))
         return out
 
+    def fetch_for_index(self) -> list[dict]:
+        """Liefert alle Werke mit dem für die Suche nötigen Text/Metadaten."""
+        rows = self.con.execute(
+            "SELECT id, title, abstract, year, doi, venue, cited_by_count "
+            "FROM works"
+        ).fetchall()
+        return [{"id": r[0], "title": r[1] or "", "abstract": r[2] or "",
+                 "year": r[3], "doi": r[4] or "", "venue": r[5] or "",
+                 "cited_by_count": int(r[6] or 0)} for r in rows]
+
     def export_parquet(self, path: str | None = None) -> str:
         """Schreibt den aktuellen Werk-Bestand als Parquet (Lake-Snapshot)."""
         target = path or str(self.cfg.lake_path / "works.parquet")
