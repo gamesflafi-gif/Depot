@@ -55,7 +55,7 @@ def test_semantic_search_offline(tmp_path):
     cfg = _cfg(tmp_path)
     ingest(cfg, max_records=100)
 
-    n = build_index(cfg, prefer="hash")        # Offline-Hash-Embedder
+    n = build_index(cfg, prefer="hash", batch=2)   # Batch < Anzahl: Chunking testen
     assert n == 3
 
     eng = SearchEngine(cfg)
