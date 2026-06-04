@@ -57,17 +57,30 @@ def iter_works(cfg: Config, filter_str: str = "", max_records: int = 1000) -> It
 
 
 def _get_json(url: str, cfg: Config) -> dict:
-    """HTTP-GET mit Retry/Backoff (Rate-Limit, Netzfehler)."""
+    """HTTP-GET mit Retry/Backoff. Client-Fehler (4xx außer 429) werden NICHT
+    wiederholt und mit der echten OpenAlex-Meldung gemeldet."""
+    import urllib.error
     last_exc: Exception | None = None
     for attempt in range(cfg.max_retries):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Synapse/0.1"})
             with urllib.request.urlopen(req, timeout=cfg.request_timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
-        except Exception as exc:  # noqa: BLE001 (bewusst breit: Netz ist unzuverlässig)
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8")[:600]
+            except Exception:  # noqa: BLE001
+                pass
+            msg = f"OpenAlex HTTP {exc.code}: {body or exc.reason}\nURL: {url}"
+            # 4xx (außer 429 Rate-Limit) = unsere Anfrage ist falsch -> nicht wiederholen
+            if 400 <= exc.code < 500 and exc.code != 429:
+                raise RuntimeError(msg)
+            last_exc = RuntimeError(msg)
+        except Exception as exc:  # noqa: BLE001 (Netz ist unzuverlässig)
             last_exc = exc
-            wait = 2 ** attempt
-            log.warning("OpenAlex-Fehler (Versuch %d): %s – warte %ds",
-                        attempt + 1, exc, wait)
-            time.sleep(wait)
+        wait = 2 ** attempt
+        log.warning("OpenAlex-Fehler (Versuch %d): %s – warte %ds",
+                    attempt + 1, last_exc, wait)
+        time.sleep(wait)
     raise RuntimeError(f"OpenAlex nicht erreichbar nach {cfg.max_retries} Versuchen: {last_exc}")

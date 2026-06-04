@@ -35,7 +35,15 @@ def cmd_doctor(cfg, args) -> None:
 def cmd_ingest(cfg, args) -> None:
     from synapse.ingest import ingest
     print(f"Lade Werke (Quelle: {cfg.source_mode}, Limit {args.limit}) …")
-    res = ingest(cfg, filter_str=args.filter or "", max_records=args.limit)
+    try:
+        res = ingest(cfg, filter_str=args.filter or "", max_records=args.limit)
+    except RuntimeError as exc:
+        print("\nFehler bei der Abfrage – wahrscheinlich ein ungültiger Filter:")
+        print(f"  {exc}")
+        print("\nTipp: ohne Filter funktioniert es (z.B. --limit 5000), oder nutze")
+        print("  --filter 'from_publication_date:2023-01-01'")
+        print("  --filter 'default.search:machine learning'")
+        return
     print(f"  Neu/aktualisiert : {res.ingested}")
     print(f"  Fehlerhaft (DLQ) : {res.failed}")
     print(f"  Bestand gesamt   : {res.total_in_store}")
