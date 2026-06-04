@@ -13,6 +13,16 @@ def _cfg(tmp_path) -> Config:
     return cfg
 
 
+def test_openalex_filter_url_keeps_colons():
+    """OpenAlex-Filter müssen ':' und ',' wörtlich enthalten (sonst HTTP 400)."""
+    import urllib.parse
+    params = {"per-page": 200, "cursor": "*",
+              "filter": "concepts.id:C154945302,from_publication_date:2024-01-01"}
+    url = "https://api.openalex.org/works?" + urllib.parse.urlencode(params, safe=":,*")
+    assert "concepts.id:C154945302,from_publication_date:2024-01-01" in url
+    assert "%3A" not in url and "%2C" not in url
+
+
 def test_reconstruct_abstract():
     inv = {"Hallo": [0, 2], "Welt": [1]}
     assert reconstruct_abstract(inv) == "Hallo Welt Hallo"

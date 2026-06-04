@@ -49,11 +49,21 @@ def cmd_index(cfg, args) -> None:
     from synapse.index import build_index
     print("Baue semantischen Index (lokale Embeddings) …")
     n = build_index(cfg, prefer=args.embedder)
+    if n == 0:
+        print("  Keine Werke vorhanden. Erst Daten laden:")
+        print("    python -m synapse.cli ingest --limit 3000")
+        return
     print(f"  Indizierte Werke: {n}")
 
 
 def cmd_search(cfg, args) -> None:
+    from pathlib import Path
     from synapse.index import SearchEngine
+    if not (Path(cfg.data_dir) / "index" / "index.json").exists():
+        print("Kein Index gefunden. Bitte zuerst:")
+        print("  python -m synapse.cli ingest --limit 3000")
+        print("  python -m synapse.cli index")
+        return
     eng = SearchEngine(cfg)
     hits = eng.search(args.query, k=args.k)
     if not hits:
