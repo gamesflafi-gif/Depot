@@ -43,8 +43,14 @@ def _index_dir(cfg: Config) -> Path:
     return p
 
 
-def build_index(cfg: Config, prefer: str = "auto") -> int:
-    """Erzeugt Embeddings für alle Werke und speichert den Index. Anzahl zurück."""
+def build_index(cfg: Config, prefer: str = "auto", batch: int = 256,
+                max_chars: int = 2000) -> int:
+    """Erzeugt Embeddings für alle Werke und speichert den Index.
+
+    Speicherschonend: bettet **in Batches** ein (nicht alles auf einmal -> sonst
+    OOM bei vielen Werken) und kürzt überlange Texte auf ``max_chars`` (das Modell
+    nutzt ohnehin nur die ersten ~512 Token).
+    """
     with SynapseStore(cfg) as store:
         records = store.fetch_for_index()
     if not records:
@@ -52,12 +58,19 @@ def build_index(cfg: Config, prefer: str = "auto") -> int:
         return 0
 
     embedder = get_embedder(prefer=prefer)
-    texts = [f"{r['title']}. {r['abstract']}".strip() for r in records]
-    log.info("Erzeuge Embeddings für %d Werke (%s) …", len(texts), embedder.name)
-    vecs = embedder.embed(texts).astype("float32")
-    # L2-normieren (Cosinus = Skalarprodukt)
-    norms = np.linalg.norm(vecs, axis=1, keepdims=True)
-    vecs = vecs / np.clip(norms, 1e-9, None)
+    texts = [(f"{r['title']}. {r['abstract']}").strip()[:max_chars] for r in records]
+    log.info("Erzeuge Embeddings für %d Werke (%s, Batch %d) …",
+             len(texts), embedder.name, batch)
+
+    chunks: list[np.ndarray] = []
+    for i in range(0, len(texts), batch):
+        v = embedder.embed(texts[i:i + batch]).astype("float32")
+        # L2-normieren (Cosinus = Skalarprodukt)
+        v /= np.clip(np.linalg.norm(v, axis=1, keepdims=True), 1e-9, None)
+        chunks.append(v)
+        if (i // batch) % 10 == 0:
+            log.info("  … %d/%d eingebettet", min(i + batch, len(texts)), len(texts))
+    vecs = np.vstack(chunks)
 
     d = _index_dir(cfg)
     np.save(d / "vectors.npy", vecs)
