@@ -43,8 +43,8 @@ def _index_dir(cfg: Config) -> Path:
     return p
 
 
-def build_index(cfg: Config, prefer: str = "auto", batch: int = 256,
-                max_chars: int = 2000) -> int:
+def build_index(cfg: Config, prefer: str = "auto", batch: int = 64,
+                max_chars: int = 1200) -> int:
     """Erzeugt Embeddings für alle Werke und speichert den Index.
 
     Speicherschonend: bettet **in Batches** ein (nicht alles auf einmal -> sonst
@@ -64,7 +64,7 @@ def build_index(cfg: Config, prefer: str = "auto", batch: int = 256,
 
     chunks: list[np.ndarray] = []
     for i in range(0, len(texts), batch):
-        v = embedder.embed(texts[i:i + batch]).astype("float32")
+        v = embedder.embed(texts[i:i + batch], kind="passage").astype("float32")
         # L2-normieren (Cosinus = Skalarprodukt)
         v /= np.clip(np.linalg.norm(v, axis=1, keepdims=True), 1e-9, None)
         chunks.append(v)
@@ -104,7 +104,7 @@ class SearchEngine:
 
     def search(self, query: str, k: int = 10, candidates: int = 100) -> list[SearchHit]:
         from synapse.ranking import make_features, score
-        qv = self.embedder.embed([query]).astype("float32")[0]
+        qv = self.embedder.embed([query], kind="query").astype("float32")[0]
         n = np.linalg.norm(qv)
         if n > 0:
             qv = qv / n

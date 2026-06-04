@@ -33,7 +33,7 @@ class HashEmbedder:
     def __init__(self, dim: int = 256) -> None:
         self.dim = dim
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], kind: str = "passage") -> np.ndarray:
         vecs = np.zeros((len(texts), self.dim), dtype="float32")
         for i, t in enumerate(texts):
             for tok in _tokenize(t):
@@ -45,18 +45,37 @@ class HashEmbedder:
         return vecs
 
 
+# Bevorzugt mehrsprachig (versteht u.a. Deutsch), Fallback englisch.
+_MODELS = ["intfloat/multilingual-e5-small", "BAAI/bge-small-en-v1.5"]
+
+
 class FastEmbedEmbedder:
-    """Echte semantische Embeddings via fastembed (ONNX, CPU)."""
+    """Echte semantische Embeddings via fastembed (ONNX, CPU). Mehrsprachig."""
     name = "fastembed"
 
-    def __init__(self, model: str = "BAAI/bge-small-en-v1.5") -> None:
+    def __init__(self, model: str | None = None) -> None:
         from fastembed import TextEmbedding
-        self.model_name = model
-        self._m = TextEmbedding(model_name=model)
-        self.dim = 384  # bge-small
+        last = None
+        for m in ([model] if model else _MODELS):
+            try:
+                self._m = TextEmbedding(model_name=m)
+                self.model_name = m
+                break
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+        else:
+            raise RuntimeError(f"Kein Embedding-Modell ladbar: {last}")
+        self.dim = 384
+        self._e5 = "e5" in self.model_name.lower()
 
-    def embed(self, texts: list[str]) -> np.ndarray:
-        return np.asarray(list(self._m.embed(texts)), dtype="float32")
+    def embed(self, texts: list[str], kind: str = "passage") -> np.ndarray:
+        # e5-Modelle brauchen Präfixe "query:"/"passage:" für beste Qualität.
+        if self._e5:
+            pre = "query: " if kind == "query" else "passage: "
+            texts = [pre + t for t in texts]
+        # parallel=1: KEIN Multiprocessing -> nur EINE Modellkopie (spart RAM!)
+        return np.asarray(list(self._m.embed(texts, batch_size=64, parallel=1)),
+                          dtype="float32")
 
 
 def get_embedder(prefer: str = "auto", dim: int = 256):

@@ -45,6 +45,17 @@ export SYNAPSE_MAILTO="du@example.org"
 - `serve [--host H] [--port P]` – Web-Oberfläche im Browser starten
 - `brain` – Ranking-Gehirn aus Klick-Feedback trainieren (Phase 2)
 
+## Themen-Bestand & Mehrsprachigkeit (wichtig für gute Treffer)
+- Das Embedding-Modell ist **mehrsprachig** (Deutsch/Englisch …).
+- Gute Treffer brauchen einen **themenrelevanten Bestand**. Ein breiter „meist-
+  zitiert"-Pull liefert vor allem Methodik-Klassiker. Besser **gezielt** laden:
+  ```bash
+  .venv/bin/python -m synapse.cli ingest --filter 'default.search:malaria' --limit 5000
+  .venv/bin/python -m synapse.cli ingest --filter 'default.search:cancer immunotherapy' --limit 5000
+  .venv/bin/python -m synapse.cli index
+  ```
+- Bei wenig RAM den Index in kleineren Häppchen bauen: `index --batch 32`.
+
 ## Lernendes Ranking-Gehirn (Phase 2)
 Das Ranking kombiniert mehrere Signale (semantische Nähe, Stichwort, Zitationen,
 Aktualität). Anfangs mit sinnvollen Cold-Start-Gewichten; sobald genug Klicks

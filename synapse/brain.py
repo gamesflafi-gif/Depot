@@ -64,7 +64,7 @@ def train(cfg: Config, prefer: str = "auto") -> BrainResult:
 
     # eindeutige Anfragen einmal einbetten (Effizienz)
     queries = sorted({q for q, _ in clicks})
-    qvecs = embedder.embed(queries).astype("float32")
+    qvecs = embedder.embed(queries, kind="query").astype("float32")
     qvecs /= np.clip(np.linalg.norm(qvecs, axis=1, keepdims=True), 1e-9, None)
     qmap = {q: qvecs[i] for i, q in enumerate(queries)}
 
