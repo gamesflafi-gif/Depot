@@ -56,7 +56,7 @@ def cmd_ingest(cfg, args) -> None:
 def cmd_index(cfg, args) -> None:
     from synapse.index import build_index
     print("Baue semantischen Index (lokale Embeddings) …")
-    n = build_index(cfg, prefer=args.embedder)
+    n = build_index(cfg, prefer=args.embedder, batch=args.batch, max_chars=args.max_chars)
     if n == 0:
         print("  Keine Werke vorhanden. Erst Daten laden:")
         print("    python -m synapse.cli ingest --limit 3000")
@@ -134,6 +134,8 @@ def main(argv: list[str] | None = None) -> None:
     pidx = sub.add_parser("index", help="semantischen Index bauen (lokale Embeddings)")
     pidx.add_argument("--embedder", default="auto", choices=["auto", "fastembed", "hash"],
                       help="auto = echtes Modell, sonst Offline-Hash")
+    pidx.add_argument("--batch", type=int, default=64, help="Batch-Größe (kleiner = weniger RAM)")
+    pidx.add_argument("--max-chars", type=int, default=1200, help="max. Textlänge je Werk")
 
     psr = sub.add_parser("search", help="semantische Suche")
     psr.add_argument("query", help="Suchanfrage (Idee/Frage in Worten)")

@@ -18,8 +18,10 @@ from pathlib import Path
 
 FEATURES = ["semantic", "keyword", "citations", "recency"]
 
-# Cold-Start-Gewichte (bevor das Gehirn aus Klicks gelernt hat)
-DEFAULT_WEIGHTS = {"semantic": 1.0, "keyword": 0.30, "citations": 0.15, "recency": 0.10}
+# Cold-Start-Gewichte (bevor das Gehirn aus Klicks gelernt hat).
+# Semantik dominiert klar; Zitationen/Aktualität nur als schwache Tie-Breaker
+# (sonst verdrängen populäre Methodik-Paper das eigentliche Thema).
+DEFAULT_WEIGHTS = {"semantic": 1.0, "keyword": 0.30, "citations": 0.05, "recency": 0.05}
 
 
 def make_features(sim: float, keyword: float, cited_by_count: int,
