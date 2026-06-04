@@ -70,6 +70,32 @@ def test_semantic_search_offline(tmp_path):
     assert hits3[0].id == "W1003"
 
 
+def test_web_api(tmp_path):
+    """Web-API liefert Suchtreffer und protokolliert Klick-Feedback (offline)."""
+    from fastapi.testclient import TestClient
+    from synapse.ingest import ingest
+    from synapse.index import build_index
+    from synapse.web import create_app
+    from synapse.storage import SynapseStore
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+
+    client = TestClient(create_app(cfg))
+    assert client.get("/health").json()["status"] == "ok"
+    assert client.get("/").status_code == 200
+
+    r = client.get("/api/search", params={"q": "protein structure neural network", "k": 3})
+    data = r.json()
+    assert data["results"] and data["results"][0]["id"] == "W1001"
+
+    # Klick-Feedback wird geloggt (Grundlage fürs Gehirn)
+    fb = client.post("/api/feedback", params={"q": "protein", "work_id": "W1001", "rank": 0})
+    assert fb.json()["ok"] is True
+    with SynapseStore(cfg) as store:
+        assert store.count_events("click") == 1 and store.count_events("search") >= 1
+
+
 def test_ingest_sample_idempotent(tmp_path):
     """Sample laden -> 3 gültige Werke + 1 Dead-Letter; erneuter Lauf = keine Duplikate."""
     from synapse.ingest import ingest

@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS state (
     key   VARCHAR PRIMARY KEY,
     value VARCHAR
 );
+CREATE TABLE IF NOT EXISTS events (
+    ts      VARCHAR,
+    event   VARCHAR,          -- 'search' | 'click'
+    query   VARCHAR,
+    work_id VARCHAR,
+    rank    INTEGER
+);
 """
 
 
@@ -85,6 +92,20 @@ class SynapseStore:
             "INSERT INTO dead_letter VALUES (?,?,?)",
             [json.dumps(raw, ensure_ascii=False)[:20000], str(error)[:1000],
              datetime.now(timezone.utc).isoformat()])
+
+    # -- Nutzungs-Events (Grundlage fürs lernende Ranking) --------------- #
+    def log_event(self, event: str, query: str = "", work_id: str = "",
+                  rank: int | None = None) -> None:
+        self.con.execute(
+            "INSERT INTO events VALUES (?,?,?,?,?)",
+            [datetime.now(timezone.utc).isoformat(), event, query[:500],
+             work_id, rank])
+
+    def count_events(self, event: str | None = None) -> int:
+        if event:
+            return int(self.con.execute(
+                "SELECT COUNT(*) FROM events WHERE event=?", [event]).fetchone()[0])
+        return int(self.con.execute("SELECT COUNT(*) FROM events").fetchone()[0])
 
     # -- Checkpoints (Wiederanlauf) -------------------------------------- #
     def get_state(self, key: str, default: str = "") -> str:

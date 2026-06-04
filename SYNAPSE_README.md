@@ -7,7 +7,7 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 
 ➡️ Gesamtplan & Architektur: **`PROJECT_PLAN_SYNAPSE.md`**
 
-## Status: Phase 0 (Fundament) ✅ · Phase 1 (semantische Suche) ✅
+## Status: Phase 0 (Fundament) ✅ · Phase 1 (Suche) ✅ · Phase 1.5 (Web) ✅
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
@@ -42,6 +42,16 @@ export SYNAPSE_MAILTO="du@example.org"
 - `stats` – Bestand im Daten-Lake
 - `index [--embedder auto|fastembed|hash]` – semantischen Index bauen
 - `search "FRAGE" [--k N]` – semantische Suche (hybrid: Vektor + Stichwort)
+- `serve [--host H] [--port P]` – Web-Oberfläche im Browser starten
+
+## Web-Oberfläche (Phase 1.5)
+```bash
+.venv/bin/python -m synapse.cli serve --host 0.0.0.0 --port 8000
+# Browser: http://DEINE-SERVER-IP:8000
+```
+Suchfeld + Trefferliste mit Quellen (DOI-Links). **Klicks werden protokolliert** –
+das ist die Datengrundlage fürs lernende Ranking-„Gehirn" (Phase 2).
+Dauerbetrieb als Dienst: `deploy/synapse/web.service` (siehe Datei).
 
 ## Server-Härtung (Sicherheit)
 ```bash

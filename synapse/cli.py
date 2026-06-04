@@ -95,8 +95,15 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
+def cmd_serve(cfg, args) -> None:
+    import uvicorn
+    from synapse.web import create_app
+    print(f"Starte Web-Oberfläche auf http://{args.host}:{args.port}  (Strg+C beendet)")
+    uvicorn.run(create_app(cfg), host=args.host, port=args.port)
+
+
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
-            "index": cmd_index, "search": cmd_search}
+            "index": cmd_index, "search": cmd_search, "serve": cmd_serve}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -120,6 +127,10 @@ def main(argv: list[str] | None = None) -> None:
     psr = sub.add_parser("search", help="semantische Suche")
     psr.add_argument("query", help="Suchanfrage (Idee/Frage in Worten)")
     psr.add_argument("--k", type=int, default=10, help="Anzahl Treffer")
+
+    pse = sub.add_parser("serve", help="Web-Oberfläche starten")
+    pse.add_argument("--host", default="0.0.0.0")
+    pse.add_argument("--port", type=int, default=8000)
 
     args = parser.parse_args(argv)
     cfg = load_config()
