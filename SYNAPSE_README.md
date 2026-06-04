@@ -11,19 +11,22 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
-## Schnellstart (lokal/Server)
+## Schnellstart (Ubuntu 24.04 / Server)
+Ubuntu blockiert `pip` systemweit (PEP 668) und kennt nur `python3`. Darum eine
+**virtuelle Umgebung** nutzen – das Setup-Skript erledigt das:
 ```bash
-pip install -r requirements-synapse.txt
+bash deploy/synapse/setup.sh        # legt .venv an + installiert alles
 
 # Offline-Demo (ohne Netzwerk):
-SYNAPSE_SOURCE=sample python -m synapse.cli ingest --limit 100 --export
-python -m synapse.cli stats
+SYNAPSE_SOURCE=sample .venv/bin/python -m synapse.cli ingest --limit 100 --export
+.venv/bin/python -m synapse.cli stats
 
 # Echte Daten von OpenAlex (CC0). mailto = stabilere API:
 export SYNAPSE_MAILTO="du@example.org"
-python -m synapse.cli ingest --filter 'from_publication_date:2024-01-01' --limit 5000
-python -m synapse.cli stats
+.venv/bin/python -m synapse.cli ingest --filter 'from_publication_date:2024-01-01' --limit 5000
+.venv/bin/python -m synapse.cli stats
 ```
+> Hinweis: immer `.venv/bin/python` (nicht `python`/`pip` direkt) verwenden.
 
 ## Befehle
 - `doctor` – Umgebung & Bestand prüfen
