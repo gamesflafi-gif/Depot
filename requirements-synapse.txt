@@ -1,0 +1,4 @@
+# Synapse – Phase 0 (Fundament): Daten-Lake & Ingestion
+duckdb>=1.0
+pyarrow>=14.0
+# (Phase 1 ergänzt: qdrant-client, sentence-transformers, fastapi, uvicorn)

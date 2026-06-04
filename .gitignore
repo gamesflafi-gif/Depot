@@ -29,3 +29,6 @@ logs/
 .DS_Store
 .idea/
 .vscode/
+
+# Synapse Daten-Lake (nicht versionieren)
+data/synapse/
