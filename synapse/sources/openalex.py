@@ -40,7 +40,9 @@ def iter_works(cfg: Config, filter_str: str = "", max_records: int = 1000) -> It
             params["filter"] = filter_str
         if cfg.mailto:
             params["mailto"] = cfg.mailto
-        url = cfg.openalex_base + "?" + urllib.parse.urlencode(params)
+        # WICHTIG: OpenAlex erwartet ':' und ',' im Filter WÖRTLICH (nicht
+        # url-kodiert), sonst HTTP 400. Daher als "safe" markieren.
+        url = cfg.openalex_base + "?" + urllib.parse.urlencode(params, safe=":,*")
 
         data = _get_json(url, cfg)
         results = data.get("results", [])
