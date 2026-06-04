@@ -38,6 +38,28 @@ def test_work_from_openalex():
     assert w.authors == ["X Y"] and w.referenced_works == ["W7"]
 
 
+def test_semantic_search_offline(tmp_path):
+    """Phase 1: Index bauen + Suche findet das thematisch passende Werk (offline)."""
+    from synapse.ingest import ingest
+    from synapse.index import build_index, SearchEngine
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+
+    n = build_index(cfg, prefer="hash")        # Offline-Hash-Embedder
+    assert n == 3
+
+    eng = SearchEngine(cfg)
+    # „protein structure neural network" -> W1001 (Deep learning for protein structure)
+    hits = eng.search("protein structure prediction neural network", k=3)
+    assert hits and hits[0].id == "W1001"
+    # „attention sequence model" -> W1002 (Attention is all you need)
+    hits2 = eng.search("attention mechanism for sequence modeling", k=3)
+    assert hits2[0].id == "W1002"
+    # „energy storage graphene" -> W1003
+    hits3 = eng.search("graphene supercapacitor energy storage", k=3)
+    assert hits3[0].id == "W1003"
+
+
 def test_ingest_sample_idempotent(tmp_path):
     """Sample laden -> 3 gültige Werke + 1 Dead-Letter; erneuter Lauf = keine Duplikate."""
     from synapse.ingest import ingest

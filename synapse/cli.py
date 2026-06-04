@@ -45,6 +45,29 @@ def cmd_ingest(cfg, args) -> None:
         print(f"  Parquet-Export   : {path}")
 
 
+def cmd_index(cfg, args) -> None:
+    from synapse.index import build_index
+    print("Baue semantischen Index (lokale Embeddings) …")
+    n = build_index(cfg, prefer=args.embedder)
+    print(f"  Indizierte Werke: {n}")
+
+
+def cmd_search(cfg, args) -> None:
+    from synapse.index import SearchEngine
+    eng = SearchEngine(cfg)
+    hits = eng.search(args.query, k=args.k)
+    if not hits:
+        print("Keine Treffer.")
+        return
+    print(f"Top {len(hits)} zu: {args.query!r}")
+    print("=" * 60)
+    for i, h in enumerate(hits, 1):
+        yr = h.year or "—"
+        print(f"{i:2d}. [{h.score:.3f}] {h.title}  ({yr}, {h.venue}, {h.cited_by_count} Zit.)")
+        if h.doi:
+            print(f"     doi:{h.doi}")
+
+
 def cmd_stats(cfg, args) -> None:
     with SynapseStore(cfg) as store:
         s = store.stats()
@@ -54,7 +77,8 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
-COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats}
+COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
+            "index": cmd_index, "search": cmd_search}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -70,6 +94,14 @@ def main(argv: list[str] | None = None) -> None:
     pi.add_argument("--export", action="store_true", help="danach als Parquet exportieren")
 
     sub.add_parser("stats", help="Bestand anzeigen")
+
+    pidx = sub.add_parser("index", help="semantischen Index bauen (lokale Embeddings)")
+    pidx.add_argument("--embedder", default="auto", choices=["auto", "fastembed", "hash"],
+                      help="auto = echtes Modell, sonst Offline-Hash")
+
+    psr = sub.add_parser("search", help="semantische Suche")
+    psr.add_argument("query", help="Suchanfrage (Idee/Frage in Worten)")
+    psr.add_argument("--k", type=int, default=10, help="Anzahl Treffer")
 
     args = parser.parse_args(argv)
     cfg = load_config()

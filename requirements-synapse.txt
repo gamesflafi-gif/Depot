@@ -1,4 +1,7 @@
 # Synapse – Phase 0 (Fundament): Daten-Lake & Ingestion
 duckdb>=1.0
 pyarrow>=14.0
-# (Phase 1 ergänzt: qdrant-client, sentence-transformers, fastapi, uvicorn)
+numpy>=1.24
+# Phase 1 – semantische Suche (lokal, CPU, kein API):
+fastembed>=0.3          # ONNX-Embeddings (leicht, kein PyTorch)
+# (Phase 1.5+: fastapi, uvicorn fürs Web-API; Skalierung: hnswlib/qdrant-client)

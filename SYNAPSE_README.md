@@ -7,7 +7,7 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 
 ➡️ Gesamtplan & Architektur: **`PROJECT_PLAN_SYNAPSE.md`**
 
-## Status: Phase 0 (Fundament) ✅
+## Status: Phase 0 (Fundament) ✅ · Phase 1 (semantische Suche) ✅
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
@@ -28,10 +28,20 @@ export SYNAPSE_MAILTO="du@example.org"
 ```
 > Hinweis: immer `.venv/bin/python` (nicht `python`/`pip` direkt) verwenden.
 
+## Semantische Suche (Phase 1)
+```bash
+# Index bauen (lokale Embeddings; echtes Modell via fastembed, sonst Offline-Hash):
+.venv/bin/python -m synapse.cli index                 # --embedder auto|fastembed|hash
+# Suchen – Idee in Worten beschreiben:
+.venv/bin/python -m synapse.cli search "neural network for protein folding" --k 10
+```
+
 ## Befehle
 - `doctor` – Umgebung & Bestand prüfen
 - `ingest [--filter F] [--limit N] [--export]` – Werke laden (idempotent)
 - `stats` – Bestand im Daten-Lake
+- `index [--embedder auto|fastembed|hash]` – semantischen Index bauen
+- `search "FRAGE" [--k N]` – semantische Suche (hybrid: Vektor + Stichwort)
 
 ## Server-Härtung (Sicherheit)
 ```bash
