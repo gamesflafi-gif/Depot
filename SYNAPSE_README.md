@@ -28,6 +28,26 @@ export SYNAPSE_MAILTO="du@example.org"
 ```
 > Hinweis: immer `.venv/bin/python` (nicht `python`/`pip` direkt) verwenden.
 
+### Echter Start-Korpus (Fokusfelder) — ein Befehl
+Lädt kuratiert hochwertige Arbeiten aus ~10 Themenfeldern (passend zu den
+Startseiten-Beispielen) und baut den Index — RAM-schonend für 8 GB:
+```bash
+SYNAPSE_MAILTO="du@example.org" bash deploy/synapse/load_corpus.sh
+# Stellschrauben: PER_THEME=2500  SINCE=2015  MIN_CIT=0
+```
+Manuell/feiner steuerbar:
+```bash
+.venv/bin/python -m synapse.cli corpus --per-theme 2500 --since 2015 --build-index
+```
+Themenfelder erweitern: `synapse/corpus.py` → `THEMES`. Der Lauf ist **idempotent**
+(keine Duplikate) und **robust** (ein Feld mit Fehler stoppt den Rest nicht).
+
+**Aktuell halten (automatisch):** wöchentlicher Refresh (Korpus + Index + Gehirn):
+```bash
+sudo cp deploy/synapse/refresh.{service,timer} /etc/systemd/system/
+sudo systemctl enable --now synapse-refresh.timer
+```
+
 ## Semantische Suche (Phase 1)
 ```bash
 # Index bauen (lokale Embeddings; echtes Modell via fastembed, sonst Offline-Hash):

@@ -53,6 +53,32 @@ def cmd_ingest(cfg, args) -> None:
         print(f"  Parquet-Export   : {path}")
 
 
+def cmd_corpus(cfg, args) -> None:
+    from synapse.corpus import load_corpus, THEMES
+    if cfg.source_mode != "sample" and not cfg.mailto:
+        print("Hinweis: SYNAPSE_MAILTO setzen (E-Mail) für die stabile OpenAlex-API.\n")
+    print(f"Baue Start-Korpus: {len(THEMES)} Themenfelder, je bis {args.per_theme} "
+          f"Arbeiten, ab {args.since}, min. Zitationen {args.min_citations}.")
+    res = load_corpus(cfg, per_theme=args.per_theme, since=args.since,
+                      min_citations=args.min_citations, progress=print)
+    print("\nZusammenfassung")
+    print("=" * 40)
+    for name, n in res.per_theme.items():
+        print(f"  {name:28s}: +{n}")
+    for name, why in res.skipped.items():
+        print(f"  {name:28s}: übersprungen ({why})")
+    print(f"\n  Neu/aktualisiert gesamt: {res.total_ingested}")
+    print(f"  Bestand gesamt         : {res.total_in_store}")
+    if args.build_index:
+        from synapse.index import build_index
+        print("\nBaue semantischen Index …")
+        n = build_index(cfg, prefer=args.embedder, batch=args.batch,
+                        max_chars=args.max_chars)
+        print(f"  Indizierte Werke: {n}")
+    else:
+        print("\nNächster Schritt: python -m synapse.cli index")
+
+
 def cmd_index(cfg, args) -> None:
     from synapse.index import build_index
     print("Baue semantischen Index (lokale Embeddings) …")
@@ -209,7 +235,7 @@ def cmd_security(cfg, args) -> None:
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
             "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
             "brain": cmd_brain, "connections": cmd_connections, "ask": cmd_ask,
-            "submit": cmd_submit, "project": cmd_project,
+            "submit": cmd_submit, "project": cmd_project, "corpus": cmd_corpus,
             "maintenance": cmd_maintenance, "security": cmd_security}
 
 
@@ -226,6 +252,15 @@ def main(argv: list[str] | None = None) -> None:
     pi.add_argument("--export", action="store_true", help="danach als Parquet exportieren")
 
     sub.add_parser("stats", help="Bestand anzeigen")
+
+    pc = sub.add_parser("corpus", help="kuratierten Start-Korpus der Fokusfelder laden")
+    pc.add_argument("--per-theme", type=int, default=2000, help="max. Arbeiten je Themenfeld")
+    pc.add_argument("--since", type=int, default=2015, help="ab Publikationsjahr")
+    pc.add_argument("--min-citations", type=int, default=0, help="Mindest-Zitationen (0=aus)")
+    pc.add_argument("--build-index", action="store_true", help="danach gleich indizieren")
+    pc.add_argument("--embedder", default="auto", choices=["auto", "fastembed", "hash"])
+    pc.add_argument("--batch", type=int, default=64)
+    pc.add_argument("--max-chars", type=int, default=1200)
 
     pidx = sub.add_parser("index", help="semantischen Index bauen (lokale Embeddings)")
     pidx.add_argument("--embedder", default="auto", choices=["auto", "fastembed", "hash"],
