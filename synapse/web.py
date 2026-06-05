@@ -10,9 +10,39 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
 from synapse.config import Config, load_config
 from synapse.storage import SynapseStore
+
+
+class ProjectIn(BaseModel):
+    title: str
+    area: str = ""
+    description: str = ""
+    owner_name: str = ""
+    owner_orcid: str = ""
+
+
+class ContribIn(BaseModel):
+    kind: str = "finding"
+    title: str
+    body: str = ""
+    link: str = ""
+    evidence_doi: str = ""
+    contributor_name: str = ""
+    contributor_orcid: str = ""
+
+
+class ReportIn(BaseModel):
+    reason: str = ""
+
+
+class ModerateIn(BaseModel):
+    project_id: str
+    owner_token: str
+    contribution_id: str
+    action: str
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +91,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
  .cbox form{margin:8px 0 4px}
 </style></head><body>
 <header><h1>Syn<span>apse</span></h1>
-<div class="sub">Frag deine Forschung — bekomme direkt eine Einordnung mit Quellen.</div></header>
+<div class="sub">Frag deine Forschung — bekomme direkt eine Einordnung mit Quellen.</div>
+<div class="sub"><a href="/projekte" style="color:var(--acc)">→ Offene Forschungs-Projekte (mitforschen)</a></div></header>
 <div class="wrap">
  <form id="f"><input id="q" placeholder="z.B. Gibt es Forschung zu Schlaf und Gedächtnis?" autofocus>
  <button>Fragen</button></form>
@@ -152,6 +183,127 @@ cf.addEventListener('submit',async e=>{
 </script></body></html>"""
 
 
+_PROJECTS_PAGE = """<!doctype html><html lang="de"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synapse — Offene Forschung</title>
+<style>
+ :root{--bg:#0e1726;--fg:#e6edf3;--mut:#9fb3c8;--acc:#3ddc84}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);
+   font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+ .wrap{max-width:820px;margin:0 auto;padding:18px}
+ a{color:var(--acc);text-decoration:none} h1{font-size:24px} h1 span{color:var(--acc)}
+ input,textarea,select{width:100%;padding:11px 13px;border-radius:10px;border:1px solid #2a3a52;
+   background:#0b1422;color:var(--fg);font-size:15px;margin:5px 0}
+ textarea{min-height:90px} button{padding:11px 16px;border:0;border-radius:10px;
+   background:var(--acc);color:#06281a;font-weight:700;cursor:pointer}
+ .card{border:1px solid #22314a;border-radius:14px;background:#111a2b;padding:14px 16px;margin:10px 0}
+ .mut{color:var(--mut);font-size:13px} .row{display:flex;gap:8px;flex-wrap:wrap}
+ .badge{font-size:11px;padding:2px 8px;border-radius:8px;margin-left:6px}
+ .verified{background:#13402a;color:#7ef0ad} .preprint{background:#3a3413;color:#f0e07e}
+ .community{background:#2a2f3a;color:#c3ccda} .flagged{background:#402020;color:#ff9b9b}
+ .pill{display:inline-block;background:#13283f;color:#cfe6ff;font-size:12px;padding:2px 9px;border-radius:20px}
+ details summary{cursor:pointer;color:var(--acc)} .ok{color:var(--acc)} .err{color:#ff9b9b}
+ .tokbox{background:#10261a;border:1px solid #1f6f43;border-radius:10px;padding:10px;margin:8px 0;word-break:break-all}
+</style></head><body><div class="wrap">
+<h1>Syn<span>apse</span> · Offene Forschung</h1>
+<div class="mut"><a href="/">← zurück zur Suche</a></div>
+<p class="mut">Lege einen Forschungsbereich an und teile Ergebnisse & Zwischenstände –
+andere können darauf aufbauen. Jeder Beitrag trägt eine Vertrauens-Stufe.
+<b>Keine medizinische/rechtliche Beratung.</b></p>
+
+<details><summary>＋ Neuen Forschungsbereich anlegen</summary>
+ <div class="card">
+  <input id="p_title" placeholder="Titel, z.B. Forschung zu Schlafstörungen">
+  <input id="p_area" placeholder="Bereich/Schlagworte, z.B. Neurowissenschaften, Schlaf">
+  <textarea id="p_desc" placeholder="Worum geht es? Ziel, Stand, was gesucht wird …"></textarea>
+  <div class="row"><input id="p_owner" placeholder="Dein Name" style="flex:1">
+   <input id="p_orcid" placeholder="ORCID (optional)" style="flex:1"></div>
+  <button onclick="createProject()">Projekt anlegen</button>
+  <div id="p_msg" class="mut"></div>
+ </div>
+</details>
+
+<div class="row" style="margin:14px 0"><input id="q" placeholder="Projekte durchsuchen …" style="flex:1">
+ <button onclick="loadList()">Suchen</button></div>
+<div id="list"></div>
+<div id="detail"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+function badge(t){return '<span class="badge '+t+'">'+t+'</span>';}
+
+async function createProject(){
+ const body={title:$('p_title').value,area:$('p_area').value,description:$('p_desc').value,
+   owner_name:$('p_owner').value,owner_orcid:$('p_orcid').value};
+ const d=await (await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify(body)})).json();
+ if(!d.ok){$('p_msg').innerHTML='<span class="err">'+esc(d.message)+'</span>';return;}
+ $('p_msg').innerHTML='<div class="ok">'+esc(d.message)+'</div>'+
+  '<div class="tokbox"><b>Owner-Token (jetzt sichern!):</b><br>'+esc(d.data.owner_token)+'</div>';
+ loadList(); openProject(d.data.id);
+}
+async function loadList(){
+ const q=encodeURIComponent($('q').value||'');
+ const d=await (await fetch('/api/projects?q='+q)).json();
+ $('list').innerHTML=d.projects.map(p=>'<div class="card"><a href="#" onclick="openProject(\\''+p.id+
+  '\\');return false"><b>'+esc(p.title)+'</b></a> <span class="pill">'+esc(p.area||'—')+'</span>'+
+  (p.status==='archived'?' <span class="badge flagged">archiviert</span>':'')+
+  '<div class="mut">'+p.contributions+' Beiträge · von '+esc(p.owner_name)+'</div></div>').join('')
+  || '<div class="mut">Noch keine Projekte – leg das erste an.</div>';
+}
+async function openProject(id){
+ const p=await (await fetch('/api/projects/get?id='+encodeURIComponent(id))).json();
+ if(p.error){$('detail').innerHTML='';return;}
+ let h='<div class="card"><h2>'+esc(p.title)+'</h2><span class="pill">'+esc(p.area||'—')+'</span>'+
+  '<p class="mut">'+esc(p.description||'')+'</p><div class="mut">von '+esc(p.owner_name)+
+  (p.owner_orcid?(' · ORCID '+esc(p.owner_orcid)):'')+' · Lizenz '+esc(p.license)+'</div>';
+ h+='<h3>Beiträge</h3>';
+ if(!p.contributions.length)h+='<div class="mut">Noch keine Beiträge.</div>';
+ p.contributions.forEach(c=>{
+  const flagged=c.status==='flagged'?badge('flagged'):'';
+  h+='<div class="card"><b>['+esc(c.kind)+'] '+esc(c.title)+'</b>'+badge(c.trust_level)+flagged+
+   '<div class="mut">von '+esc(c.contributor_name)+' · '+(c.created_at||'').slice(0,10)+'</div>'+
+   '<div>'+esc(c.body)+'</div>'+
+   (c.link?('<div class="mut">Daten/Quelle: <a target="_blank" href="'+esc(c.link)+'">'+esc(c.link)+'</a></div>'):'')+
+   (c.evidence_doi?('<div class="mut">DOI: '+esc(c.evidence_doi)+'</div>'):'')+
+   '<button onclick="reportC(\\''+c.id+'\\')" style="background:none;border:1px solid #43324a;color:#ff9b9b;font-size:12px;margin-top:6px">melden</button></div>';
+ });
+ // Beitrag-Formular
+ h+='<details><summary>＋ Beitrag hinzufügen (mitforschen)</summary><div class="card">'+
+  '<select id="c_kind"><option value="finding">Ergebnis</option><option value="progress">Zwischenstand</option>'+
+  '<option value="dataset">Datensatz</option><option value="question">offene Frage</option></select>'+
+  '<input id="c_title" placeholder="Titel des Beitrags">'+
+  '<textarea id="c_body" placeholder="Beschreibung / Ergebnis / Methode …"></textarea>'+
+  '<input id="c_link" placeholder="Link zu Daten/Preprint (Zenodo/OSF/arXiv …) – optional">'+
+  '<input id="c_doi" placeholder="DOI (falls publiziert) – wird geprüft → Stufe geprüft">'+
+  '<div class="row"><input id="c_name" placeholder="Dein Name" style="flex:1">'+
+  '<input id="c_orcid" placeholder="ORCID (optional)" style="flex:1"></div>'+
+  '<button onclick="addContrib(\\''+id+'\\')">Beitrag absenden</button>'+
+  '<div class="mut">Stufen: geprüft (DOI) · preprint (Link) · community (unbestätigt).</div>'+
+  '<div id="c_msg" class="mut"></div></div></details></div>';
+ $('detail').innerHTML=h;
+ window.scrollTo(0,$('detail').offsetTop);
+}
+async function addContrib(id){
+ const body={kind:$('c_kind').value,title:$('c_title').value,body:$('c_body').value,
+   link:$('c_link').value,evidence_doi:$('c_doi').value,contributor_name:$('c_name').value,
+   contributor_orcid:$('c_orcid').value};
+ const d=await (await fetch('/api/projects/contribute?id='+encodeURIComponent(id),
+   {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+ $('c_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>';
+ if(d.ok)openProject(id);
+}
+async function reportC(cid){
+ const reason=prompt('Warum meldest du diesen Beitrag?')||''; if(reason===null)return;
+ await fetch('/api/contributions/report?id='+encodeURIComponent(cid),
+  {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});
+ alert('Danke – der Beitrag wurde zur Prüfung markiert.');
+}
+loadList();
+</script></div></body></html>"""
+
+
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or load_config()
     app = FastAPI(title="Synapse", version="0.2")
@@ -221,5 +373,47 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             return {"field": "", "related": []}
         seed_field, conns = res
         return {"field": seed_field, "related": [c.__dict__ for c in conns]}
+
+    # --- Kollaborative Forschung: Projekte & Beiträge --------------------- #
+    @app.get("/projekte", response_class=HTMLResponse)
+    def projekte():
+        return _PROJECTS_PAGE
+
+    @app.get("/api/projects")
+    def projects_list(q: str = ""):
+        from synapse import projects
+        return {"projects": projects.list_projects(cfg, q=q)}
+
+    @app.post("/api/projects")
+    def projects_create(p: ProjectIn):
+        from synapse import projects
+        r = projects.create_project(cfg, p.title, p.area, p.description,
+                                    p.owner_name, p.owner_orcid)
+        return {"ok": r.ok, "message": r.message, "data": r.data}
+
+    @app.get("/api/projects/get")
+    def projects_get(id: str):
+        from synapse import projects
+        d = projects.get_project(cfg, id)
+        return d or {"error": "nicht gefunden"}
+
+    @app.post("/api/projects/contribute")
+    def projects_contribute(id: str, c: ContribIn):
+        from synapse import projects
+        r = projects.add_contribution(cfg, id, c.kind, c.title, c.body, c.link,
+                                      c.evidence_doi, c.contributor_name, c.contributor_orcid)
+        return {"ok": r.ok, "message": r.message, "data": r.data}
+
+    @app.post("/api/contributions/report")
+    def contributions_report(id: str, rep: ReportIn):
+        from synapse import projects
+        r = projects.report(cfg, id, rep.reason)
+        return {"ok": r.ok, "message": r.message}
+
+    @app.post("/api/projects/moderate")
+    def projects_moderate(m: ModerateIn):
+        from synapse import projects
+        r = projects.moderate(cfg, m.project_id, m.owner_token, m.contribution_id, m.action)
+        return {"ok": r.ok, "message": r.message}
 
     return app

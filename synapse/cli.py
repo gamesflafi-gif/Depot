@@ -95,6 +95,35 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
+def cmd_project(cfg, args) -> None:
+    from synapse import projects
+    act = args.action
+    if act == "list":
+        for p in projects.list_projects(cfg):
+            print(f"  {p['id']}  | {p['title']}  ({p['area'] or '—'}, "
+                  f"{p['contributions']} Beiträge, {p['status']})")
+        return
+    if act == "new":
+        r = projects.create_project(cfg, args.title or "", area=args.area or "",
+                                    description=args.desc or "", owner_name=args.owner or "")
+        print(r.message)
+        if r.ok:
+            print(f"  ID: {r.data['id']}")
+            print(f"  Owner-Token (sichern!): {r.data['owner_token']}")
+        return
+    if act == "show":
+        d = projects.get_project(cfg, args.title or "")
+        if not d:
+            print("Projekt nicht gefunden.")
+            return
+        print(f"{d['title']}  ({d['area']})  – von {d['owner_name']}")
+        print(d["description"])
+        print(f"\nBeiträge ({len(d['contributions'])}):")
+        for c in d["contributions"]:
+            print(f"  [{c['trust_level']}] {c['kind']}: {c['title']}  – {c['contributor_name']}")
+        return
+
+
 def cmd_submit(cfg, args) -> None:
     from synapse.ingest import submit_doi
     print(f"Prüfe DOI {args.doi} (OpenAlex/Crossref) …")
@@ -150,7 +179,7 @@ def cmd_serve(cfg, args) -> None:
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
             "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
             "brain": cmd_brain, "connections": cmd_connections, "ask": cmd_ask,
-            "submit": cmd_submit}
+            "submit": cmd_submit, "project": cmd_project}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -192,6 +221,13 @@ def main(argv: list[str] | None = None) -> None:
 
     psu = sub.add_parser("submit", help="eigene Arbeit per DOI beitragen (wird geprüft)")
     psu.add_argument("doi", help="DOI, z.B. 10.1038/s41586-021-03819-2")
+
+    pp = sub.add_parser("project", help="Forschungs-Projekte (anlegen/auflisten/ansehen)")
+    pp.add_argument("action", choices=["list", "new", "show"])
+    pp.add_argument("title", nargs="?", help="Titel (new) oder Projekt-ID (show)")
+    pp.add_argument("--area", default="")
+    pp.add_argument("--desc", default="")
+    pp.add_argument("--owner", default="")
 
     args = parser.parse_args(argv)
     cfg = load_config()

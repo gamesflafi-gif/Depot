@@ -43,10 +43,42 @@ CREATE TABLE IF NOT EXISTS state (
 );
 CREATE TABLE IF NOT EXISTS events (
     ts      VARCHAR,
-    event   VARCHAR,          -- 'search' | 'click'
+    event   VARCHAR,          -- 'search' | 'click' | 'submit'
     query   VARCHAR,
     work_id VARCHAR,
     rank    INTEGER
+);
+CREATE TABLE IF NOT EXISTS projects (
+    id           VARCHAR PRIMARY KEY,
+    title        VARCHAR,
+    area         VARCHAR,
+    description  VARCHAR,
+    owner_name   VARCHAR,
+    owner_orcid  VARCHAR,
+    owner_token  VARCHAR,      -- gehasht
+    license      VARCHAR,
+    status       VARCHAR,      -- active | archived
+    created_at   VARCHAR
+);
+CREATE TABLE IF NOT EXISTS contributions (
+    id               VARCHAR PRIMARY KEY,
+    project_id       VARCHAR,
+    kind             VARCHAR,  -- finding | dataset | progress | question
+    title            VARCHAR,
+    body             VARCHAR,
+    link             VARCHAR,
+    evidence_doi     VARCHAR,
+    contributor_name VARCHAR,
+    contributor_orcid VARCHAR,
+    trust_level      VARCHAR,  -- verified | preprint | community
+    status           VARCHAR,  -- visible | flagged | removed
+    created_at       VARCHAR
+);
+CREATE TABLE IF NOT EXISTS reports (
+    id         VARCHAR,
+    target_id  VARCHAR,
+    reason     VARCHAR,
+    created_at VARCHAR
 );
 """
 
