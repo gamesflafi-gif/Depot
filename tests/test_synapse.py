@@ -96,6 +96,74 @@ def test_web_api(tmp_path):
         assert store.count_events("click") == 1 and store.count_events("search") >= 1
 
 
+def test_collab_projects(tmp_path):
+    """Kollaborative Forschung: Projekt anlegen, Beiträge mit Vertrauens-Stufen,
+    Melden→Flag, Owner-Moderation per Token."""
+    from synapse import projects
+    cfg = _cfg(tmp_path)
+
+    # Projekt anlegen -> Owner-Token zurück
+    r = projects.create_project(cfg, "Forschung zu Schlafstörungen",
+                                area="Neurowissenschaften", owner_name="Dr. X")
+    assert r.ok and r.data["owner_token"]
+    pid, token = r.data["id"], r.data["owner_token"]
+    assert projects.create_project(cfg, "abc").ok is False     # Titel zu kurz
+
+    # Beiträge mit unterschiedlichen Vertrauens-Stufen
+    c_comm = projects.add_contribution(cfg, pid, "progress", "Zwischenstand Woche 1",
+                                       body="Erste Auswertung der Schlafdaten.")
+    assert c_comm.ok and c_comm.data["trust_level"] == "community"
+    c_pre = projects.add_contribution(cfg, pid, "dataset", "Rohdaten",
+                                      link="https://zenodo.org/record/123")
+    assert c_pre.data["trust_level"] == "preprint"             # anerkanntes Repo
+
+    # Auflisten + Detail
+    lst = projects.list_projects(cfg)
+    assert lst and lst[0]["id"] == pid and lst[0]["contributions"] == 2
+    d = projects.get_project(cfg, pid)
+    assert d["title"].startswith("Forschung zu") and len(d["contributions"]) == 2
+
+    # Melden -> Beitrag wird geflaggt
+    cid = c_comm.data["id"]
+    assert projects.report(cfg, cid, "Spam").ok
+    d2 = projects.get_project(cfg, pid)
+    assert next(c for c in d2["contributions"] if c["id"] == cid)["status"] == "flagged"
+
+    # Moderation: falscher Token verboten, richtiger entfernt
+    assert projects.moderate(cfg, pid, "falsch", cid, "remove").ok is False
+    assert projects.moderate(cfg, pid, token, cid, "remove").ok
+    d3 = projects.get_project(cfg, pid)
+    assert all(c["id"] != cid for c in d3["contributions"])    # entfernt nicht mehr sichtbar
+
+    # archiviert -> keine neuen Beiträge
+    assert projects.archive(cfg, pid, token, True).ok
+    assert projects.add_contribution(cfg, pid, "finding", "Neuer Beitrag").ok is False
+
+
+def test_collab_web(tmp_path):
+    """Web-API der Projekte: anlegen, Detail, Beitrag, melden."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(cfg))
+
+    r = client.post("/api/projects", json={"title": "Offene Krebs-Datenbasis",
+                                           "area": "Onkologie", "owner_name": "A"}).json()
+    assert r["ok"] and r["data"]["owner_token"]
+    pid = r["data"]["id"]
+
+    c = client.post("/api/projects/contribute", params={"id": pid},
+                    json={"kind": "finding", "title": "Beobachtung zu Tumorwachstum",
+                          "body": "Hinweis auf Zusammenhang."}).json()
+    assert c["ok"] and "Stufe: community" in c["message"]
+    # sensibles Thema -> Warnhinweis im Text
+    assert "unbestätigt" in c["message"] or "Beratung" in c["message"]
+
+    d = client.get("/api/projects/get", params={"id": pid}).json()
+    assert d["contributions"] and d["contributions"][0]["trust_level"] == "community"
+    assert client.get("/projekte").status_code == 200
+
+
 def test_add_to_index_incremental(tmp_path):
     """Belegte Arbeit nachträglich in den Index aufnehmen (ohne Neu-Bau)."""
     from synapse.ingest import ingest

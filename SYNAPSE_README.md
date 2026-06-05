@@ -7,7 +7,7 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 
 ➡️ Gesamtplan & Architektur: **`PROJECT_PLAN_SYNAPSE.md`**
 
-## Status: Fundament ✅ · Suche ✅ · Web ✅ · Gehirn ✅ · Verbindungen ✅ · Assistent ✅
+## Status: Fundament ✅ · Suche ✅ · Web ✅ · Gehirn ✅ · Verbindungen ✅ · Assistent ✅ · Kollab-Forschung ✅
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
@@ -47,6 +47,16 @@ export SYNAPSE_MAILTO="du@example.org"
 - `connections WORK_ID` – verwandte Arbeiten + **Feld-Brücken** zu einem Werk
 - `ask "FRAGE"` – Forschungs-Assistent: Einordnung mit Quellen
 - `submit DOI` – eigene **belegte** Arbeit per DOI beitragen (wird geprüft)
+- `project list|new|show` – Forschungs-Projekte verwalten
+
+## Kollaborative Forschung (Projekte) — `/projekte`
+Nutzer legen einen **Forschungsbereich** an (z.B. „Schlafstörungen") und teilen
+**Ergebnisse & Zwischenstände**; andere bauen darauf auf. Jeder Beitrag trägt
+eine **Vertrauens-Stufe**: geprüft (DOI), preprint (Daten-Link) oder community
+(unbestätigt). Ungeprüftes wird **nie** mit der geprüften Literatur vermischt.
+Mit Melde-/Moderationsfunktion (Owner-Token), sensiblen-Themen-Hinweis und
+Disclaimer. Vollständiges Konzept inkl. aller Eventualitäten:
+**`SYNAPSE_COLLAB_DESIGN.md`**.
 
 ## Eigene Forschung beitragen (nur belegt)
 Über die DOI lässt sich eine **offiziell registrierte** Arbeit aufnehmen: Synapse
