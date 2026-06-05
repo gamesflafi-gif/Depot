@@ -8,12 +8,37 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from synapse.config import Config, load_config
 from synapse.storage import SynapseStore
+
+_COOKIE = "sid"
+_COOKIE_MAXAGE = 30 * 24 * 3600
+
+
+class RegisterIn(BaseModel):
+    username: str
+    password: str
+    name: str = ""
+    email: str = ""
+    orcid: str = ""
+    affiliation: str = ""
+    bio: str = ""
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class ProfileIn(BaseModel):
+    name: str = ""
+    affiliation: str = ""
+    orcid: str = ""
+    bio: str = ""
 
 
 class ProjectIn(BaseModel):
@@ -95,7 +120,7 @@ _PAGE = """<!doctype html><html lang="de"><head>
 </style></head><body>
 <div class="topbar"><div class="topin">
  <div class="brand">Syn<span>apse</span></div>
- <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a></div>
+ <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a><a href="/konto">Konto</a></div>
 </div></div>
 <div class="wrap">
  <div class="lead">Stelle eine Forschungsfrage — Synapse ordnet die Studienlage ein und nennt die Quellen.</div>
@@ -222,7 +247,7 @@ _PROJECTS_PAGE = """<!doctype html><html lang="de"><head>
 </style></head><body>
 <div class="topbar"><div class="topin">
  <div class="brand">Syn<span>apse</span></div>
- <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a></div>
+ <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a><a href="/konto">Konto</a></div>
 </div></div>
 <div class="wrap">
 <h1>Offene Forschung</h1>
@@ -235,8 +260,7 @@ andere können darauf aufbauen. Jeder Beitrag trägt eine Vertrauens-Stufe.
   <input id="p_title" placeholder="Titel, z.B. Forschung zu Schlafstörungen">
   <input id="p_area" placeholder="Bereich/Schlagworte, z.B. Neurowissenschaften, Schlaf">
   <textarea id="p_desc" placeholder="Worum geht es? Ziel, Stand, was gesucht wird …"></textarea>
-  <div class="row"><input id="p_owner" placeholder="Dein Name" style="flex:1">
-   <input id="p_orcid" placeholder="ORCID (optional)" style="flex:1"></div>
+  <div class="mut">Wird unter deinem Profil angelegt. <a href="/konto">Konto</a> nötig.</div>
   <button onclick="createProject()">Projekt anlegen</button>
   <div id="p_msg" class="mut"></div>
  </div>
@@ -253,11 +277,10 @@ function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':
 function badge(t){return '<span class="badge '+t+'">'+t+'</span>';}
 
 async function createProject(){
- const body={title:$('p_title').value,area:$('p_area').value,description:$('p_desc').value,
-   owner_name:$('p_owner').value,owner_orcid:$('p_orcid').value};
+ const body={title:$('p_title').value,area:$('p_area').value,description:$('p_desc').value};
  const d=await (await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify(body)})).json();
- if(!d.ok){$('p_msg').innerHTML='<span class="err">'+esc(d.message)+'</span>';return;}
+ if(!d.ok){$('p_msg').innerHTML='<span class="err">'+esc(d.message)+' <a href="/konto">→ anmelden</a></span>';return;}
  $('p_msg').innerHTML='<div class="ok">'+esc(d.message)+'</div>'+
   '<div class="tokbox"><b>Owner-Token (jetzt sichern!):</b><br>'+esc(d.data.owner_token)+'</div>';
  loadList(); openProject(d.data.id);
@@ -281,8 +304,9 @@ async function openProject(id){
  if(!p.contributions.length)h+='<div class="mut">Noch keine Beiträge.</div>';
  p.contributions.forEach(c=>{
   const flagged=c.status==='flagged'?badge('flagged'):'';
+  const av=c.author_verified?' <span class="badge verified">ORCID ✓</span>':'';
   h+='<div class="card"><b>['+esc(c.kind)+'] '+esc(c.title)+'</b>'+badge(c.trust_level)+flagged+
-   '<div class="mut">von '+esc(c.contributor_name)+' · '+(c.created_at||'').slice(0,10)+'</div>'+
+   '<div class="mut">von '+esc(c.contributor_name)+av+' · '+(c.created_at||'').slice(0,10)+'</div>'+
    '<div>'+esc(c.body)+'</div>'+
    (c.link?('<div class="mut">Daten/Quelle: <a target="_blank" href="'+esc(c.link)+'">'+esc(c.link)+'</a></div>'):'')+
    (c.evidence_doi?('<div class="mut">DOI: '+esc(c.evidence_doi)+'</div>'):'')+
@@ -296,21 +320,20 @@ async function openProject(id){
   '<textarea id="c_body" placeholder="Beschreibung / Ergebnis / Methode …"></textarea>'+
   '<input id="c_link" placeholder="Link zu Daten/Preprint (Zenodo/OSF/arXiv …) – optional">'+
   '<input id="c_doi" placeholder="DOI (falls publiziert) – wird geprüft → Stufe geprüft">'+
-  '<div class="row"><input id="c_name" placeholder="Dein Name" style="flex:1">'+
-  '<input id="c_orcid" placeholder="ORCID (optional)" style="flex:1"></div>'+
   '<button onclick="addContrib(\\''+id+'\\')">Beitrag absenden</button>'+
-  '<div class="mut">Stufen: geprüft (DOI) · preprint (Link) · community (unbestätigt).</div>'+
+  '<div class="mut">Wird unter deinem Profil veröffentlicht (<a href="/konto">Konto</a> nötig). '+
+  'Stufen: geprüft (DOI) · preprint (Link) · community (unbestätigt).</div>'+
   '<div id="c_msg" class="mut"></div></div></details></div>';
  $('detail').innerHTML=h;
  window.scrollTo(0,$('detail').offsetTop);
 }
 async function addContrib(id){
  const body={kind:$('c_kind').value,title:$('c_title').value,body:$('c_body').value,
-   link:$('c_link').value,evidence_doi:$('c_doi').value,contributor_name:$('c_name').value,
-   contributor_orcid:$('c_orcid').value};
+   link:$('c_link').value,evidence_doi:$('c_doi').value};
  const d=await (await fetch('/api/projects/contribute?id='+encodeURIComponent(id),
    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
- $('c_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>';
+ $('c_msg').innerHTML=(d.ok?'<span class="ok">'+esc(d.message)+'</span>':
+   '<span class="err">'+esc(d.message)+' <a href="/konto">→ anmelden</a></span>');
  if(d.ok)openProject(id);
 }
 async function reportC(cid){
@@ -323,6 +346,77 @@ loadList();
 </script></div></body></html>"""
 
 
+_ACCOUNT_PAGE = """<!doctype html><html lang="de"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synapse — Konto</title>
+<style>
+ :root{--bg:#f5f7fb;--surface:#fff;--fg:#1f2a37;--mut:#64748b;--border:#e2e8f0;
+   --acc:#1d4ed8;--accsoft:#eef3ff}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);
+   font:16px/1.6 ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+ a{color:var(--acc);text-decoration:none}
+ .topbar{background:var(--surface);border-bottom:1px solid var(--border)}
+ .topin{max-width:560px;margin:0 auto;padding:13px 18px;display:flex;justify-content:space-between;align-items:center}
+ .brand{font-size:20px;font-weight:700} .brand span{color:var(--acc)}
+ .nav a{margin-left:18px;font-size:14px;color:var(--mut)} .nav a:hover{color:var(--fg)}
+ .wrap{max-width:560px;margin:0 auto;padding:22px 18px}
+ h1{font-size:21px} h2{font-size:16px;margin:18px 0 8px}
+ input,textarea{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);
+   background:var(--surface);color:var(--fg);font-size:15px;margin:6px 0}
+ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accsoft)}
+ button{padding:11px 16px;border:0;border-radius:10px;background:var(--acc);color:#fff;
+   font-weight:600;cursor:pointer} button:hover{filter:brightness(1.06)}
+ .card{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:16px 18px;margin:12px 0;
+   box-shadow:0 1px 2px rgba(16,24,40,.04)}
+ .mut{color:var(--mut);font-size:13px} .ok{color:#1f7a4d} .err{color:#b42323}
+ .badge{display:inline-block;background:#e7f6ee;color:#1f7a4d;font-size:11px;padding:2px 9px;border-radius:7px;font-weight:600}
+</style></head><body>
+<div class="topbar"><div class="topin"><div class="brand">Syn<span>apse</span></div>
+ <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a><a href="/konto">Konto</a></div></div></div>
+<div class="wrap"><h1>Konto</h1>
+<p class="mut">Mit einem offiziellen Profil sind deine Beiträge nachvollziehbar.
+Eine <b>ORCID</b> macht dich als Forscher:in verifizierbar.</p>
+<div id="view"></div></div>
+<script>
+const $=id=>document.getElementById(id);
+function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+async function load(){
+ const m=(await (await fetch('/api/me')).json()).user;
+ if(m){ $('view').innerHTML=
+  '<div class="card"><h2>Angemeldet als '+esc(m.username)+'</h2>'+
+  '<div class="mut">'+esc(m.name)+(m.orcid_verified?' <span class="badge">ORCID ✓ verifiziert</span>':'')+'</div>'+
+  '<h2>Profil bearbeiten</h2>'+
+  '<input id="p_name" placeholder="Anzeigename" value="'+esc(m.name)+'">'+
+  '<input id="p_aff" placeholder="Institution/Affiliation" value="'+esc(m.affiliation||'')+'">'+
+  '<input id="p_orcid" placeholder="ORCID (0000-0000-0000-0000)" value="'+esc(m.orcid||'')+'">'+
+  '<textarea id="p_bio" placeholder="Kurzprofil">'+esc(m.bio||'')+'</textarea>'+
+  '<button onclick="saveProfile()">Speichern</button> '+
+  '<button onclick="logout()" style="background:#64748b">Abmelden</button>'+
+  '<div id="p_msg" class="mut"></div></div>'; return; }
+ $('view').innerHTML=
+  '<div class="card"><h2>Anmelden</h2>'+
+  '<input id="l_user" placeholder="Nutzername"><input id="l_pw" type="password" placeholder="Passwort">'+
+  '<button onclick="login()">Anmelden</button><div id="l_msg" class="mut"></div></div>'+
+  '<div class="card"><h2>Neues Konto</h2>'+
+  '<input id="r_user" placeholder="Nutzername (3–32 Zeichen)"><input id="r_pw" type="password" placeholder="Passwort (min. 8)">'+
+  '<input id="r_name" placeholder="Dein Name"><input id="r_orcid" placeholder="ORCID (optional, verifiziert dich)">'+
+  '<input id="r_aff" placeholder="Institution (optional)">'+
+  '<button onclick="register()">Registrieren</button><div id="r_msg" class="mut"></div></div>';
+}
+async function post(url,body){return (await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();}
+async function login(){const d=await post('/api/login',{username:$('l_user').value,password:$('l_pw').value});
+ $('l_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
+async function register(){const d=await post('/api/register',{username:$('r_user').value,password:$('r_pw').value,
+  name:$('r_name').value,orcid:$('r_orcid').value,affiliation:$('r_aff').value});
+ $('r_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
+async function saveProfile(){const d=await post('/api/profile',{name:$('p_name').value,affiliation:$('p_aff').value,
+  orcid:$('p_orcid').value,bio:$('p_bio').value});
+ $('p_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
+async function logout(){await post('/api/logout',{}); load();}
+load();
+</script></body></html>"""
+
+
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or load_config()
     app = FastAPI(title="Synapse", version="0.2")
@@ -333,6 +427,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             from synapse.index import SearchEngine
             _state["engine"] = SearchEngine(cfg)
         return _state["engine"]
+
+    def _user(request: Request):
+        from synapse import accounts
+        return accounts.session_user(cfg, request.cookies.get(_COOKIE, ""))
 
     @app.get("/health")
     def health():
@@ -404,10 +502,15 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return {"projects": projects.list_projects(cfg, q=q)}
 
     @app.post("/api/projects")
-    def projects_create(p: ProjectIn):
+    def projects_create(p: ProjectIn, request: Request):
+        u = _user(request)
+        if not u:
+            return JSONResponse({"ok": False, "message": "Bitte zuerst anmelden, "
+                                 "um ein Projekt anzulegen."}, status_code=401)
         from synapse import projects
         r = projects.create_project(cfg, p.title, p.area, p.description,
-                                    p.owner_name, p.owner_orcid)
+                                    owner_name=u["name"], owner_orcid=u.get("orcid", ""),
+                                    owner_user_id=u["id"])
         return {"ok": r.ok, "message": r.message, "data": r.data}
 
     @app.get("/api/projects/get")
@@ -417,10 +520,16 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return d or {"error": "nicht gefunden"}
 
     @app.post("/api/projects/contribute")
-    def projects_contribute(id: str, c: ContribIn):
+    def projects_contribute(id: str, c: ContribIn, request: Request):
+        u = _user(request)
+        if not u:
+            return JSONResponse({"ok": False, "message": "Bitte zuerst anmelden, "
+                                 "um beizutragen."}, status_code=401)
         from synapse import projects
         r = projects.add_contribution(cfg, id, c.kind, c.title, c.body, c.link,
-                                      c.evidence_doi, c.contributor_name, c.contributor_orcid)
+                                      c.evidence_doi, contributor_name=u["name"],
+                                      contributor_orcid=u.get("orcid", ""),
+                                      contributor_user_id=u["id"])
         return {"ok": r.ok, "message": r.message, "data": r.data}
 
     @app.post("/api/contributions/report")
@@ -433,6 +542,55 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     def projects_moderate(m: ModerateIn):
         from synapse import projects
         r = projects.moderate(cfg, m.project_id, m.owner_token, m.contribution_id, m.action)
+        return {"ok": r.ok, "message": r.message}
+
+    # --- Konten / offizielle Profile ------------------------------------- #
+    @app.get("/konto", response_class=HTMLResponse)
+    def konto():
+        return _ACCOUNT_PAGE
+
+    @app.get("/api/me")
+    def me(request: Request):
+        return {"user": _user(request)}
+
+    @app.post("/api/register")
+    def api_register(p: RegisterIn, response: Response):
+        from synapse import accounts
+        r = accounts.register(cfg, p.username, p.password, p.name, p.email,
+                              p.orcid, p.affiliation, p.bio)
+        if not r.ok:
+            return JSONResponse({"ok": False, "message": r.message}, status_code=400)
+        tok = accounts.create_session(cfg, r.data["user_id"])
+        response.set_cookie(_COOKIE, tok, httponly=True, samesite="lax",
+                            max_age=_COOKIE_MAXAGE)
+        return {"ok": True, "message": r.message}
+
+    @app.post("/api/login")
+    def api_login(p: LoginIn, response: Response):
+        from synapse import accounts
+        uid = accounts.authenticate(cfg, p.username, p.password)
+        if not uid:
+            return JSONResponse({"ok": False, "message": "Nutzername oder Passwort falsch."},
+                                status_code=401)
+        tok = accounts.create_session(cfg, uid)
+        response.set_cookie(_COOKIE, tok, httponly=True, samesite="lax",
+                            max_age=_COOKIE_MAXAGE)
+        return {"ok": True, "message": "Angemeldet."}
+
+    @app.post("/api/logout")
+    def api_logout(request: Request, response: Response):
+        from synapse import accounts
+        accounts.destroy_session(cfg, request.cookies.get(_COOKIE, ""))
+        response.delete_cookie(_COOKIE)
+        return {"ok": True}
+
+    @app.post("/api/profile")
+    def api_profile(p: ProfileIn, request: Request):
+        u = _user(request)
+        if not u:
+            return JSONResponse({"ok": False, "message": "Bitte anmelden."}, status_code=401)
+        from synapse import accounts
+        r = accounts.update_profile(cfg, u["id"], p.name, p.affiliation, p.orcid, p.bio)
         return {"ok": r.ok, "message": r.message}
 
     return app

@@ -52,7 +52,7 @@ class SubmitOutcome:
 # --------------------------------------------------------------------------- #
 def create_project(cfg: Config, title: str, area: str = "", description: str = "",
                    owner_name: str = "", owner_orcid: str = "",
-                   license: str = "CC-BY 4.0") -> SubmitOutcome:
+                   license: str = "CC-BY 4.0", owner_user_id: str = "") -> SubmitOutcome:
     title = (title or "").strip()
     if len(title) < 4:
         return SubmitOutcome(False, "Bitte einen aussagekräftigen Titel (min. 4 Zeichen).")
@@ -60,10 +60,12 @@ def create_project(cfg: Config, title: str, area: str = "", description: str = "
     token = secrets.token_urlsafe(12)            # geheim, nur einmal sichtbar
     with SynapseStore(cfg) as store:
         store.con.execute(
-            "INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO projects (id,title,area,description,owner_name,owner_orcid,"
+            "owner_token,license,status,created_at,owner_user_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             [pid, title, area.strip()[:120], description.strip()[:4000],
              (owner_name or "anonym").strip()[:120], owner_orcid.strip()[:40],
-             _hash(token), license.strip()[:60], "active", _now()])
+             _hash(token), license.strip()[:60], "active", _now(), owner_user_id or None])
     return SubmitOutcome(True, "Projekt angelegt. Bewahre den Owner-Token sicher auf "
                          "(zum Kuratieren – wird nur jetzt angezeigt).",
                          {"id": pid, "title": title, "owner_token": token})
@@ -87,7 +89,8 @@ def _trust_level(cfg: Config, evidence_doi: str, link: str) -> str:
 
 def add_contribution(cfg: Config, project_id: str, kind: str, title: str,
                      body: str = "", link: str = "", evidence_doi: str = "",
-                     contributor_name: str = "", contributor_orcid: str = "") -> SubmitOutcome:
+                     contributor_name: str = "", contributor_orcid: str = "",
+                     contributor_user_id: str = "") -> SubmitOutcome:
     kind = kind if kind in KINDS else "finding"
     title = (title or "").strip()
     if len(title) < 4:
@@ -102,10 +105,13 @@ def add_contribution(cfg: Config, project_id: str, kind: str, title: str,
         trust = _trust_level(cfg, evidence_doi, link)
         cid = "c-" + secrets.token_hex(6)
         store.con.execute(
-            "INSERT INTO contributions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO contributions (id,project_id,kind,title,body,link,evidence_doi,"
+            "contributor_name,contributor_orcid,trust_level,status,created_at,"
+            "contributor_user_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             [cid, project_id, kind, title, body.strip()[:8000], link.strip()[:500],
              evidence_doi.strip()[:120], (contributor_name or "anonym").strip()[:120],
-             contributor_orcid.strip()[:40], trust, "visible", _now()])
+             contributor_orcid.strip()[:40], trust, "visible", _now(),
+             contributor_user_id or None])
     warn = ""
     if any(w in (title + " " + body).lower() for w in _SENSITIVE):
         warn = (" Hinweis: sensibles Thema – dies ist KEINE medizinische/rechtliche "
@@ -144,13 +150,16 @@ def get_project(cfg: Config, project_id: str) -> dict | None:
         if not p:
             return None
         rows = store.con.execute(
-            "SELECT id,kind,title,body,link,evidence_doi,contributor_name,"
-            "contributor_orcid,trust_level,status,created_at FROM contributions "
-            "WHERE project_id=? AND status<>'removed' ORDER BY created_at DESC",
+            "SELECT c.id,c.kind,c.title,c.body,c.link,c.evidence_doi,c.contributor_name,"
+            "c.contributor_orcid,c.trust_level,c.status,c.created_at,"
+            "COALESCE(u.orcid_verified,false) "
+            "FROM contributions c LEFT JOIN users u ON c.contributor_user_id=u.id "
+            "WHERE c.project_id=? AND c.status<>'removed' ORDER BY c.created_at DESC",
             [project_id]).fetchall()
     contribs = [{"id": r[0], "kind": r[1], "title": r[2], "body": r[3], "link": r[4],
                  "evidence_doi": r[5], "contributor_name": r[6], "contributor_orcid": r[7],
-                 "trust_level": r[8], "status": r[9], "created_at": r[10]} for r in rows]
+                 "trust_level": r[8], "status": r[9], "created_at": r[10],
+                 "author_verified": bool(r[11])} for r in rows]
     return {"id": p[0], "title": p[1], "area": p[2], "description": p[3],
             "owner_name": p[4], "owner_orcid": p[5], "license": p[6], "status": p[7],
             "created_at": p[8], "contributions": contribs}

@@ -96,6 +96,58 @@ def test_web_api(tmp_path):
         assert store.count_events("click") == 1 and store.count_events("search") >= 1
 
 
+def test_accounts_security():
+    """Passwort-Hashing ist sicher (scrypt, salted, nicht umkehrbar)."""
+    from synapse import accounts
+    h = accounts.hash_pw("geheim123")
+    assert h.startswith("scrypt$") and "geheim123" not in h
+    assert accounts.verify_pw("geheim123", h) is True
+    assert accounts.verify_pw("falsch", h) is False
+    assert accounts.hash_pw("x") != accounts.hash_pw("x")        # unterschiedliche Salts
+
+
+def test_accounts_and_gating(tmp_path):
+    """Konto: Registrierung/Login/Profil + Login-Pflicht für Projekte/Beiträge."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(cfg))
+
+    # ohne Login: Projekt anlegen verboten
+    assert client.post("/api/projects", json={"title": "Geheimprojekt"}).status_code == 401
+    assert client.get("/api/me").json()["user"] is None
+
+    # Registrierung (ohne ORCID -> keine Netzwerk-Prüfung) meldet direkt an
+    r = client.post("/api/register", json={"username": "dr_mueller", "password": "supersicher1",
+                                           "name": "Dr. Müller"}).json()
+    assert r["ok"]
+    me = client.get("/api/me").json()["user"]
+    assert me and me["username"] == "dr_mueller" and me["orcid_verified"] is False
+
+    # jetzt eingeloggt: Projekt + Beitrag laufen, Autor = Profil
+    pc = client.post("/api/projects", json={"title": "Forschung zu Schlafstörungen",
+                                            "area": "Neuro"}).json()
+    assert pc["ok"]
+    pid = pc["data"]["id"]
+    cc = client.post("/api/projects/contribute", params={"id": pid},
+                     json={"kind": "progress", "title": "Erste Messreihe",
+                           "body": "Vorläufige Daten."}).json()
+    assert cc["ok"]
+    d = client.get("/api/projects/get", params={"id": pid}).json()
+    assert d["owner_name"] == "Dr. Müller"
+    assert d["contributions"][0]["contributor_name"] == "Dr. Müller"
+
+    # doppelter Nutzername abgelehnt; falsches Passwort -> 401
+    assert client.post("/api/register", json={"username": "dr_mueller",
+                                              "password": "anders12"}).status_code == 400
+    client.post("/api/logout", json={})
+    assert client.post("/api/login", json={"username": "dr_mueller",
+                                           "password": "falsch"}).status_code == 401
+    assert client.post("/api/login", json={"username": "dr_mueller",
+                                           "password": "supersicher1"}).json()["ok"]
+    assert client.get("/konto").status_code == 200
+
+
 def test_collab_projects(tmp_path):
     """Kollaborative Forschung: Projekt anlegen, Beiträge mit Vertrauens-Stufen,
     Melden→Flag, Owner-Moderation per Token."""
@@ -146,9 +198,11 @@ def test_collab_web(tmp_path):
     from synapse.web import create_app
     cfg = _cfg(tmp_path)
     client = TestClient(create_app(cfg))
+    client.post("/api/register", json={"username": "forscher_a", "password": "passwort123",
+                                       "name": "A"})        # Login nötig zum Anlegen
 
     r = client.post("/api/projects", json={"title": "Offene Krebs-Datenbasis",
-                                           "area": "Onkologie", "owner_name": "A"}).json()
+                                           "area": "Onkologie"}).json()
     assert r["ok"] and r["data"]["owner_token"]
     pid = r["data"]["id"]
 
