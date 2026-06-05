@@ -148,6 +148,49 @@ def test_accounts_and_gating(tmp_path):
     assert client.get("/konto").status_code == 200
 
 
+def test_student_account_and_project_type(tmp_path):
+    """Studierende ohne ORCID können mitforschen – ehrlich als „Student:in"
+    gekennzeichnet; Projekt-Typ (Forschung/Studienprojekt) wird mitgeführt."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(cfg))
+
+    # Registrierung als Student:in (keine ORCID nötig)
+    r = client.post("/api/register", json={"username": "studi_lena", "password": "lernen12345",
+                                           "name": "Lena", "account_type": "student",
+                                           "affiliation": "Uni Köln"}).json()
+    assert r["ok"]
+    me = client.get("/api/me").json()["user"]
+    assert me["account_type"] == "student" and me["orcid_verified"] is False
+    assert me["affiliation"] == "Uni Köln"
+
+    # Studienprojekt anlegen (ptype=student)
+    pc = client.post("/api/projects", json={"title": "Studienprojekt Lernverhalten",
+                                            "area": "Psychologie", "ptype": "student"}).json()
+    assert pc["ok"]
+    pid = pc["data"]["id"]
+    client.post("/api/projects/contribute", params={"id": pid},
+                json={"kind": "progress", "title": "Vorläufige Umfrage",
+                      "body": "Erste Ergebnisse."})
+
+    d = client.get("/api/projects/get", params={"id": pid}).json()
+    assert d["ptype"] == "student"
+    c0 = d["contributions"][0]
+    assert c0["author_type"] == "student" and c0["author_affiliation"] == "Uni Köln"
+    assert c0["author_verified"] is False
+
+    # Profil-Update kann den Konto-Typ ändern (z.B. nach Abschluss)
+    upd = client.post("/api/profile", json={"account_type": "researcher"}).json()
+    assert upd["ok"]
+    assert client.get("/api/me").json()["user"]["account_type"] == "researcher"
+
+    # ungültiger Typ fällt auf „other" zurück
+    client.post("/api/register", json={"username": "rando_x", "password": "passwort123",
+                                       "account_type": "blödsinn"})
+    assert client.get("/api/me").json()["user"]["account_type"] == "other"
+
+
 def test_collab_projects(tmp_path):
     """Kollaborative Forschung: Projekt anlegen, Beiträge mit Vertrauens-Stufen,
     Melden→Flag, Owner-Moderation per Token."""

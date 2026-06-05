@@ -52,20 +52,23 @@ class SubmitOutcome:
 # --------------------------------------------------------------------------- #
 def create_project(cfg: Config, title: str, area: str = "", description: str = "",
                    owner_name: str = "", owner_orcid: str = "",
-                   license: str = "CC-BY 4.0", owner_user_id: str = "") -> SubmitOutcome:
+                   license: str = "CC-BY 4.0", owner_user_id: str = "",
+                   ptype: str = "research") -> SubmitOutcome:
     title = (title or "").strip()
     if len(title) < 4:
         return SubmitOutcome(False, "Bitte einen aussagekräftigen Titel (min. 4 Zeichen).")
+    ptype = ptype if ptype in ("research", "student") else "research"
     pid = _slug(title)
     token = secrets.token_urlsafe(12)            # geheim, nur einmal sichtbar
     with SynapseStore(cfg) as store:
         store.con.execute(
             "INSERT INTO projects (id,title,area,description,owner_name,owner_orcid,"
-            "owner_token,license,status,created_at,owner_user_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "owner_token,license,status,created_at,owner_user_id,ptype) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             [pid, title, area.strip()[:120], description.strip()[:4000],
              (owner_name or "anonym").strip()[:120], owner_orcid.strip()[:40],
-             _hash(token), license.strip()[:60], "active", _now(), owner_user_id or None])
+             _hash(token), license.strip()[:60], "active", _now(),
+             owner_user_id or None, ptype])
     return SubmitOutcome(True, "Projekt angelegt. Bewahre den Owner-Token sicher auf "
                          "(zum Kuratieren – wird nur jetzt angezeigt).",
                          {"id": pid, "title": title, "owner_token": token})
@@ -146,23 +149,26 @@ def get_project(cfg: Config, project_id: str) -> dict | None:
     with SynapseStore(cfg) as store:
         p = store.con.execute(
             "SELECT id,title,area,description,owner_name,owner_orcid,license,status,"
-            "created_at FROM projects WHERE id=?", [project_id]).fetchone()
+            "created_at,COALESCE(ptype,'research') FROM projects WHERE id=?",
+            [project_id]).fetchone()
         if not p:
             return None
         rows = store.con.execute(
             "SELECT c.id,c.kind,c.title,c.body,c.link,c.evidence_doi,c.contributor_name,"
             "c.contributor_orcid,c.trust_level,c.status,c.created_at,"
-            "COALESCE(u.orcid_verified,false) "
+            "COALESCE(u.orcid_verified,false),COALESCE(u.account_type,'other'),"
+            "COALESCE(u.affiliation,'') "
             "FROM contributions c LEFT JOIN users u ON c.contributor_user_id=u.id "
             "WHERE c.project_id=? AND c.status<>'removed' ORDER BY c.created_at DESC",
             [project_id]).fetchall()
     contribs = [{"id": r[0], "kind": r[1], "title": r[2], "body": r[3], "link": r[4],
                  "evidence_doi": r[5], "contributor_name": r[6], "contributor_orcid": r[7],
                  "trust_level": r[8], "status": r[9], "created_at": r[10],
-                 "author_verified": bool(r[11])} for r in rows]
+                 "author_verified": bool(r[11]), "author_type": r[12],
+                 "author_affiliation": r[13]} for r in rows]
     return {"id": p[0], "title": p[1], "area": p[2], "description": p[3],
             "owner_name": p[4], "owner_orcid": p[5], "license": p[6], "status": p[7],
-            "created_at": p[8], "contributions": contribs}
+            "created_at": p[8], "ptype": p[9], "contributions": contribs}
 
 
 def report(cfg: Config, contribution_id: str, reason: str = "") -> SubmitOutcome:

@@ -27,6 +27,7 @@ class RegisterIn(BaseModel):
     orcid: str = ""
     affiliation: str = ""
     bio: str = ""
+    account_type: str = "other"
 
 
 class LoginIn(BaseModel):
@@ -39,6 +40,7 @@ class ProfileIn(BaseModel):
     affiliation: str = ""
     orcid: str = ""
     bio: str = ""
+    account_type: str = ""
 
 
 class ProjectIn(BaseModel):
@@ -47,6 +49,7 @@ class ProjectIn(BaseModel):
     description: str = ""
     owner_name: str = ""
     owner_orcid: str = ""
+    ptype: str = "research"
 
 
 class ContribIn(BaseModel):
@@ -240,6 +243,8 @@ _PROJECTS_PAGE = """<!doctype html><html lang="de"><head>
  .badge{font-size:11px;padding:2px 9px;border-radius:7px;margin-left:6px;font-weight:600}
  .verified{background:#e7f6ee;color:#1f7a4d} .preprint{background:#fdf3e0;color:#9a6a12}
  .community{background:#eef1f5;color:#5b6776} .flagged{background:#fdeaea;color:#b42323}
+ .student{background:#eef3ff;color:#1e40af} .researcher{background:#eef1f5;color:#5b6776}
+ .lbl{font-size:12px;color:var(--mut);font-weight:600;margin-top:6px}
  .pill{display:inline-block;background:var(--accsoft);color:#1e40af;font-size:12px;
    padding:3px 10px;border-radius:20px;font-weight:500}
  details summary{cursor:pointer;color:var(--acc);font-weight:500} .ok{color:#1f7a4d} .err{color:#b42323}
@@ -259,8 +264,12 @@ andere können darauf aufbauen. Jeder Beitrag trägt eine Vertrauens-Stufe.
  <div class="card">
   <input id="p_title" placeholder="Titel, z.B. Forschung zu Schlafstörungen">
   <input id="p_area" placeholder="Bereich/Schlagworte, z.B. Neurowissenschaften, Schlaf">
+  <div class="lbl">Projekt-Typ</div>
+  <select id="p_type"><option value="research">Forschung</option>
+   <option value="student">Studienprojekt / Lehre (Uni)</option></select>
   <textarea id="p_desc" placeholder="Worum geht es? Ziel, Stand, was gesucht wird …"></textarea>
-  <div class="mut">Wird unter deinem Profil angelegt. <a href="/konto">Konto</a> nötig.</div>
+  <div class="mut">Wird unter deinem Profil angelegt. <a href="/konto">Konto</a> nötig.
+   Studienprojekte sind ausdrücklich willkommen – sie werden klar gekennzeichnet.</div>
   <button onclick="createProject()">Projekt anlegen</button>
   <div id="p_msg" class="mut"></div>
  </div>
@@ -275,9 +284,19 @@ andere können darauf aufbauen. Jeder Beitrag trägt eine Vertrauens-Stufe.
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
 function badge(t){return '<span class="badge '+t+'">'+t+'</span>';}
+// Ehrliches Identitäts-Abzeichen je Beitrag: ORCID > Student:in > Forscher:in.
+function authorBadge(c){
+ if(c.author_verified)return ' <span class="badge verified">ORCID ✓</span>';
+ if(c.author_type==='student')return ' <span class="badge student">Student:in'+
+   (c.author_affiliation?(' · '+esc(c.author_affiliation)):'')+'</span>';
+ if(c.author_type==='researcher')return ' <span class="badge researcher">Forscher:in'+
+   (c.author_affiliation?(' · '+esc(c.author_affiliation)):'')+'</span>';
+ return '';
+}
 
 async function createProject(){
- const body={title:$('p_title').value,area:$('p_area').value,description:$('p_desc').value};
+ const body={title:$('p_title').value,area:$('p_area').value,description:$('p_desc').value,
+   ptype:$('p_type').value};
  const d=await (await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify(body)})).json();
  if(!d.ok){$('p_msg').innerHTML='<span class="err">'+esc(d.message)+' <a href="/konto">→ anmelden</a></span>';return;}
@@ -297,16 +316,17 @@ async function loadList(){
 async function openProject(id){
  const p=await (await fetch('/api/projects/get?id='+encodeURIComponent(id))).json();
  if(p.error){$('detail').innerHTML='';return;}
+ const tlabel=p.ptype==='student'?'Studienprojekt':'Forschung';
  let h='<div class="card"><h2>'+esc(p.title)+'</h2><span class="pill">'+esc(p.area||'—')+'</span>'+
+  ' <span class="badge '+(p.ptype==='student'?'student':'researcher')+'">'+tlabel+'</span>'+
   '<p class="mut">'+esc(p.description||'')+'</p><div class="mut">von '+esc(p.owner_name)+
   (p.owner_orcid?(' · ORCID '+esc(p.owner_orcid)):'')+' · Lizenz '+esc(p.license)+'</div>';
  h+='<h3>Beiträge</h3>';
  if(!p.contributions.length)h+='<div class="mut">Noch keine Beiträge.</div>';
  p.contributions.forEach(c=>{
   const flagged=c.status==='flagged'?badge('flagged'):'';
-  const av=c.author_verified?' <span class="badge verified">ORCID ✓</span>':'';
   h+='<div class="card"><b>['+esc(c.kind)+'] '+esc(c.title)+'</b>'+badge(c.trust_level)+flagged+
-   '<div class="mut">von '+esc(c.contributor_name)+av+' · '+(c.created_at||'').slice(0,10)+'</div>'+
+   '<div class="mut">von '+esc(c.contributor_name)+authorBadge(c)+' · '+(c.created_at||'').slice(0,10)+'</div>'+
    '<div>'+esc(c.body)+'</div>'+
    (c.link?('<div class="mut">Daten/Quelle: <a target="_blank" href="'+esc(c.link)+'">'+esc(c.link)+'</a></div>'):'')+
    (c.evidence_doi?('<div class="mut">DOI: '+esc(c.evidence_doi)+'</div>'):'')+
@@ -361,15 +381,18 @@ _ACCOUNT_PAGE = """<!doctype html><html lang="de"><head>
  .nav a{margin-left:18px;font-size:14px;color:var(--mut)} .nav a:hover{color:var(--fg)}
  .wrap{max-width:560px;margin:0 auto;padding:22px 18px}
  h1{font-size:21px} h2{font-size:16px;margin:18px 0 8px}
- input,textarea{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);
+ input,textarea,select{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);
    background:var(--surface);color:var(--fg);font-size:15px;margin:6px 0}
- input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accsoft)}
+ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accsoft)}
  button{padding:11px 16px;border:0;border-radius:10px;background:var(--acc);color:#fff;
    font-weight:600;cursor:pointer} button:hover{filter:brightness(1.06)}
  .card{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:16px 18px;margin:12px 0;
    box-shadow:0 1px 2px rgba(16,24,40,.04)}
  .mut{color:var(--mut);font-size:13px} .ok{color:#1f7a4d} .err{color:#b42323}
+ .lbl{font-size:12px;color:var(--mut);font-weight:600;margin-top:8px}
+ .note{background:var(--accsoft);color:#1e40af;font-size:12.5px;border-radius:9px;padding:9px 12px;margin:8px 0}
  .badge{display:inline-block;background:#e7f6ee;color:#1f7a4d;font-size:11px;padding:2px 9px;border-radius:7px;font-weight:600}
+ .badge.student{background:#eef3ff;color:#1e40af} .badge.other{background:#eef1f5;color:#5b6776}
 </style></head><body>
 <div class="topbar"><div class="topin"><div class="brand">Syn<span>apse</span></div>
  <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a><a href="/konto">Konto</a></div></div></div>
@@ -380,15 +403,36 @@ Eine <b>ORCID</b> macht dich als Forscher:in verifizierbar.</p>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+// Ehrliches Identitäts-Abzeichen: ORCID schlägt alles, sonst akadem. Status.
+function idBadge(m){
+ if(m.orcid_verified)return ' <span class="badge">ORCID ✓ verifiziert</span>';
+ if(m.account_type==='student')return ' <span class="badge student">Student:in'+
+   (m.affiliation?(' · '+esc(m.affiliation)):'')+'</span>';
+ if(m.account_type==='researcher')return ' <span class="badge other">Forscher:in'+
+   (m.affiliation?(' · '+esc(m.affiliation)):'')+'</span>';
+ return '';
+}
+function typeSel(id,cur){
+ const o=(v,t)=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+t+'</option>';
+ return '<div class="lbl">Konto-Typ (ehrlich gekennzeichnet)</div><select id="'+id+'">'+
+  o('student','Student:in (Uni-Projekt, ohne ORCID)')+
+  o('researcher','Forscher:in')+o('other','Andere')+'</select>';
+}
+const ORCID_NOTE='<div class="note">Kein ORCID? Kein Problem – Studierende können ohne '+
+ 'mitforschen. Beiträge werden dann als „Student:in" gekennzeichnet (ehrlich, nicht '+
+ 'zweitklassig). Eine <a href="https://orcid.org" target="_blank">ORCID ist kostenlos</a> '+
+ 'und macht dich zusätzlich verifizierbar.</div>';
 async function load(){
  const m=(await (await fetch('/api/me')).json()).user;
  if(m){ $('view').innerHTML=
   '<div class="card"><h2>Angemeldet als '+esc(m.username)+'</h2>'+
-  '<div class="mut">'+esc(m.name)+(m.orcid_verified?' <span class="badge">ORCID ✓ verifiziert</span>':'')+'</div>'+
+  '<div class="mut">'+esc(m.name)+idBadge(m)+'</div>'+
   '<h2>Profil bearbeiten</h2>'+
   '<input id="p_name" placeholder="Anzeigename" value="'+esc(m.name)+'">'+
-  '<input id="p_aff" placeholder="Institution/Affiliation" value="'+esc(m.affiliation||'')+'">'+
+  typeSel('p_type',m.account_type||'other')+
+  '<input id="p_aff" placeholder="Institution/Universität" value="'+esc(m.affiliation||'')+'">'+
   '<input id="p_orcid" placeholder="ORCID (0000-0000-0000-0000)" value="'+esc(m.orcid||'')+'">'+
+  ORCID_NOTE+
   '<textarea id="p_bio" placeholder="Kurzprofil">'+esc(m.bio||'')+'</textarea>'+
   '<button onclick="saveProfile()">Speichern</button> '+
   '<button onclick="logout()" style="background:#64748b">Abmelden</button>'+
@@ -399,18 +443,21 @@ async function load(){
   '<button onclick="login()">Anmelden</button><div id="l_msg" class="mut"></div></div>'+
   '<div class="card"><h2>Neues Konto</h2>'+
   '<input id="r_user" placeholder="Nutzername (3–32 Zeichen)"><input id="r_pw" type="password" placeholder="Passwort (min. 8)">'+
-  '<input id="r_name" placeholder="Dein Name"><input id="r_orcid" placeholder="ORCID (optional, verifiziert dich)">'+
-  '<input id="r_aff" placeholder="Institution (optional)">'+
+  '<input id="r_name" placeholder="Dein Name">'+
+  typeSel('r_type','student')+
+  '<input id="r_aff" placeholder="Institution/Universität (optional)">'+
+  '<input id="r_orcid" placeholder="ORCID (optional, verifiziert dich)">'+
+  ORCID_NOTE+
   '<button onclick="register()">Registrieren</button><div id="r_msg" class="mut"></div></div>';
 }
 async function post(url,body){return (await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();}
 async function login(){const d=await post('/api/login',{username:$('l_user').value,password:$('l_pw').value});
  $('l_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
 async function register(){const d=await post('/api/register',{username:$('r_user').value,password:$('r_pw').value,
-  name:$('r_name').value,orcid:$('r_orcid').value,affiliation:$('r_aff').value});
+  name:$('r_name').value,orcid:$('r_orcid').value,affiliation:$('r_aff').value,account_type:$('r_type').value});
  $('r_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
 async function saveProfile(){const d=await post('/api/profile',{name:$('p_name').value,affiliation:$('p_aff').value,
-  orcid:$('p_orcid').value,bio:$('p_bio').value});
+  orcid:$('p_orcid').value,bio:$('p_bio').value,account_type:$('p_type').value});
  $('p_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
 async function logout(){await post('/api/logout',{}); load();}
 load();
@@ -510,7 +557,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         from synapse import projects
         r = projects.create_project(cfg, p.title, p.area, p.description,
                                     owner_name=u["name"], owner_orcid=u.get("orcid", ""),
-                                    owner_user_id=u["id"])
+                                    owner_user_id=u["id"], ptype=p.ptype)
         return {"ok": r.ok, "message": r.message, "data": r.data}
 
     @app.get("/api/projects/get")
@@ -557,7 +604,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     def api_register(p: RegisterIn, response: Response):
         from synapse import accounts
         r = accounts.register(cfg, p.username, p.password, p.name, p.email,
-                              p.orcid, p.affiliation, p.bio)
+                              p.orcid, p.affiliation, p.bio, p.account_type)
         if not r.ok:
             return JSONResponse({"ok": False, "message": r.message}, status_code=400)
         tok = accounts.create_session(cfg, r.data["user_id"])
@@ -590,7 +637,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if not u:
             return JSONResponse({"ok": False, "message": "Bitte anmelden."}, status_code=401)
         from synapse import accounts
-        r = accounts.update_profile(cfg, u["id"], p.name, p.affiliation, p.orcid, p.bio)
+        r = accounts.update_profile(cfg, u["id"], p.name, p.affiliation, p.orcid,
+                                    p.bio, p.account_type)
         return {"ok": r.ok, "message": r.message}
 
     return app
