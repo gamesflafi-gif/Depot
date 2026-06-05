@@ -7,7 +7,7 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 
 ➡️ Gesamtplan & Architektur: **`PROJECT_PLAN_SYNAPSE.md`**
 
-## Status: Phase 0 ✅ · Phase 1 Suche ✅ · Phase 1.5 Web ✅ · Phase 2 Gehirn ✅
+## Status: Phase 0 ✅ · Suche ✅ · Web ✅ · Gehirn ✅ · Verbindungs-Entdeckung ✅
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
@@ -44,6 +44,13 @@ export SYNAPSE_MAILTO="du@example.org"
 - `search "FRAGE" [--k N]` – semantische Suche (hybrid: Vektor + Stichwort)
 - `serve [--host H] [--port P]` – Web-Oberfläche im Browser starten
 - `brain` – Ranking-Gehirn aus Klick-Feedback trainieren (Phase 2)
+- `connections WORK_ID` – verwandte Arbeiten + **Feld-Brücken** zu einem Werk
+
+## Verbindungs-Entdeckung (das Alleinstellungsmerkmal)
+Im Web hat jeder Treffer einen **„↔ Verbindungen"**-Button: er zeigt verwandte
+Arbeiten und markiert **Brücken** (semantisch nah, aber aus einem **anderen
+Forschungsfeld**) – so findet man interdisziplinäre Anknüpfungspunkte, die eine
+normale Suche nicht zeigt. Ohne Neu-Indizieren (nutzt vorhandene Vektoren).
 
 ## Themen-Bestand & Mehrsprachigkeit (wichtig für gute Treffer)
 - Das Embedding-Modell ist **mehrsprachig** (Deutsch/Englisch …).

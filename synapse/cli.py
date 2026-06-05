@@ -95,6 +95,24 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
+def cmd_connections(cfg, args) -> None:
+    from pathlib import Path
+    from synapse.index import SearchEngine
+    if not (Path(cfg.data_dir) / "index" / "index.json").exists():
+        print("Kein Index. Bitte erst 'ingest' + 'index'.")
+        return
+    res = SearchEngine(cfg).connections(args.work_id, k=args.k)
+    if res is None:
+        print(f"Werk {args.work_id} nicht im Index.")
+        return
+    field, conns = res
+    print(f"Verbindungen zu {args.work_id}  (Feld: {field or '—'})")
+    print("=" * 60)
+    for c in conns:
+        bridge = f"   ↔ BRÜCKE → {c.field}" if c.cross_field else ""
+        print(f"[{c.similarity:.3f}] {c.title}{bridge}")
+
+
 def cmd_brain(cfg, args) -> None:
     from synapse import brain
     print("Trainiere Ranking-Gehirn aus Klick-Feedback …")
@@ -114,7 +132,7 @@ def cmd_serve(cfg, args) -> None:
 
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
             "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
-            "brain": cmd_brain}
+            "brain": cmd_brain, "connections": cmd_connections}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -146,6 +164,10 @@ def main(argv: list[str] | None = None) -> None:
     pse.add_argument("--port", type=int, default=8000)
 
     sub.add_parser("brain", help="Ranking-Gehirn aus Klick-Feedback trainieren")
+
+    pco = sub.add_parser("connections", help="verwandte Arbeiten + Feld-Brücken zu einem Werk")
+    pco.add_argument("work_id", help="OpenAlex-ID, z.B. W2741809807")
+    pco.add_argument("--k", type=int, default=8)
 
     args = parser.parse_args(argv)
     cfg = load_config()

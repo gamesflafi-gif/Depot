@@ -40,6 +40,13 @@ _PAGE = """<!doctype html><html lang="de"><head>
  .sc{color:var(--acc);font-variant-numeric:tabular-nums}
  .foot{color:var(--mut);font-size:12px;text-align:center;margin:24px 0}
  .empty{color:var(--mut);text-align:center;margin:30px 0}
+ .relbtn{margin-top:9px;font-size:12px;color:var(--acc);background:none;
+   border:1px solid #2a3a52;border-radius:8px;padding:4px 10px;cursor:pointer}
+ .rel{margin-top:10px;border-top:1px solid #22314a;padding-top:8px}
+ .rel a{display:block;color:var(--mut);font-size:13px;padding:5px 0;text-decoration:none}
+ .rel a:hover{color:var(--fg)}
+ .badge{display:inline-block;background:#13402a;color:#7ef0ad;font-size:11px;
+   padding:1px 7px;border-radius:6px;margin-left:6px}
 </style></head><body>
 <header><h1>Syn<span>apse</span></h1>
 <div class="sub">Beschreibe eine Idee oder Frage — finde passende Forschung. Mit Quellen.</div></header>
@@ -64,15 +71,34 @@ document.getElementById('f').addEventListener('submit', async e=>{
  d.results.forEach((h,i)=>{
   const url=h.doi?('https://doi.org/'+h.doi):('https://openalex.org/'+h.id);
   const meta=[h.year||'—',h.venue,(h.cited_by_count+' Zit.')].filter(Boolean).join(' · ');
-  const a=document.createElement('a');
-  a.className='hit'; a.target='_blank'; a.href=url;
+  const card=document.createElement('div'); card.className='hit';
+  const a=document.createElement('a'); a.target='_blank'; a.href=url;
+  a.style.textDecoration='none'; a.style.color='inherit';
   a.innerHTML='<div class="t">'+(i+1)+'. '+esc(h.title)+'</div>'+
    '<div class="m">'+esc(meta)+' · <span class="sc">'+h.score.toFixed(3)+'</span></div>';
-  a.addEventListener('click', ()=>{
-   fetch('/api/feedback?q='+encodeURIComponent(query)+'&work_id='+
-     encodeURIComponent(h.id)+'&rank='+i, {method:'POST'});
+  a.addEventListener('click', ()=>{ fetch('/api/feedback?q='+encodeURIComponent(query)+
+     '&work_id='+encodeURIComponent(h.id)+'&rank='+i, {method:'POST'}); });
+  card.appendChild(a);
+  const btn=document.createElement('button'); btn.className='relbtn';
+  btn.textContent='↔ Verbindungen';
+  const panel=document.createElement('div'); panel.className='rel'; panel.style.display='none';
+  btn.addEventListener('click', async ()=>{
+   if(panel.dataset.loaded){ panel.style.display=(panel.style.display==='none'?'block':'none'); return; }
+   panel.style.display='block'; panel.innerHTML='<div class="m">lädt …</div>';
+   let rd; try{ rd=await (await fetch('/api/related?id='+encodeURIComponent(h.id)+'&k=8')).json(); }
+   catch(_){ panel.innerHTML='<div class="m">Fehler.</div>'; return; }
+   panel.dataset.loaded='1';
+   if(!rd.related||!rd.related.length){ panel.innerHTML='<div class="m">Keine Verbindungen.</div>'; return; }
+   panel.innerHTML='<div class="m">Feld: '+esc(rd.field||'—')+' · verwandte Arbeiten:</div>';
+   rd.related.forEach(c=>{
+    const cu=c.doi?('https://doi.org/'+c.doi):('https://openalex.org/'+c.id);
+    const link=document.createElement('a'); link.target='_blank'; link.href=cu;
+    link.innerHTML=esc(c.title)+(c.cross_field?('<span class="badge">Brücke → '+esc(c.field)+'</span>'):'');
+    panel.appendChild(link);
+   });
   });
-  r.appendChild(a);
+  card.appendChild(btn); card.appendChild(panel);
+  r.appendChild(card);
  });
 });
 </script></body></html>"""
@@ -115,5 +141,16 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         with SynapseStore(cfg) as store:
             store.log_event("click", query=q, work_id=work_id, rank=rank)
         return {"ok": True}
+
+    @app.get("/api/related")
+    def related(id: str, k: int = 8):
+        try:
+            res = _engine().connections(id, k=min(max(k, 1), 20))
+        except FileNotFoundError:
+            return JSONResponse({"error": "Kein Index."}, status_code=503)
+        if res is None:
+            return {"field": "", "related": []}
+        seed_field, conns = res
+        return {"field": seed_field, "related": [c.__dict__ for c in conns]}
 
     return app

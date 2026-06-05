@@ -145,6 +145,27 @@ class SynapseStore:
                  "year": r[3], "doi": r[4] or "", "venue": r[5] or "",
                  "cited_by_count": int(r[6] or 0)} for r in rows]
 
+    def fetch_by_ids(self, ids: list[str]) -> dict:
+        """Liefert Metadaten inkl. primärem Forschungsfeld (Top-Konzept) je ID.
+        Wird für die Verbindungs-Entdeckung genutzt (nur wenige IDs -> schnell)."""
+        if not ids:
+            return {}
+        ph = ",".join(["?"] * len(ids))
+        rows = self.con.execute(
+            f"SELECT id, title, year, doi, venue, cited_by_count, concepts "
+            f"FROM works WHERE id IN ({ph})", ids).fetchall()
+        out: dict = {}
+        for r in rows:
+            try:
+                concepts = json.loads(r[6]) if r[6] else []
+            except Exception:
+                concepts = []
+            field = concepts[0]["name"] if concepts else ""
+            out[r[0]] = {"id": r[0], "title": r[1] or "", "year": r[2],
+                         "doi": r[3] or "", "venue": r[4] or "",
+                         "cited_by_count": int(r[5] or 0), "field": field}
+        return out
+
     def export_parquet(self, path: str | None = None) -> str:
         """Schreibt den aktuellen Werk-Bestand als Parquet (Lake-Snapshot)."""
         target = path or str(self.cfg.lake_path / "works.parquet")
