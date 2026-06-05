@@ -7,7 +7,7 @@ eigenen Server, keine teure Fremd-API, Daten bleiben bei dir.
 
 ➡️ Gesamtplan & Architektur: **`PROJECT_PLAN_SYNAPSE.md`**
 
-## Status: Phase 0 ✅ · Suche ✅ · Web ✅ · Gehirn ✅ · Verbindungs-Entdeckung ✅
+## Status: Fundament ✅ · Suche ✅ · Web ✅ · Gehirn ✅ · Verbindungen ✅ · Assistent ✅
 Reproduzierbare, idempotente, wiederanlauffähige Datenpipeline in einen lokalen
 Daten-Lake (DuckDB + Parquet). Offline testbar (Sample-Modus).
 
@@ -45,6 +45,18 @@ export SYNAPSE_MAILTO="du@example.org"
 - `serve [--host H] [--port P]` – Web-Oberfläche im Browser starten
 - `brain` – Ranking-Gehirn aus Klick-Feedback trainieren (Phase 2)
 - `connections WORK_ID` – verwandte Arbeiten + **Feld-Brücken** zu einem Werk
+- `ask "FRAGE"` – Forschungs-Assistent: Einordnung mit Quellen
+
+## Forschungs-Assistent (Phase 3)
+Im Web ist die Suche jetzt ein **Assistent**: Du stellst eine Frage und bekommst
+**direkt eine faktenbasierte Einordnung** statt nur einer Liste:
+- *Gibt es das?* – Anzahl weltweit (live von OpenAlex) + im Bestand
+- *Was gibt es?* – Hauptthemen, einflussreichste & neueste Arbeiten
+- *Aktiv oder reif?* – Trend
+- *Brücken* in andere Felder
+
+Bewusst **ohne großes Sprachmodell** (schnell, kostenlos, **keine Halluzination** –
+alles aus echten Daten + Quellen). CLI: `ask "Gibt es Forschung zu Schlaf und Gedächtnis?"`
 
 ## Verbindungs-Entdeckung (das Alleinstellungsmerkmal)
 Im Web hat jeder Treffer einen **„↔ Verbindungen"**-Button: er zeigt verwandte

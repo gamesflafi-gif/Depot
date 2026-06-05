@@ -56,6 +56,22 @@ def iter_works(cfg: Config, filter_str: str = "", max_records: int = 1000) -> It
         cursor = (data.get("meta") or {}).get("next_cursor")
 
 
+def count_works(cfg: Config, query: str) -> int | None:
+    """Wie viele Arbeiten gibt es **weltweit** zu einer Suchanfrage? (OpenAlex
+    meta.count). Liefert None offline/bei Fehler."""
+    if cfg.source_mode == "sample" or not query.strip():
+        return None
+    params = {"filter": f"default.search:{query}", "per-page": 1}
+    if cfg.mailto:
+        params["mailto"] = cfg.mailto
+    url = cfg.openalex_base + "?" + urllib.parse.urlencode(params, safe=":,*")
+    try:
+        data = _get_json(url, cfg)
+        return int((data.get("meta") or {}).get("count", 0))
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _get_json(url: str, cfg: Config) -> dict:
     """HTTP-GET mit Retry/Backoff. Client-Fehler (4xx außer 429) werden NICHT
     wiederholt und mit der echten OpenAlex-Meldung gemeldet."""
