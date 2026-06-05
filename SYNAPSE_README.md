@@ -129,6 +129,31 @@ bash deploy/synapse/harden.sh   # Firewall, fail2ban, Auto-Updates, SSH-Härtung
 - **HTTPS**: sobald hinter TLS betrieben, `SYNAPSE_HTTPS=1` setzen → `Secure`-Cookies
   + HSTS. Empfohlen: Reverse-Proxy (Caddy/Nginx) mit Let's-Encrypt vor `127.0.0.1:8000`.
 
+### Launch-Härtung (Betrieb)
+```bash
+# 1) HTTPS + Domain (Caddy, automatisch Let's Encrypt; setzt SYNAPSE_HTTPS=1)
+sudo bash deploy/synapse/install_https.sh DEINE-DOMAIN.de
+
+# 2) Backups (täglich 03:30) + Restore jederzeit testbar
+sudo cp deploy/synapse/backup.{service,timer} /etc/systemd/system/
+sudo systemctl enable --now synapse-backup.timer
+bash deploy/synapse/restore.sh <snapshot>        # Restore (regelmäßig testen!)
+
+# 3) Watchdog (Health alle 5 Min, optional Telegram-Alarm) + Wartung (04:00)
+sudo cp deploy/synapse/watchdog.{service,timer} /etc/systemd/system/
+sudo cp deploy/synapse/maintenance.{service,timer} /etc/systemd/system/
+sudo systemctl enable --now synapse-watchdog.timer synapse-maintenance.timer
+
+# 4) Vor jedem Release: Schwachstellen-/Geheimnis-Scan + Selbstcheck
+bash deploy/synapse/security_scan.sh
+python -m synapse.cli security
+```
+- **Rate-Limiting**: schreibende Anfragen sind je IP gedrosselt (Spam-/Missbrauchs-Schutz),
+  Anfragegröße begrenzt.
+- **Rechtliches**: `/impressum`, `/datenschutz`, `/nutzungsbedingungen` sind eingebaut
+  (Vorlagen — Platzhalter `[[…]]` vor Launch füllen und fachkundig prüfen lassen).
+- **Status/Monitoring**: `GET /api/status` liefert Bestand/Index/HTTPS-Status für den Watchdog.
+
 ## Nächste Phasen (siehe Plan)
 - **Phase 1:** vorberechnete Embeddings (SPECTER2) → Qdrant-Index → semantische
   Hybrid-Suche + API + Mini-Frontend.

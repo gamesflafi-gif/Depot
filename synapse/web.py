@@ -143,7 +143,9 @@ _PAGE = """<!doctype html><html lang="de"><head>
    <button>Prüfen & hinzufügen</button></form>
    <div id="cmsg" class="m"></div></div>
  </details>
- <div class="foot">Lokal & quellenbasiert · keine Anlage-/Medizin-/Rechtsberatung</div>
+ <div class="foot">Lokal & quellenbasiert · keine Anlage-/Medizin-/Rechtsberatung<br>
+  <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> ·
+  <a href="/nutzungsbedingungen">Nutzungsbedingungen</a></div>
 </div>
 <script>
 const r=document.getElementById('r'), br=document.getElementById('brief'), q=document.getElementById('q');
@@ -368,7 +370,11 @@ async function reportC(cid){
  alert('Danke – der Beitrag wurde zur Prüfung markiert.');
 }
 loadList();
-</script></div></body></html>"""
+</script>
+<p class="mut" style="text-align:center;margin-top:26px">
+ <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> ·
+ <a href="/nutzungsbedingungen">Nutzungsbedingungen</a></p>
+</div></body></html>"""
 
 
 _ACCOUNT_PAGE = """<!doctype html><html lang="de"><head>
@@ -440,7 +446,8 @@ async function load(){
   ORCID_NOTE+
   '<textarea id="p_bio" placeholder="Kurzprofil">'+esc(m.bio||'')+'</textarea>'+
   '<button onclick="saveProfile()">Speichern</button> '+
-  '<button onclick="logout()" style="background:#64748b">Abmelden</button>'+
+  '<button onclick="logout()" style="background:#64748b">Abmelden</button> '+
+  '<button onclick="logoutAll()" style="background:#9a3636">Auf allen Geräten abmelden</button>'+
   '<div id="p_msg" class="mut"></div></div>'+
   '<div class="card"><h2>Passwort ändern</h2>'+
   '<input id="pw_old" type="password" placeholder="Aktuelles Passwort">'+
@@ -474,8 +481,110 @@ async function changePw(){const d=await post('/api/password',{old_password:$('pw
  $('pw_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>';
  if(d.ok){$('pw_old').value='';$('pw_new').value='';}}
 async function logout(){await post('/api/logout',{}); load();}
+async function logoutAll(){if(!confirm('Wirklich auf allen Geräten abmelden?'))return;
+ await post('/api/logout-all',{}); load();}
 load();
-</script></body></html>"""
+</script>
+<div class="wrap" style="padding-top:0"><p class="mut" style="text-align:center">
+ <a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a> ·
+ <a href="/nutzungsbedingungen">Nutzungsbedingungen</a></p></div>
+</body></html>"""
+
+
+# --------------------------------------------------------------------------- #
+# Rechtliche Pflichtseiten (DE/DSGVO). Platzhalter in [[…]] vor Launch füllen.
+def _legal_page(title: str, body_html: str) -> str:
+    return f"""<!doctype html><html lang="de"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synapse — {title}</title>
+<style>
+ :root{{--bg:#f5f7fb;--surface:#fff;--fg:#1f2a37;--mut:#64748b;--border:#e2e8f0;--acc:#1d4ed8}}
+ *{{box-sizing:border-box}} body{{margin:0;background:var(--bg);color:var(--fg);
+   font:16px/1.65 ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}}
+ a{{color:var(--acc)}}
+ .topbar{{background:var(--surface);border-bottom:1px solid var(--border)}}
+ .topin{{max-width:760px;margin:0 auto;padding:13px 18px;display:flex;justify-content:space-between;align-items:center}}
+ .brand{{font-size:20px;font-weight:700}} .brand span{{color:var(--acc)}}
+ .nav a{{margin-left:18px;font-size:14px;color:var(--mut);text-decoration:none}}
+ .wrap{{max-width:760px;margin:0 auto;padding:24px 18px}}
+ h1{{font-size:23px}} h2{{font-size:17px;margin-top:26px}} .mut{{color:var(--mut)}}
+ .ph{{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:2px 6px}}
+</style></head><body>
+<div class="topbar"><div class="topin"><div class="brand">Syn<span>apse</span></div>
+ <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a><a href="/konto">Konto</a></div></div></div>
+<div class="wrap">{body_html}
+<p class="mut" style="margin-top:30px"><a href="/">← zurück zur Suche</a></p></div>
+</body></html>"""
+
+
+_IMPRESSUM = _legal_page("Impressum", """
+<h1>Impressum</h1>
+<p>Angaben gemäß § 5 DDG (ehemals § 5 TMG):</p>
+<p><span class="ph">[[Vorname Nachname / Firma]]</span><br>
+<span class="ph">[[Straße Nr.]]</span><br>
+<span class="ph">[[PLZ Ort]]</span><br>
+Deutschland</p>
+<h2>Kontakt</h2>
+<p>E-Mail: <span class="ph">[[kontakt@deine-domain.de]]</span></p>
+<h2>Verantwortlich für den Inhalt (§ 18 Abs. 2 MStV)</h2>
+<p><span class="ph">[[Name, Anschrift wie oben]]</span></p>
+<p class="mut">Hinweis: Diese Vorlage ersetzt keine Rechtsberatung. Bitte vor dem
+Online-Gang von einer fachkundigen Person prüfen lassen.</p>
+""")
+
+
+_DATENSCHUTZ = _legal_page("Datenschutz", """
+<h1>Datenschutzerklärung</h1>
+<p>Wir nehmen den Schutz deiner Daten ernst. Verarbeitung nur, soweit nötig
+(Datenminimierung, Art. 5 DSGVO).</p>
+<h2>Verantwortlicher</h2>
+<p><span class="ph">[[Name, Anschrift, E-Mail – siehe Impressum]]</span></p>
+<h2>Welche Daten wir verarbeiten</h2>
+<ul>
+<li><b>Konto:</b> Nutzername, (optional) Name/E-Mail/Affiliation/ORCID, Passwort
+   (nur als scrypt-Hash – nie im Klartext).</li>
+<li><b>Sitzungen:</b> ein technisch notwendiges Cookie (<code>sid</code>,
+   HttpOnly); in der Datenbank liegt nur dessen Hash.</li>
+<li><b>Sicherheit:</b> Login-Fehlversuche inkl. IP-Adresse zur Abwehr von
+   Brute-Force-Angriffen (berechtigtes Interesse, Art. 6 Abs. 1 f DSGVO),
+   automatische Löschung nach kurzer Zeit.</li>
+<li><b>Nutzung:</b> Suchanfragen/Klicks zur Verbesserung des Rankings –
+   ohne Personenbezug, sofern nicht angemeldet.</li>
+</ul>
+<h2>Keine Weitergabe an Dritte</h2>
+<p>Es werden keine personenbezogenen Daten an Werbe-/Tracking-Dienste übermittelt.
+Es laufen keine Fremd-Skripte/CDNs. Bei ORCID-Verifikation wird die von dir
+eingegebene ORCID einmalig an die öffentliche ORCID-API gesendet.</p>
+<h2>Deine Rechte</h2>
+<p>Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit,
+Widerspruch sowie Beschwerde bei einer Aufsichtsbehörde (Art. 15–21, 77 DSGVO).
+Kontakt: <span class="ph">[[kontakt@deine-domain.de]]</span></p>
+<p class="mut">Vorlage – bitte vor Launch fachkundig prüfen lassen.</p>
+""")
+
+
+_NUTZUNG = _legal_page("Nutzungsbedingungen", """
+<h1>Nutzungsbedingungen</h1>
+<h2>1. Was Synapse ist</h2>
+<p>Synapse ist eine quellenbasierte Wissenschafts-Suche und eine Plattform für
+offene Forschung. Es werden Metadaten/Abstracts und Verweise auf Originalquellen
+angezeigt.</p>
+<h2>2. Keine Beratung</h2>
+<p>Inhalte sind reine Information mit Quellen – <b>keine medizinische, rechtliche
+oder finanzielle Beratung</b>. Entscheidungen triffst du eigenverantwortlich.</p>
+<h2>3. Beiträge der Community</h2>
+<p>Hochgeladene Beiträge tragen eine sichtbare Vertrauens-Stufe (geprüft/preprint/
+community). Du sicherst zu, nur Inhalte beizutragen, an denen du die nötigen Rechte
+hast. Geprüfte Literatur und unbestätigte Beiträge bleiben klar getrennt.</p>
+<h2>4. Pflichten der Nutzenden</h2>
+<p>Kein Missbrauch, kein Spam, keine rechtswidrigen oder irreführenden Inhalte,
+keine automatisierten Massenzugriffe ohne Absprache.</p>
+<h2>5. Haftung</h2>
+<p>Bereitstellung „wie besehen", ohne Gewähr für Vollständigkeit/Richtigkeit
+externer Quellen. Haftung nur bei Vorsatz/grober Fahrlässigkeit im gesetzlichen
+Rahmen.</p>
+<p class="mut">Vorlage – bitte vor Launch fachkundig prüfen lassen.</p>
+""")
 
 
 def create_app(cfg: Config | None = None) -> FastAPI:
@@ -503,6 +612,33 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return resp
 
+    # Globales Rate-Limiting (je IP, gleitendes 60-s-Fenster) + Größenlimit.
+    # Schützt schreibende Endpunkte vor Massen-/Spam-Zugriffen; In-Memory reicht
+    # für einen Prozess (uvicorn), kein externer Dienst nötig.
+    _WRITE_PER_MIN = 90
+    _MAX_BODY = 256 * 1024            # 256 KB pro Anfrage
+    _hits: dict[str, list[float]] = {}
+
+    @app.middleware("http")
+    async def _rate_limit(request: Request, call_next):
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            clen = request.headers.get("content-length")
+            if clen and clen.isdigit() and int(clen) > _MAX_BODY:
+                return JSONResponse({"ok": False, "message": "Anfrage zu groß."},
+                                    status_code=413)
+            import time
+            ip = request.client.host if request.client else "?"
+            now = time.monotonic()
+            recent = [t for t in _hits.get(ip, []) if now - t < 60.0]
+            if len(recent) >= _WRITE_PER_MIN:
+                return JSONResponse({"ok": False, "message": "Zu viele Anfragen – "
+                                     "bitte kurz warten."}, status_code=429)
+            recent.append(now)
+            _hits[ip] = recent
+            if len(_hits) > 5000:                       # Speicher begrenzen
+                _hits.clear()
+        return await call_next(request)
+
     def _set_session(response: Response, token: str) -> None:
         # HttpOnly (kein JS-Zugriff), SameSite=Lax (CSRF-Schutz), Secure bei HTTPS.
         response.set_cookie(_COOKIE, token, httponly=True, samesite="lax",
@@ -525,9 +661,35 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    @app.get("/api/status")
+    def status():
+        # Leichtgewichtiger Betriebs-Status für Monitoring/Watchdog.
+        try:
+            from pathlib import Path
+            with SynapseStore(cfg) as store:
+                works = store.count_works()
+            index_ready = (Path(cfg.data_dir) / "index" / "index.json").exists()
+            return {"status": "ok", "works": works, "https": cfg.https,
+                    "index": bool(index_ready)}
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"status": "error", "detail": str(exc)[:200]},
+                                status_code=500)
+
     @app.get("/", response_class=HTMLResponse)
     def home():
         return _PAGE
+
+    @app.get("/impressum", response_class=HTMLResponse)
+    def impressum():
+        return _IMPRESSUM
+
+    @app.get("/datenschutz", response_class=HTMLResponse)
+    def datenschutz():
+        return _DATENSCHUTZ
+
+    @app.get("/nutzungsbedingungen", response_class=HTMLResponse)
+    def nutzungsbedingungen():
+        return _NUTZUNG
 
     @app.get("/api/ask")
     def ask(q: str):
@@ -668,6 +830,16 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         accounts.destroy_session(cfg, request.cookies.get(_COOKIE, ""))
         response.delete_cookie(_COOKIE, path="/")
         return {"ok": True}
+
+    @app.post("/api/logout-all")
+    def api_logout_all(request: Request, response: Response):
+        u = _user(request)
+        if not u:
+            return JSONResponse({"ok": False, "message": "Bitte anmelden."}, status_code=401)
+        from synapse import accounts
+        accounts.destroy_user_sessions(cfg, u["id"])      # auch die aktuelle
+        response.delete_cookie(_COOKIE, path="/")
+        return {"ok": True, "message": "Auf allen Geräten abgemeldet."}
 
     @app.post("/api/profile")
     def api_profile(p: ProfileIn, request: Request):

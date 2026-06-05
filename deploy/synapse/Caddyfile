@@ -1,0 +1,34 @@
+# Synapse – HTTPS-Reverse-Proxy (automatisch Let's Encrypt).
+#
+# 1) DEINE-DOMAIN unten ersetzen (A-Record muss auf die Server-IP zeigen).
+# 2) E-Mail für Let's-Encrypt-Hinweise eintragen.
+# 3) Synapse läuft lokal auf 127.0.0.1:8000 (nicht öffentlich!),
+#    Caddy terminiert TLS und reicht weiter.
+#
+# Caddy holt & erneuert Zertifikate selbst – kein Cronjob nötig.
+
+{
+	email gamesflafi@gmail.com
+}
+
+DEINE-DOMAIN.de {
+	encode zstd gzip
+
+	# TLS erzwingen (Caddy setzt HTTPS automatisch; HSTS zusätzlich absichern)
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "no-referrer"
+		-Server
+	}
+
+	# nur an die lokal gebundene Synapse-Instanz
+	reverse_proxy 127.0.0.1:8000
+
+	# Zugriffe protokollieren (für fail2ban/Analyse)
+	log {
+		output file /var/log/caddy/synapse.log
+		format json
+	}
+}

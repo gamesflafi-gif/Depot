@@ -148,6 +148,53 @@ def test_accounts_and_gating(tmp_path):
     assert client.get("/konto").status_code == 200
 
 
+def test_legal_pages_and_status(tmp_path):
+    """Rechtliche Pflichtseiten + Betriebs-Status sind erreichbar."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    client = TestClient(create_app(_cfg(tmp_path)))
+    for path in ("/impressum", "/datenschutz", "/nutzungsbedingungen"):
+        r = client.get(path)
+        assert r.status_code == 200 and "Synapse" in r.text
+    s = client.get("/api/status").json()
+    assert s["status"] == "ok" and "works" in s and "https" in s
+
+
+def test_logout_all(tmp_path):
+    """„Auf allen Geräten abmelden" beendet die Sitzung; ohne Login -> 401."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    client = TestClient(create_app(_cfg(tmp_path)))
+    assert client.post("/api/logout-all", json={}).status_code == 401
+    client.post("/api/register", json={"username": "geraet", "password": "passwort-1234"})
+    assert client.get("/api/me").json()["user"]["username"] == "geraet"
+    assert client.post("/api/logout-all", json={}).json()["ok"]
+    assert client.get("/api/me").json()["user"] is None
+
+
+def test_global_rate_limit(tmp_path):
+    """Zu viele Schreibanfragen je IP -> 429 (Spam-/Missbrauchs-Schutz)."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    client = TestClient(create_app(_cfg(tmp_path)))
+    codes = [client.post("/api/logout", json={}).status_code for _ in range(95)]
+    assert codes[0] == 200 and 429 in codes
+
+
+def test_maintenance_cleanup(tmp_path):
+    """Wartung entfernt abgelaufene Sitzungen und alte Login-Versuche."""
+    from datetime import datetime, timezone, timedelta
+    from synapse import accounts
+    from synapse.storage import SynapseStore
+    cfg = _cfg(tmp_path)
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    with SynapseStore(cfg) as store:
+        store.con.execute("INSERT INTO sessions VALUES (?,?,?,?)", ["h1", "u1", past, past])
+        store.con.execute("INSERT INTO login_attempts VALUES (?,?,?)", ["ip:x", past, False])
+    res = accounts.cleanup_expired(cfg)
+    assert res["sessions_removed"] == 1 and res["attempts_removed"] == 1
+
+
 def test_password_policy():
     """Passwort-Richtlinie wehrt schwache Passwörter ab, lässt starke zu."""
     from synapse.accounts import validate_password

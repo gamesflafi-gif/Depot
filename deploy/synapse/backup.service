@@ -1,0 +1,13 @@
+# Tägliches Synapse-Backup (durch backup.timer ausgelöst).
+#   sudo cp deploy/synapse/backup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now synapse-backup.timer
+[Unit]
+Description=Synapse Backup (Daten-Lake)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Depot
+# BACKUP_DIR möglichst auf externes/Off-site-Storage zeigen lassen:
+Environment=BACKUP_DIR=/root/synapse-backups
+Environment=KEEP=14
+ExecStart=/usr/bin/env bash deploy/synapse/backup.sh

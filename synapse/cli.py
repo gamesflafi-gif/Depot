@@ -176,10 +176,41 @@ def cmd_serve(cfg, args) -> None:
     uvicorn.run(create_app(cfg), host=args.host, port=args.port)
 
 
+def cmd_maintenance(cfg, args) -> None:
+    """Abgelaufene Sitzungen + alte Login-Versuche aufräumen (per Timer nutzbar)."""
+    from synapse import accounts
+    res = accounts.cleanup_expired(cfg)
+    print(f"Aufgeräumt: {res['sessions_removed']} Sitzungen, "
+          f"{res['attempts_removed']} Login-Versuche entfernt.")
+
+
+def cmd_security(cfg, args) -> None:
+    """Sicherheits-Selbstcheck: warnt vor unsicheren Betriebs-Einstellungen."""
+    print("Synapse Security-Check")
+    print("=" * 40)
+    ok = True
+    https = "OK (Secure-Cookies aktiv)" if cfg.https else \
+        "WARNUNG: SYNAPSE_HTTPS nicht gesetzt – nur hinter HTTPS-Proxy betreiben!"
+    if not cfg.https:
+        ok = False
+    print(f"  HTTPS-Modus      : {https}")
+    print(f"  mailto gesetzt   : {'ja' if cfg.mailto else 'nein (empfohlen)'}")
+    with SynapseStore(cfg) as store:
+        users = int(store.con.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+        sess = int(store.con.execute("SELECT COUNT(*) FROM sessions").fetchone()[0])
+    print(f"  Konten           : {users}")
+    print(f"  aktive Sitzungen : {sess}")
+    print("  Passwort-Hash    : scrypt (gesalzen)")
+    print("  Brute-Force      : Lockout je Konto + IP aktiv")
+    print("\n" + ("Alles gut." if ok else
+                  "Bitte WARNUNG(en) oben beheben, bevor du öffentlich gehst."))
+
+
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
             "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
             "brain": cmd_brain, "connections": cmd_connections, "ask": cmd_ask,
-            "submit": cmd_submit, "project": cmd_project}
+            "submit": cmd_submit, "project": cmd_project,
+            "maintenance": cmd_maintenance, "security": cmd_security}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -209,6 +240,9 @@ def main(argv: list[str] | None = None) -> None:
     pse = sub.add_parser("serve", help="Web-Oberfläche starten")
     pse.add_argument("--host", default="0.0.0.0")
     pse.add_argument("--port", type=int, default=8000)
+
+    sub.add_parser("maintenance", help="abgelaufene Sitzungen/Login-Versuche aufräumen")
+    sub.add_parser("security", help="Sicherheits-Selbstcheck der Betriebs-Einstellungen")
 
     sub.add_parser("brain", help="Ranking-Gehirn aus Klick-Feedback trainieren")
 

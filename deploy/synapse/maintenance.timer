@@ -1,0 +1,10 @@
+# Tägliche Wartung um 04:00 Uhr.
+[Unit]
+Description=Synapse Wartung täglich
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
