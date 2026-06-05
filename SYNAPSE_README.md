@@ -46,6 +46,13 @@ export SYNAPSE_MAILTO="du@example.org"
 - `brain` – Ranking-Gehirn aus Klick-Feedback trainieren (Phase 2)
 - `connections WORK_ID` – verwandte Arbeiten + **Feld-Brücken** zu einem Werk
 - `ask "FRAGE"` – Forschungs-Assistent: Einordnung mit Quellen
+- `submit DOI` – eigene **belegte** Arbeit per DOI beitragen (wird geprüft)
+
+## Eigene Forschung beitragen (nur belegt)
+Über die DOI lässt sich eine **offiziell registrierte** Arbeit aufnehmen: Synapse
+prüft sie bei **OpenAlex/Crossref** und nimmt sie nur auf, wenn sie dort existiert
+(sonst Ablehnung). So kommt **nichts Ungeprüftes** in den Bestand. Im Web unter
+„＋ Eigene Forschung beitragen". Der Eintrag wird **inkrementell** indiziert.
 
 ## Forschungs-Assistent (Phase 3)
 Im Web ist die Suche jetzt ein **Assistent**: Du stellst eine Frage und bekommst

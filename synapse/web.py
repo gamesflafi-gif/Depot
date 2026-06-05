@@ -55,6 +55,10 @@ _PAGE = """<!doctype html><html lang="de"><head>
    padding:1px 7px;border-radius:6px;margin-left:6px}
  .foot{color:var(--mut);font-size:12px;text-align:center;margin:24px 0}
  .empty{color:var(--mut);text-align:center;margin:30px 0}
+ .contrib{margin:26px 0 6px;border:1px solid #22314a;border-radius:12px;padding:8px 14px}
+ .contrib summary{cursor:pointer;color:var(--acc);font-size:14px}
+ .cbox{color:var(--mut);font-size:13px;margin-top:8px}
+ .cbox form{margin:8px 0 4px}
 </style></head><body>
 <header><h1>Syn<span>apse</span></h1>
 <div class="sub">Frag deine Forschung — bekomme direkt eine Einordnung mit Quellen.</div></header>
@@ -63,6 +67,13 @@ _PAGE = """<!doctype html><html lang="de"><head>
  <button>Fragen</button></form>
  <div id="brief"></div>
  <div id="r"></div>
+ <details class="contrib"><summary>＋ Eigene Forschung beitragen</summary>
+  <div class="cbox">Nur <b>offiziell registrierte</b> Arbeiten mit gültiger DOI
+   (geprüft über OpenAlex/Crossref) – so kommt nichts Ungeprüftes hinein.
+   <form id="cf"><input id="doi" placeholder="DOI, z.B. 10.1038/s41586-021-03819-2">
+   <button>Prüfen & hinzufügen</button></form>
+   <div id="cmsg" class="m"></div></div>
+ </details>
  <div class="foot">Lokal & quellenbasiert · keine Anlage-/Medizin-/Rechtsberatung</div>
 </div>
 <script>
@@ -128,6 +139,16 @@ document.getElementById('f').addEventListener('submit',async e=>{
  catch(_){br.innerHTML='<div class="empty">Fehler.</div>';return;}
  renderBrief(b); renderResults(query,b.results);
 });
+
+const cf=document.getElementById('cf'), cmsg=document.getElementById('cmsg'), doi=document.getElementById('doi');
+cf.addEventListener('submit',async e=>{
+ e.preventDefault(); const v=doi.value.trim(); if(!v)return;
+ cmsg.textContent='Prüfe DOI …';
+ let d; try{d=await(await fetch('/api/submit?doi='+encodeURIComponent(v),{method:'POST'})).json();}
+ catch(_){cmsg.textContent='Fehler.';return;}
+ cmsg.textContent=(d.ok?('✓ '+esc(d.title)+' — '+d.message):('✗ '+d.message));
+ if(d.ok)doi.value='';
+});
 </script></body></html>"""
 
 
@@ -175,6 +196,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         with SynapseStore(cfg) as store:
             store.log_event("search", query=q)
         return {"query": q, "results": [h.__dict__ for h in hits]}
+
+    @app.post("/api/submit")
+    def submit(doi: str):
+        from synapse.ingest import submit_doi
+        res = submit_doi(cfg, doi)
+        if res.ok:
+            _state["engine"] = None        # Index neu laden (neuer Eintrag)
+        return {"ok": res.ok, "message": res.message, "title": res.title, "id": res.id}
 
     @app.post("/api/feedback")
     def feedback(q: str, work_id: str, rank: int = 0):

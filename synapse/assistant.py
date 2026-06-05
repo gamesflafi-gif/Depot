@@ -12,9 +12,25 @@ Daten + Quellen. Kein großes Sprachmodell nötig – schnell und sicher auf 8 G
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
+
+# Füllwörter (DE/EN), die eine Frage zu einer brauchbaren Stichwort-Suche machen.
+_STOP = {
+    "gibt", "es", "forschung", "studien", "studie", "zu", "zum", "zur", "über",
+    "was", "ist", "sind", "der", "die", "das", "und", "oder", "ein", "eine",
+    "welche", "wie", "viel", "viele", "schon", "bereits", "dazu", "etwas",
+    "there", "is", "are", "research", "studies", "study", "on", "about", "what",
+    "the", "a", "an", "of", "for", "papers", "any", "do", "does", "exist",
+}
+
+
+def _keywords(q: str) -> str:
+    """Reduziert eine (auch deutsche) Frage auf Stichworte für die Zählung."""
+    toks = [t for t in re.findall(r"[A-Za-zÄÖÜäöüß0-9]+", q.lower()) if t not in _STOP]
+    return " ".join(toks) if toks else q
 
 
 @dataclass
@@ -44,7 +60,7 @@ def analyze(cfg, question: str, k: int = 30) -> Briefing:
     hits = eng.search(question, k=k)
     b.results = [h.__dict__ for h in hits]
     b.local_count = len(hits)
-    b.worldwide_count = count_works(cfg, question)      # live, sonst None
+    b.worldwide_count = count_works(cfg, _keywords(question))   # Stichworte statt Fragesatz
 
     if not hits:
         b.verdict = ("Dazu finde ich in unserem Bestand nichts Passendes – "
@@ -80,21 +96,21 @@ def analyze(cfg, question: str, k: int = 30) -> Briefing:
                      for c in conns if c.cross_field][:3]
 
     # Verdikt + Aktivität ----------------------------------------------------
-    if b.worldwide_count is not None:
-        if b.worldwide_count > 2000:
-            b.verdict = (f"Ja – dazu gibt es **umfangreiche** Forschung "
-                         f"(~{b.worldwide_count:,} Arbeiten weltweit).")
-        elif b.worldwide_count > 50:
-            b.verdict = (f"Ja – dazu gibt es Forschung, aber überschaubar "
-                         f"(~{b.worldwide_count:,} Arbeiten weltweit).")
-        elif b.worldwide_count > 0:
-            b.verdict = (f"Nur sehr wenig dazu (~{b.worldwide_count} Arbeiten "
-                         f"weltweit) – könnte eine **Forschungslücke** sein.")
-        else:
-            b.verdict = "Weltweit praktisch nichts gefunden – evtl. echtes Neuland."
+    # Ehrlich: die Welt-Zahl ist nur ein Anhaltspunkt (Stichwort-Suche), keine
+    # absolute Wahrheit – darum keine voreiligen „Lücke"-Behauptungen.
+    wc = b.worldwide_count
+    if wc is not None and wc > 1000:
+        b.verdict = f"Ja – dazu gibt es umfangreiche Forschung (~{wc:,} Arbeiten weltweit)."
+    elif wc is not None and wc > 100:
+        b.verdict = f"Ja, dazu gibt es Forschung (~{wc:,} Arbeiten weltweit)."
+    elif wc is not None and wc > 0:
+        b.verdict = (f"Zu diesen Stichworten findet OpenAlex nur ~{wc} Treffer. "
+                     "Das muss keine Lücke sein – oft helfen andere/englische "
+                     "Stichworte. Unten zeige ich die nächstliegenden Arbeiten.")
     else:
-        b.verdict = (f"In unserem Bestand finde ich {b.local_count} passende "
-                     "Arbeiten dazu.")
+        b.verdict = (f"In unserem (begrenzten) Bestand finde ich {b.local_count} "
+                     "thematisch nächstliegende Arbeiten – für ein vollständiges "
+                     "Bild bitte mehr Daten laden.")
 
     frac_recent = len(recent) / max(1, len(hits))
     if frac_recent >= 0.4:

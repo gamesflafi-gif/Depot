@@ -20,6 +20,42 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class SubmitResult:
+    ok: bool = False
+    message: str = ""
+    title: str = ""
+    id: str = ""
+
+
+def submit_doi(cfg: Config, doi: str) -> SubmitResult:
+    """Nimmt eine **belegte** Arbeit per DOI auf – nur wenn sie offiziell in
+    OpenAlex/Crossref registriert ist (sonst Ablehnung). So kann niemand
+    beliebige, ungeprüfte Inhalte hochladen."""
+    from synapse.sources import openalex
+    raw = openalex.fetch_by_doi(cfg, doi)
+    if not raw:
+        return SubmitResult(False, "Nicht gefunden: Diese DOI ist nicht offiziell "
+                            "registriert (OpenAlex/Crossref). Nur belegte Arbeiten "
+                            "mit gültiger DOI können aufgenommen werden.")
+    try:
+        work = Work.from_openalex(raw)
+    except Exception as exc:  # noqa: BLE001
+        return SubmitResult(False, f"Datensatz unbrauchbar: {exc}")
+
+    with SynapseStore(cfg) as store:
+        store.upsert_works([work])
+        store.log_event("submit", query=doi, work_id=work.id)
+    # in den Suchindex aufnehmen (inkrementell)
+    from synapse.index import add_to_index
+    rec = {"id": work.id, "title": work.title, "abstract": work.abstract,
+           "year": work.year, "doi": work.doi, "venue": work.venue,
+           "cited_by_count": work.cited_by_count}
+    add_to_index(cfg, [rec])
+    return SubmitResult(True, "Aufgenommen und durchsuchbar gemacht.",
+                        title=work.title, id=work.id)
+
+
+@dataclass
 class IngestResult:
     ingested: int = 0
     failed: int = 0

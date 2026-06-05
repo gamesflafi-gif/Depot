@@ -96,6 +96,32 @@ def build_index(cfg: Config, prefer: str = "auto", batch: int = 64,
     return len(records)
 
 
+def add_to_index(cfg: Config, records: list[dict]) -> int:
+    """Hängt neue Werke an den bestehenden Index an (ohne Neu-Bau). ``records``
+    im Format von ``fetch_for_index``. Nutzt denselben Embedder wie der Index."""
+    d = _index_dir(cfg)
+    if not (d / "index.json").exists():
+        return build_index(cfg)                       # kein Index -> voll bauen
+    info = json.load(open(d / "index.json", encoding="utf-8"))
+    meta = json.load(open(d / "meta.json", encoding="utf-8"))
+    existing = {m["id"] for m in meta}
+    new = [r for r in records if r["id"] not in existing]
+    if not new:
+        return 0
+    embedder = get_embedder(prefer=info.get("embedder", "auto"))
+    texts = [(f"{r['title']}. {r.get('abstract', '')}").strip()[:1200] for r in new]
+    v = embedder.embed(texts, kind="passage").astype("float32")
+    v /= np.clip(np.linalg.norm(v, axis=1, keepdims=True), 1e-9, None)
+    vecs = np.vstack([np.load(d / "vectors.npy"), v])
+    meta += [{k: r[k] for k in ("id", "title", "year", "doi", "venue", "cited_by_count")}
+             for r in new]
+    np.save(d / "vectors.npy", vecs)
+    json.dump(meta, open(d / "meta.json", "w", encoding="utf-8"), ensure_ascii=False)
+    info["count"] = len(meta)
+    json.dump(info, open(d / "index.json", "w", encoding="utf-8"))
+    return len(new)
+
+
 class SearchEngine:
     """Lädt den Index in den Speicher und beantwortet Suchanfragen.
 

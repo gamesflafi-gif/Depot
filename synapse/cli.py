@@ -95,6 +95,13 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
+def cmd_submit(cfg, args) -> None:
+    from synapse.ingest import submit_doi
+    print(f"Prüfe DOI {args.doi} (OpenAlex/Crossref) …")
+    res = submit_doi(cfg, args.doi)
+    print(("✓ " + res.title + " — " if res.ok else "✗ ") + res.message)
+
+
 def cmd_ask(cfg, args) -> None:
     from pathlib import Path
     from synapse import assistant
@@ -142,7 +149,8 @@ def cmd_serve(cfg, args) -> None:
 
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
             "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
-            "brain": cmd_brain, "connections": cmd_connections, "ask": cmd_ask}
+            "brain": cmd_brain, "connections": cmd_connections, "ask": cmd_ask,
+            "submit": cmd_submit}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -181,6 +189,9 @@ def main(argv: list[str] | None = None) -> None:
 
     pa = sub.add_parser("ask", help="Forschungs-Assistent: Frage -> Einordnung mit Quellen")
     pa.add_argument("question", help="deine Forschungsfrage in Worten")
+
+    psu = sub.add_parser("submit", help="eigene Arbeit per DOI beitragen (wird geprüft)")
+    psu.add_argument("doi", help="DOI, z.B. 10.1038/s41586-021-03819-2")
 
     args = parser.parse_args(argv)
     cfg = load_config()
