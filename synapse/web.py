@@ -125,6 +125,19 @@ _PAGE = """<!doctype html><html lang="de"><head>
  .contrib{margin:24px 0 6px;border:1px solid var(--border);border-radius:12px;padding:10px 16px;background:var(--surface)}
  .contrib summary{cursor:pointer;color:var(--acc);font-size:14px;font-weight:500}
  .cbox{color:var(--mut);font-size:13px;margin-top:10px} .cbox form{margin:8px 0 4px}
+ .exrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 6px}
+ .exlbl{color:var(--mut);font-size:13px;width:100%;margin-bottom:2px}
+ .exchip{background:var(--surface);border:1px solid var(--border);color:var(--fg);
+   font-size:14px;padding:9px 14px;border-radius:22px;cursor:pointer;line-height:1}
+ .exchip:active,.exchip:hover{border-color:var(--acc);color:var(--acc);background:var(--accsoft)}
+ .how{margin:18px 0 4px;display:grid;gap:10px}
+ .how div{display:flex;gap:10px;align-items:flex-start;color:var(--mut);font-size:13.5px}
+ .how b{color:var(--fg);font-weight:600} .how span{color:var(--acc);font-weight:700}
+ @media(max-width:520px){
+   form{flex-direction:column} form button{width:100%;padding:14px}
+   .topin{padding:12px 16px} .nav a{margin-left:14px}
+   .wrap{padding:18px 16px} .lead{font-size:16px}
+ }
 </style></head><body>
 <div class="topbar"><div class="topin">
  <div class="brand">Syn<span>apse</span></div>
@@ -132,8 +145,21 @@ _PAGE = """<!doctype html><html lang="de"><head>
 </div></div>
 <div class="wrap">
  <div class="lead">Stelle eine Forschungsfrage — Synapse ordnet die Studienlage ein und nennt die Quellen.</div>
- <form id="f"><input id="q" placeholder="z. B. Welche Forschung gibt es zu Schlaf und Gedächtnis?" autofocus>
+ <form id="f"><input id="q" placeholder="z. B. Schlaf und Gedächtnis" autofocus>
  <button>Analysieren</button></form>
+ <div id="examples" class="exrow">
+  <span class="exlbl">Zum Ausprobieren:</span>
+  <button type="button" class="exchip" onclick="runEx('Schlaf und Gedächtnis')">Schlaf und Gedächtnis</button>
+  <button type="button" class="exchip" onclick="runEx('Künstliche Intelligenz in der Medizin')">KI in der Medizin</button>
+  <button type="button" class="exchip" onclick="runEx('Mikroplastik und Gesundheit')">Mikroplastik & Gesundheit</button>
+  <button type="button" class="exchip" onclick="runEx('CRISPR Genom-Editierung')">CRISPR Genom-Editierung</button>
+  <button type="button" class="exchip" onclick="runEx('Klimawandel und Landwirtschaft')">Klima & Landwirtschaft</button>
+ </div>
+ <div id="how" class="how">
+  <div><span>1</span><div><b>Einordnung statt Linkliste.</b> Gibt es dazu Forschung? Wie viel, wie aktuell, aktives Feld oder Lücke?</div></div>
+  <div><span>2</span><div><b>Immer mit Quellen.</b> Einflussreichste und neueste Arbeiten – direkt zur DOI verlinkt.</div></div>
+  <div><span>3</span><div><b>Brücken zwischen Feldern.</b> Synapse zeigt verwandte Arbeiten aus anderen Disziplinen.</div></div>
+ </div>
  <div id="brief"></div>
  <div id="r"></div>
  <details class="contrib"><summary>＋ Eigene Forschung beitragen</summary>
@@ -203,13 +229,17 @@ function renderResults(query,results){
  });
 }
 
-document.getElementById('f').addEventListener('submit',async e=>{
- e.preventDefault(); const query=q.value.trim(); if(!query)return;
+async function doSearch(query){
+ query=(query||'').trim(); if(!query)return;
+ const ex=document.getElementById('examples'), how=document.getElementById('how');
+ if(ex)ex.style.display='none'; if(how)how.style.display='none';   // Intro ausblenden
  br.innerHTML='<div class="empty">Analysiere Forschungslage …</div>'; r.innerHTML='';
  let b; try{b=await(await fetch('/api/ask?q='+encodeURIComponent(query))).json();}
  catch(_){br.innerHTML='<div class="empty">Fehler.</div>';return;}
  renderBrief(b); renderResults(query,b.results);
-});
+}
+function runEx(t){q.value=t; doSearch(t);}
+document.getElementById('f').addEventListener('submit',e=>{e.preventDefault(); doSearch(q.value);});
 
 const cf=document.getElementById('cf'), cmsg=document.getElementById('cmsg'), doi=document.getElementById('doi');
 cf.addEventListener('submit',async e=>{
