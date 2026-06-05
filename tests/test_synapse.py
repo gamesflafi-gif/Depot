@@ -457,6 +457,33 @@ def test_assistant_briefing(tmp_path):
     assert d["verdict"] and isinstance(d["results"], list) and d["results"]
 
 
+def test_assistant_trend_and_gap(tmp_path):
+    """Phase 3: Assistent liefert Jahres-Trend, ehrliche Lücken-Einordnung und
+    aufkommende Begriffe – rein lokal, ohne erfundene Aussagen."""
+    from synapse import assistant
+    from synapse.ingest import ingest
+    from synapse.index import build_index
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+
+    b = assistant.analyze(cfg, "protein structure prediction with neural networks")
+    assert b.trend_label                                   # eine Trend-Aussage
+    assert isinstance(b.trend, list)
+    assert all({"year", "count"} <= set(p) for p in b.trend)
+    assert b.gap                                           # ehrliche Einordnung
+    assert isinstance(b.emerging, list)
+    txt = assistant.render(b)
+    assert "Trend:" in txt and "Einschätzung:" in txt
+
+    # Web-Endpoint reicht die neuen Felder durch
+    d = TestClient(create_app(cfg)).get("/api/ask",
+                                        params={"q": "deep learning"}).json()
+    assert "trend_label" in d and "gap" in d and "emerging" in d
+
+
 def test_connections_cross_field(tmp_path):
     """Verbindungs-Entdeckung: verwandte Arbeiten + Feld-Brücken markieren."""
     from synapse.ingest import ingest
