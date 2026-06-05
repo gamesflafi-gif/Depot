@@ -96,6 +96,32 @@ def test_web_api(tmp_path):
         assert store.count_events("click") == 1 and store.count_events("search") >= 1
 
 
+def test_connections_cross_field(tmp_path):
+    """Verbindungs-Entdeckung: verwandte Arbeiten + Feld-Brücken markieren."""
+    from synapse.ingest import ingest
+    from synapse.index import build_index, SearchEngine
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+
+    eng = SearchEngine(cfg)
+    res = eng.connections("W1001", k=5)        # Deep-Learning-Protein-Paper
+    assert res is not None
+    field, conns = res
+    assert field == "Deep learning"            # primäres Feld aus Konzepten
+    assert conns                                # Nachbarn vorhanden
+    # mind. eine Verbindung aus einem anderen Feld ist als Brücke markiert
+    assert any(c.cross_field for c in conns)
+    assert eng.connections("DOES_NOT_EXIST") is None
+
+    # Web-Endpoint liefert dieselben Daten
+    client = TestClient(create_app(cfg))
+    d = client.get("/api/related", params={"id": "W1001", "k": 5}).json()
+    assert d["field"] == "Deep learning" and d["related"]
+
+
 def test_brain_learns_from_clicks(tmp_path):
     """Phase 2: aus Klicks werden Ranking-Gewichte gelernt und angewandt."""
     from synapse import brain

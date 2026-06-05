@@ -37,6 +37,18 @@ class SearchHit:
     score: float
 
 
+@dataclass
+class Connection:
+    id: str
+    title: str
+    year: int | None
+    doi: str
+    venue: str
+    field: str
+    similarity: float
+    cross_field: bool        # semantisch nah, aber aus einem anderen Feld = Brücke
+
+
 def _index_dir(cfg: Config) -> Path:
     p = Path(cfg.data_dir) / "index"
     p.mkdir(parents=True, exist_ok=True)
@@ -99,6 +111,7 @@ class SearchEngine:
         self.meta: list = json.load(open(d / "meta.json", encoding="utf-8"))
         self.embedder = get_embedder(prefer=info.get("embedder", "auto"))
         self._tokens = [set(_tokenize(m["title"])) for m in self.meta]
+        self.id2idx = {m["id"]: i for i, m in enumerate(self.meta)}
         from synapse.ranking import load_weights
         self.weights = load_weights(cfg.data_dir)
 
@@ -131,3 +144,36 @@ class SearchEngine:
                 id=m["id"], title=m["title"], year=m["year"], doi=m["doi"],
                 venue=m["venue"], cited_by_count=m["cited_by_count"], score=float(sc)))
         return hits
+
+    def connections(self, work_id: str, k: int = 8):
+        """Verwandte Arbeiten zu einem Werk – mit Markierung der **Brücken**
+        (semantisch nah, aber aus einem anderen Forschungsfeld).
+
+        Returns ``(seed_field, [Connection, …])`` oder ``None``, wenn das Werk
+        nicht im Index ist. Nutzt nur die vorhandenen Vektoren + holt die Felder
+        der wenigen Nachbarn frisch aus der DB (kein Neu-Indizieren nötig).
+        """
+        if work_id not in self.id2idx:
+            return None
+        i = self.id2idx[work_id]
+        sims = self.vecs @ self.vecs[i]
+        n_take = min(k + 1, len(sims))
+        order = np.argpartition(-sims, n_take - 1)[:n_take]
+        neigh = sorted((int(j) for j in order if int(j) != i),
+                       key=lambda j: -sims[j])[:k]
+
+        ids = [work_id] + [self.meta[j]["id"] for j in neigh]
+        from synapse.storage import SynapseStore
+        with SynapseStore(self.cfg) as store:
+            info = store.fetch_by_ids(ids)
+        seed_field = info.get(work_id, {}).get("field", "")
+
+        conns = []
+        for j in neigh:
+            m = self.meta[j]
+            f = info.get(m["id"], {}).get("field", "")
+            conns.append(Connection(
+                id=m["id"], title=m["title"], year=m["year"], doi=m["doi"],
+                venue=m["venue"], field=f, similarity=float(sims[j]),
+                cross_field=bool(f and seed_field and f != seed_field)))
+        return seed_field, conns
