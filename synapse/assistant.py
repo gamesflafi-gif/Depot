@@ -46,6 +46,10 @@ class Briefing:
     top_works: list = field(default_factory=list)       # einflussreichste (dicts)
     recent_works: list = field(default_factory=list)    # neueste (dicts)
     bridges: list = field(default_factory=list)         # Feld-Brücken (dicts)
+    trend: list = field(default_factory=list)           # [{year,count}] (Verlauf)
+    trend_label: str = ""                                # wachsend/stabil/rückläufig
+    gap: str = ""                                        # ehrliche Lücken-Einordnung
+    emerging: list = field(default_factory=list)         # aufkommende Begriffe
     results: list = field(default_factory=list)         # volle Trefferliste (dicts)
 
 
@@ -119,7 +123,56 @@ def analyze(cfg, question: str, k: int = 30) -> Briefing:
         b.activity = "etabliertes Feld mit weiterhin neuer Forschung"
     else:
         b.activity = "eher reifes/älteres Feld"
+
+    # Trend, Lücke & aufkommende Begriffe (rein lokal, ehrlich) --------------
+    _trend_and_gap(b, hits, recent, now, _keywords(question))
     return b
+
+
+def _trend_and_gap(b: "Briefing", hits, recent, now: int, kw: str) -> None:
+    """Jahres-Verlauf + ehrliche Lücken-/Reife-Einordnung + aufkommende Begriffe.
+    Alles aus dem lokalen Bestand – keine erfundenen Trends."""
+    year_counts = Counter(h.year for h in hits if h.year)
+    if b.year_min:
+        start = max(b.year_min, now - 7)
+        b.trend = [{"year": y, "count": int(year_counts.get(y, 0))}
+                   for y in range(start, now + 1)]
+    last3 = sum(year_counts.get(y, 0) for y in range(now - 2, now + 1))
+    prev3 = sum(year_counts.get(y, 0) for y in range(now - 5, now - 2))
+    if last3 == 0 and prev3 == 0:
+        b.trend_label = "kaum aktuelle Arbeiten im Bestand"
+    elif last3 >= max(2, prev3 * 1.5):
+        b.trend_label = "stark wachsend"
+    elif last3 > prev3:
+        b.trend_label = "wachsend"
+    elif last3 == prev3:
+        b.trend_label = "stabil"
+    else:
+        b.trend_label = "rückläufig"
+
+    growing = b.trend_label in ("stark wachsend", "wachsend")
+    wc = b.worldwide_count
+    if growing:
+        b.gap = "Aktiv beforscht – derzeit eher keine Lücke, sondern ein lebendiges Feld."
+    elif wc is not None and 0 < wc < 80 and b.local_count < 6:
+        b.gap = ("Wenig Literatur zu diesen Stichworten – möglicher unterforschter "
+                 "Bereich. Bitte mit anderen/englischen Begriffen gegenprüfen.")
+    elif b.trend_label == "rückläufig":
+        b.gap = ("Aktivität nimmt ab – reifes Feld. Lohnend sind oft neue Anwendungen "
+                 "oder die Übertragung auf andere Disziplinen (siehe Brücken).")
+    else:
+        b.gap = ("Solide Studienlage. Aussichtsreich sind gezielte Teilfragen oder "
+                 "Feld-Brücken (siehe unten) statt der breiten Frage.")
+
+    # aufkommende Begriffe: häufige Titelwörter der neuesten Arbeiten
+    src = recent if recent else hits
+    qset = set(kw.split())
+    terms: Counter = Counter()
+    for h in src:
+        for t in re.findall(r"[A-Za-zÄÖÜäöüß]{4,}", (h.title or "").lower()):
+            if t not in _STOP and t not in qset:
+                terms[t] += 1
+    b.emerging = [t for t, n in terms.most_common(5) if n >= 1][:4]
 
 
 def render(b: Briefing) -> str:
@@ -131,6 +184,13 @@ def render(b: Briefing) -> str:
                      f"({b.local_count} Treffer).")
     if b.themes:
         lines.append("Hauptthemen: " + ", ".join(b.themes))
+    if b.trend_label:
+        spark = " ".join(f"{t['year']}:{t['count']}" for t in b.trend)
+        lines.append(f"Trend: {b.trend_label}" + (f"  [{spark}]" if spark else ""))
+    if b.gap:
+        lines.append(f"Einschätzung: {b.gap}")
+    if b.emerging:
+        lines.append("Aufkommende Begriffe: " + ", ".join(b.emerging))
     if b.top_works:
         lines.append("\nEinflussreichste Arbeiten:")
         for w in b.top_works:

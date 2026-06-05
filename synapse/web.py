@@ -106,6 +106,16 @@ _PAGE = """<!doctype html><html lang="de"><head>
  .act{color:var(--mut);font-size:14px;margin-top:6px}
  .chips{margin:12px 0 2px} .chip{display:inline-block;background:var(--accsoft);color:#1e40af;
    font-size:12px;padding:4px 10px;border-radius:20px;margin:3px 6px 3px 0;font-weight:500}
+ .trendwrap{margin:14px 0 4px}
+ .trendlabel{font-size:13px;color:var(--fg);font-weight:600}
+ .trendlabel .tl{font-weight:700}
+ .bars{display:flex;align-items:flex-end;gap:4px;height:46px;margin:8px 0 2px}
+ .bar{flex:1;min-width:6px;background:var(--accsoft);border-radius:3px 3px 0 0;position:relative}
+ .bar i{position:absolute;inset:0;background:var(--acc);border-radius:3px 3px 0 0;opacity:.85}
+ .byrs{display:flex;gap:4px;color:var(--mut);font-size:10px}
+ .byrs span{flex:1;text-align:center}
+ .gap{border-left:3px solid #f59e0b;background:#fffbeb;color:#92600c;font-size:13.5px;
+   padding:9px 13px;border-radius:8px;margin:10px 0}
  .blk{margin-top:14px} .blk b{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
  .blk a{display:block;color:var(--fg);font-size:14px;text-decoration:none;padding:5px 0;border-bottom:1px solid #f1f4f8}
  .blk a:hover{color:var(--acc)}
@@ -185,6 +195,19 @@ function renderBrief(b){
    (b.year_min?(' · Zeitraum '+b.year_min+'–'+b.year_max):'')+'</div>';
  if(b.themes&&b.themes.length){h+='<div class="chips">';
    b.themes.forEach(t=>h+='<span class="chip">'+esc(t)+'</span>');h+='</div>';}
+ if(b.trend_label){
+   h+='<div class="trendwrap"><div class="trendlabel">Trend: <span class="tl">'+esc(b.trend_label)+'</span></div>';
+   if(b.trend&&b.trend.length){
+     const mx=Math.max(1,...b.trend.map(t=>t.count));
+     h+='<div class="bars">'+b.trend.map(t=>'<div class="bar" title="'+t.year+': '+t.count+
+       '"><i style="top:'+(100-Math.round(t.count/mx*100))+'%"></i></div>').join('')+'</div>';
+     h+='<div class="byrs">'+b.trend.map(t=>'<span>'+(String(t.year).slice(2))+'</span>').join('')+'</div>';
+   }
+   h+='</div>';
+ }
+ if(b.emerging&&b.emerging.length){h+='<div class="chips">Aufkommend: ';
+   b.emerging.forEach(t=>h+='<span class="chip">'+esc(t)+'</span>');h+='</div>';}
+ if(b.gap)h+='<div class="gap">'+esc(b.gap)+'</div>';
  if(b.top_works&&b.top_works.length){h+='<div class="blk"><b>Einflussreichste Arbeiten</b>';
    b.top_works.forEach(w=>h+='<a target="_blank" href="'+link(w)+'">'+esc(w.title)+
      ' ('+(w.year||'—')+', '+w.cited_by_count+' Zit.)</a>');h+='</div>';}
