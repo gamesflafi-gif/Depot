@@ -50,52 +50,57 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Synapse — Forschungs-Assistent</title>
 <style>
- :root{--bg:#0e1726;--fg:#e6edf3;--mut:#9fb3c8;--acc:#3ddc84}
+ :root{--bg:#f5f7fb;--surface:#fff;--fg:#1f2a37;--mut:#64748b;--border:#e2e8f0;
+   --acc:#1d4ed8;--accsoft:#eef3ff}
  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);
-   font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
- header{padding:26px 18px 6px;text-align:center}
- h1{margin:0;font-size:26px} h1 span{color:var(--acc)}
- .sub{color:var(--mut);font-size:14px;margin-top:4px}
- .wrap{max-width:820px;margin:0 auto;padding:16px}
- form{display:flex;gap:8px;margin:14px 0}
- input{flex:1;padding:13px 15px;border-radius:12px;border:1px solid #2a3a52;
-   background:#0b1422;color:var(--fg);font-size:16px}
- button{padding:13px 18px;border:0;border-radius:12px;background:var(--acc);
-   color:#06281a;font-weight:700;font-size:16px;cursor:pointer}
- .brief{border:1px solid #244; border-left:4px solid var(--acc);border-radius:14px;
-   background:#0f1e30;padding:16px 18px;margin:6px 0 16px}
- .verdict{font-size:17px;font-weight:600}
- .act{color:var(--mut);font-size:14px;margin-top:4px}
- .chips{margin:10px 0 2px} .chip{display:inline-block;background:#13283f;color:#cfe6ff;
-   font-size:12px;padding:3px 9px;border-radius:20px;margin:3px 4px 3px 0}
- .blk{margin-top:10px} .blk b{font-size:13px;color:var(--mut)}
- .blk a{display:block;color:#cfe0f0;font-size:14px;text-decoration:none;padding:3px 0}
- .blk a:hover{color:#fff}
- .sech{color:var(--mut);font-size:13px;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.05em}
- .hit{padding:14px 16px;border:1px solid #22314a;border-radius:14px;margin:10px 0;background:#111a2b}
- .hit:hover{border-color:var(--acc)}
- .t{font-weight:600} .m{color:var(--mut);font-size:13px;margin-top:4px}
- .sc{color:var(--acc);font-variant-numeric:tabular-nums}
- .relbtn{margin-top:9px;font-size:12px;color:var(--acc);background:none;
-   border:1px solid #2a3a52;border-radius:8px;padding:4px 10px;cursor:pointer}
- .rel{margin-top:10px;border-top:1px solid #22314a;padding-top:8px}
- .rel a{display:block;color:var(--mut);font-size:13px;padding:5px 0;text-decoration:none}
- .rel a:hover{color:var(--fg)}
- .badge{display:inline-block;background:#13402a;color:#7ef0ad;font-size:11px;
-   padding:1px 7px;border-radius:6px;margin-left:6px}
- .foot{color:var(--mut);font-size:12px;text-align:center;margin:24px 0}
+   font:16px/1.6 ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+ a{color:var(--acc)}
+ .topbar{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+ .topin{max-width:860px;margin:0 auto;padding:13px 18px;display:flex;align-items:center;justify-content:space-between}
+ .brand{font-size:20px;font-weight:700;letter-spacing:-.01em} .brand span{color:var(--acc)}
+ .nav a{margin-left:18px;font-size:14px;text-decoration:none;color:var(--mut)} .nav a:hover{color:var(--fg)}
+ .wrap{max-width:860px;margin:0 auto;padding:22px 18px}
+ .lead{color:var(--mut);font-size:15px;margin:2px 0 14px}
+ form{display:flex;gap:8px;margin:8px 0 4px}
+ input{flex:1;padding:13px 15px;border-radius:10px;border:1px solid var(--border);
+   background:var(--surface);color:var(--fg);font-size:16px}
+ input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accsoft)}
+ button{padding:13px 18px;border:0;border-radius:10px;background:var(--acc);
+   color:#fff;font-weight:600;font-size:15px;cursor:pointer} button:hover{filter:brightness(1.06)}
+ .brief{border:1px solid var(--border);border-left:4px solid var(--acc);border-radius:12px;
+   background:var(--surface);padding:18px 20px;margin:12px 0 18px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+ .verdict{font-size:17px;font-weight:600;line-height:1.45}
+ .act{color:var(--mut);font-size:14px;margin-top:6px}
+ .chips{margin:12px 0 2px} .chip{display:inline-block;background:var(--accsoft);color:#1e40af;
+   font-size:12px;padding:4px 10px;border-radius:20px;margin:3px 6px 3px 0;font-weight:500}
+ .blk{margin-top:14px} .blk b{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+ .blk a{display:block;color:var(--fg);font-size:14px;text-decoration:none;padding:5px 0;border-bottom:1px solid #f1f4f8}
+ .blk a:hover{color:var(--acc)}
+ .sech{color:var(--mut);font-size:12px;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+ .hit{padding:15px 17px;border:1px solid var(--border);border-radius:12px;margin:10px 0;background:var(--surface)}
+ .hit:hover{border-color:#c7d2fe}
+ .t{font-weight:600;line-height:1.35} .m{color:var(--mut);font-size:13px;margin-top:5px}
+ .sc{color:var(--acc);font-variant-numeric:tabular-nums;font-weight:600}
+ .relbtn{margin-top:10px;font-size:12px;color:var(--acc);background:#fff;
+   border:1px solid var(--border);border-radius:8px;padding:5px 11px;cursor:pointer} .relbtn:hover{border-color:var(--acc)}
+ .rel{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+ .rel a{display:block;color:var(--mut);font-size:13px;padding:5px 0;text-decoration:none} .rel a:hover{color:var(--fg)}
+ .badge{display:inline-block;background:#e7f6ee;color:#1f7a4d;font-size:11px;
+   padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:600}
+ .foot{color:var(--mut);font-size:12px;text-align:center;margin:28px 0}
  .empty{color:var(--mut);text-align:center;margin:30px 0}
- .contrib{margin:26px 0 6px;border:1px solid #22314a;border-radius:12px;padding:8px 14px}
- .contrib summary{cursor:pointer;color:var(--acc);font-size:14px}
- .cbox{color:var(--mut);font-size:13px;margin-top:8px}
- .cbox form{margin:8px 0 4px}
+ .contrib{margin:24px 0 6px;border:1px solid var(--border);border-radius:12px;padding:10px 16px;background:var(--surface)}
+ .contrib summary{cursor:pointer;color:var(--acc);font-size:14px;font-weight:500}
+ .cbox{color:var(--mut);font-size:13px;margin-top:10px} .cbox form{margin:8px 0 4px}
 </style></head><body>
-<header><h1>Syn<span>apse</span></h1>
-<div class="sub">Frag deine Forschung — bekomme direkt eine Einordnung mit Quellen.</div>
-<div class="sub"><a href="/projekte" style="color:var(--acc)">→ Offene Forschungs-Projekte (mitforschen)</a></div></header>
+<div class="topbar"><div class="topin">
+ <div class="brand">Syn<span>apse</span></div>
+ <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a></div>
+</div></div>
 <div class="wrap">
- <form id="f"><input id="q" placeholder="z.B. Gibt es Forschung zu Schlaf und Gedächtnis?" autofocus>
- <button>Fragen</button></form>
+ <div class="lead">Stelle eine Forschungsfrage — Synapse ordnet die Studienlage ein und nennt die Quellen.</div>
+ <form id="f"><input id="q" placeholder="z. B. Welche Forschung gibt es zu Schlaf und Gedächtnis?" autofocus>
+ <button>Analysieren</button></form>
  <div id="brief"></div>
  <div id="r"></div>
  <details class="contrib"><summary>＋ Eigene Forschung beitragen</summary>
@@ -187,26 +192,40 @@ _PROJECTS_PAGE = """<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Synapse — Offene Forschung</title>
 <style>
- :root{--bg:#0e1726;--fg:#e6edf3;--mut:#9fb3c8;--acc:#3ddc84}
+ :root{--bg:#f5f7fb;--surface:#fff;--fg:#1f2a37;--mut:#64748b;--border:#e2e8f0;
+   --acc:#1d4ed8;--accsoft:#eef3ff}
  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);
-   font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
- .wrap{max-width:820px;margin:0 auto;padding:18px}
- a{color:var(--acc);text-decoration:none} h1{font-size:24px} h1 span{color:var(--acc)}
- input,textarea,select{width:100%;padding:11px 13px;border-radius:10px;border:1px solid #2a3a52;
-   background:#0b1422;color:var(--fg);font-size:15px;margin:5px 0}
- textarea{min-height:90px} button{padding:11px 16px;border:0;border-radius:10px;
-   background:var(--acc);color:#06281a;font-weight:700;cursor:pointer}
- .card{border:1px solid #22314a;border-radius:14px;background:#111a2b;padding:14px 16px;margin:10px 0}
+   font:16px/1.6 ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+ a{color:var(--acc);text-decoration:none}
+ .topbar{background:var(--surface);border-bottom:1px solid var(--border)}
+ .topin{max-width:860px;margin:0 auto;padding:13px 18px;display:flex;align-items:center;justify-content:space-between}
+ .brand{font-size:20px;font-weight:700} .brand span{color:var(--acc)}
+ .nav a{margin-left:18px;font-size:14px;color:var(--mut)} .nav a:hover{color:var(--fg)}
+ .wrap{max-width:860px;margin:0 auto;padding:22px 18px}
+ h1{font-size:22px;margin:6px 0} h2{font-size:19px;margin:4px 0} h3{font-size:14px;
+   text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:18px 0 6px}
+ input,textarea,select{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--border);
+   background:var(--surface);color:var(--fg);font-size:15px;margin:6px 0}
+ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accsoft)}
+ textarea{min-height:96px} button{padding:11px 16px;border:0;border-radius:10px;
+   background:var(--acc);color:#fff;font-weight:600;cursor:pointer} button:hover{filter:brightness(1.06)}
+ .card{border:1px solid var(--border);border-radius:12px;background:var(--surface);
+   padding:15px 17px;margin:10px 0;box-shadow:0 1px 2px rgba(16,24,40,.04)}
  .mut{color:var(--mut);font-size:13px} .row{display:flex;gap:8px;flex-wrap:wrap}
- .badge{font-size:11px;padding:2px 8px;border-radius:8px;margin-left:6px}
- .verified{background:#13402a;color:#7ef0ad} .preprint{background:#3a3413;color:#f0e07e}
- .community{background:#2a2f3a;color:#c3ccda} .flagged{background:#402020;color:#ff9b9b}
- .pill{display:inline-block;background:#13283f;color:#cfe6ff;font-size:12px;padding:2px 9px;border-radius:20px}
- details summary{cursor:pointer;color:var(--acc)} .ok{color:var(--acc)} .err{color:#ff9b9b}
- .tokbox{background:#10261a;border:1px solid #1f6f43;border-radius:10px;padding:10px;margin:8px 0;word-break:break-all}
-</style></head><body><div class="wrap">
-<h1>Syn<span>apse</span> · Offene Forschung</h1>
-<div class="mut"><a href="/">← zurück zur Suche</a></div>
+ .badge{font-size:11px;padding:2px 9px;border-radius:7px;margin-left:6px;font-weight:600}
+ .verified{background:#e7f6ee;color:#1f7a4d} .preprint{background:#fdf3e0;color:#9a6a12}
+ .community{background:#eef1f5;color:#5b6776} .flagged{background:#fdeaea;color:#b42323}
+ .pill{display:inline-block;background:var(--accsoft);color:#1e40af;font-size:12px;
+   padding:3px 10px;border-radius:20px;font-weight:500}
+ details summary{cursor:pointer;color:var(--acc);font-weight:500} .ok{color:#1f7a4d} .err{color:#b42323}
+ .tokbox{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:11px;margin:8px 0;word-break:break-all}
+</style></head><body>
+<div class="topbar"><div class="topin">
+ <div class="brand">Syn<span>apse</span></div>
+ <div class="nav"><a href="/">Suche</a><a href="/projekte">Projekte</a></div>
+</div></div>
+<div class="wrap">
+<h1>Offene Forschung</h1>
 <p class="mut">Lege einen Forschungsbereich an und teile Ergebnisse & Zwischenstände –
 andere können darauf aufbauen. Jeder Beitrag trägt eine Vertrauens-Stufe.
 <b>Keine medizinische/rechtliche Beratung.</b></p>
