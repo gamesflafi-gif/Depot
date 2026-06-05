@@ -95,6 +95,16 @@ def cmd_stats(cfg, args) -> None:
         print(f"  {k:14s}: {v}")
 
 
+def cmd_ask(cfg, args) -> None:
+    from pathlib import Path
+    from synapse import assistant
+    if not (Path(cfg.data_dir) / "index" / "index.json").exists():
+        print("Kein Index. Bitte erst 'ingest' + 'index'.")
+        return
+    print("Analysiere Forschungslage …\n")
+    print(assistant.render(assistant.analyze(cfg, args.question)))
+
+
 def cmd_connections(cfg, args) -> None:
     from pathlib import Path
     from synapse.index import SearchEngine
@@ -132,7 +142,7 @@ def cmd_serve(cfg, args) -> None:
 
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,
             "index": cmd_index, "search": cmd_search, "serve": cmd_serve,
-            "brain": cmd_brain, "connections": cmd_connections}
+            "brain": cmd_brain, "connections": cmd_connections, "ask": cmd_ask}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -168,6 +178,9 @@ def main(argv: list[str] | None = None) -> None:
     pco = sub.add_parser("connections", help="verwandte Arbeiten + Feld-Brücken zu einem Werk")
     pco.add_argument("work_id", help="OpenAlex-ID, z.B. W2741809807")
     pco.add_argument("--k", type=int, default=8)
+
+    pa = sub.add_parser("ask", help="Forschungs-Assistent: Frage -> Einordnung mit Quellen")
+    pa.add_argument("question", help="deine Forschungsfrage in Worten")
 
     args = parser.parse_args(argv)
     cfg = load_config()

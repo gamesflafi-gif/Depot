@@ -96,6 +96,29 @@ def test_web_api(tmp_path):
         assert store.count_events("click") == 1 and store.count_events("search") >= 1
 
 
+def test_assistant_briefing(tmp_path):
+    """Forschungs-Assistent: liefert Einordnung, Themen, Top-/neueste Arbeiten."""
+    from synapse import assistant
+    from synapse.ingest import ingest
+    from synapse.index import build_index
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+
+    b = assistant.analyze(cfg, "protein structure prediction with neural networks")
+    assert b.local_count >= 1 and b.verdict
+    assert "Deep learning" in b.themes
+    assert b.top_works and b.top_works[0]["cited_by_count"] >= 0
+    assert "Frage:" in assistant.render(b)
+
+    # Web-Endpoint /api/ask liefert dieselbe Struktur
+    client = TestClient(create_app(cfg))
+    d = client.get("/api/ask", params={"q": "attention sequence modeling"}).json()
+    assert d["verdict"] and isinstance(d["results"], list) and d["results"]
+
+
 def test_connections_cross_field(tmp_path):
     """Verbindungs-Entdeckung: verwandte Arbeiten + Feld-Brücken markieren."""
     from synapse.ingest import ingest
