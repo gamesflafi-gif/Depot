@@ -148,6 +148,76 @@ def test_accounts_and_gating(tmp_path):
     assert client.get("/konto").status_code == 200
 
 
+def test_password_policy():
+    """Passwort-Richtlinie wehrt schwache Passwörter ab, lässt starke zu."""
+    from synapse.accounts import validate_password
+    assert validate_password("kurz")                       # zu kurz
+    assert validate_password("passwort", "x")              # zu verbreitet
+    assert validate_password("aaaaaaaaaaaa")               # zu wenig Varianz
+    assert validate_password("lena12345", "lena12345")     # = Nutzername
+    assert validate_password("Sicher-2026!xy") == ""       # stark -> akzeptiert
+
+
+def test_login_brute_force_lockout(tmp_path):
+    """Nach zu vielen Fehlversuchen wird der Login kurz gesperrt –
+    auch ein dann korrektes Passwort wird abgewiesen."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(cfg))
+    client.post("/api/register", json={"username": "opfer", "password": "richtig-passwort-9"})
+    client.post("/api/logout", json={})
+
+    for _ in range(5):                                     # 5 Fehlversuche
+        assert client.post("/api/login", json={"username": "opfer",
+                                               "password": "falsch-falsch"}).status_code == 401
+    # nun gesperrt: selbst das korrekte Passwort wird (vorübergehend) blockiert
+    r = client.post("/api/login", json={"username": "opfer", "password": "richtig-passwort-9"})
+    assert r.status_code == 401
+    assert "Fehlversuche" in r.json()["message"] or "warten" in r.json()["message"]
+
+
+def test_change_password_and_session_invalidation(tmp_path):
+    """Passwort ändern: altes muss stimmen, neues wird gehärtet; danach gilt
+    nur noch das neue Passwort."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    client = TestClient(create_app(cfg))
+    client.post("/api/register", json={"username": "wechsler", "password": "altes-passwort-1"})
+
+    # falsches altes Passwort -> abgelehnt
+    assert client.post("/api/password", json={"old_password": "stimmt-nicht",
+                                              "new_password": "neues-passwort-2"}).status_code == 400
+    # zu schwaches neues Passwort -> abgelehnt
+    assert client.post("/api/password", json={"old_password": "altes-passwort-1",
+                                              "new_password": "kurz"}).status_code == 400
+    # gültiger Wechsel
+    assert client.post("/api/password", json={"old_password": "altes-passwort-1",
+                                              "new_password": "neues-passwort-2"}).json()["ok"]
+
+    # aktuelle Sitzung bleibt aktiv (keep_token)
+    assert client.get("/api/me").json()["user"]["username"] == "wechsler"
+    client.post("/api/logout", json={})
+    # altes Passwort gilt nicht mehr, neues schon
+    assert client.post("/api/login", json={"username": "wechsler",
+                                           "password": "altes-passwort-1"}).status_code == 401
+    assert client.post("/api/login", json={"username": "wechsler",
+                                           "password": "neues-passwort-2"}).json()["ok"]
+
+
+def test_security_headers(tmp_path):
+    """Jede Antwort trägt Schutz-Header (Clickjacking/MIME/CSP)."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    cfg = _cfg(tmp_path)
+    h = TestClient(create_app(cfg)).get("/").headers
+    assert h["x-frame-options"] == "DENY"
+    assert h["x-content-type-options"] == "nosniff"
+    assert "default-src 'self'" in h["content-security-policy"]
+    assert "frame-ancestors 'none'" in h["content-security-policy"]
+
+
 def test_student_account_and_project_type(tmp_path):
     """Studierende ohne ORCID können mitforschen – ehrlich als „Student:in"
     gekennzeichnet; Projekt-Typ (Forschung/Studienprojekt) wird mitgeführt."""
