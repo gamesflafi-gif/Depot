@@ -80,7 +80,32 @@ CREATE TABLE IF NOT EXISTS reports (
     reason     VARCHAR,
     created_at VARCHAR
 );
+CREATE TABLE IF NOT EXISTS users (
+    id            VARCHAR PRIMARY KEY,
+    username      VARCHAR UNIQUE,
+    email         VARCHAR,
+    password_hash VARCHAR,
+    name          VARCHAR,
+    affiliation   VARCHAR,
+    orcid         VARCHAR,
+    orcid_verified BOOLEAN,
+    bio           VARCHAR,
+    role          VARCHAR,         -- user | admin
+    created_at    VARCHAR
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash VARCHAR PRIMARY KEY,
+    user_id    VARCHAR,
+    expires_at VARCHAR,
+    created_at VARCHAR
+);
 """
+
+# Spalten, die ältere DBs evtl. noch nicht haben (Migration, idempotent).
+_MIGRATIONS = [
+    "ALTER TABLE projects ADD COLUMN owner_user_id VARCHAR",
+    "ALTER TABLE contributions ADD COLUMN contributor_user_id VARCHAR",
+]
 
 
 class SynapseStore:
@@ -91,6 +116,11 @@ class SynapseStore:
         cfg.ensure_dirs()
         self.con = duckdb.connect(str(cfg.db_path))
         self.con.execute(_SCHEMA)
+        for stmt in _MIGRATIONS:                 # fehlende Spalten ergänzen
+            try:
+                self.con.execute(stmt)
+            except Exception:                    # Spalte existiert bereits
+                pass
 
     # -- Kontextmanager -------------------------------------------------- #
     def __enter__(self) -> "SynapseStore":
