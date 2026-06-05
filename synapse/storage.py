@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS users (
     orcid         VARCHAR,
     orcid_verified BOOLEAN,
     bio           VARCHAR,
-    role          VARCHAR,         -- user | admin
+    role          VARCHAR,         -- user | admin (Berechtigung)
+    account_type  VARCHAR,         -- student | researcher | other (akadem. Status)
     created_at    VARCHAR
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -105,6 +106,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 _MIGRATIONS = [
     "ALTER TABLE projects ADD COLUMN owner_user_id VARCHAR",
     "ALTER TABLE contributions ADD COLUMN contributor_user_id VARCHAR",
+    "ALTER TABLE users ADD COLUMN account_type VARCHAR",
+    "ALTER TABLE projects ADD COLUMN ptype VARCHAR",   # research | student
 ]
 
 
