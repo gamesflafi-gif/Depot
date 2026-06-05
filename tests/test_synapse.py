@@ -148,6 +148,30 @@ def test_accounts_and_gating(tmp_path):
     assert client.get("/konto").status_code == 200
 
 
+def test_corpus_build_filter():
+    """Korpus-Filter nutzt aktuelle OpenAlex-Syntax (kein veraltetes concepts.id)."""
+    from synapse.corpus import build_filter
+    f = build_filter("sleep memory", since=2015, min_citations=5)
+    assert "title_and_abstract.search:sleep memory" in f
+    assert "has_abstract:true" in f and "from_publication_date:2015-01-01" in f
+    assert "type:article" in f and "cited_by_count:>5" in f
+    assert "concepts.id" not in f                       # nicht das veraltete Feld
+    # ohne Mindest-Zitationen kein cited_by_count-Teil
+    assert "cited_by_count" not in build_filter("x", 2020, 0)
+
+
+def test_corpus_load_orchestration(tmp_path):
+    """Korpus-Lauf orchestriert mehrere Themenfelder (offline/Sample) und ist
+    robust + idempotent."""
+    from synapse.corpus import load_corpus
+    cfg = _cfg(tmp_path)
+    themes = {"A": "sleep memory", "B": "cancer immunotherapy"}
+    res = load_corpus(cfg, per_theme=10, themes=themes)
+    assert set(res.per_theme) == {"A", "B"} and not res.skipped
+    assert res.total_in_store == 3                      # Sample = 3 Werke, idempotent
+    assert res.total_ingested >= 3
+
+
 def test_legal_pages_and_status(tmp_path):
     """Rechtliche Pflichtseiten + Betriebs-Status sind erreichbar."""
     from fastapi.testclient import TestClient
