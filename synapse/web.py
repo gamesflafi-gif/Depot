@@ -72,6 +72,11 @@ class ModerateIn(BaseModel):
     contribution_id: str
     action: str
 
+
+class PasswordIn(BaseModel):
+    old_password: str
+    new_password: str
+
 log = logging.getLogger(__name__)
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -436,13 +441,19 @@ async function load(){
   '<textarea id="p_bio" placeholder="Kurzprofil">'+esc(m.bio||'')+'</textarea>'+
   '<button onclick="saveProfile()">Speichern</button> '+
   '<button onclick="logout()" style="background:#64748b">Abmelden</button>'+
-  '<div id="p_msg" class="mut"></div></div>'; return; }
+  '<div id="p_msg" class="mut"></div></div>'+
+  '<div class="card"><h2>Passwort ändern</h2>'+
+  '<input id="pw_old" type="password" placeholder="Aktuelles Passwort">'+
+  '<input id="pw_new" type="password" placeholder="Neues Passwort (min. 10 Zeichen)">'+
+  '<div class="mut">Nach dem Ändern werden alle anderen Geräte/Sitzungen abgemeldet.</div>'+
+  '<button onclick="changePw()">Passwort ändern</button>'+
+  '<div id="pw_msg" class="mut"></div></div>'; return; }
  $('view').innerHTML=
   '<div class="card"><h2>Anmelden</h2>'+
   '<input id="l_user" placeholder="Nutzername"><input id="l_pw" type="password" placeholder="Passwort">'+
   '<button onclick="login()">Anmelden</button><div id="l_msg" class="mut"></div></div>'+
   '<div class="card"><h2>Neues Konto</h2>'+
-  '<input id="r_user" placeholder="Nutzername (3–32 Zeichen)"><input id="r_pw" type="password" placeholder="Passwort (min. 8)">'+
+  '<input id="r_user" placeholder="Nutzername (3–32 Zeichen)"><input id="r_pw" type="password" placeholder="Passwort (min. 10 Zeichen)">'+
   '<input id="r_name" placeholder="Dein Name">'+
   typeSel('r_type','student')+
   '<input id="r_aff" placeholder="Institution/Universität (optional)">'+
@@ -459,6 +470,9 @@ async function register(){const d=await post('/api/register',{username:$('r_user
 async function saveProfile(){const d=await post('/api/profile',{name:$('p_name').value,affiliation:$('p_aff').value,
   orcid:$('p_orcid').value,bio:$('p_bio').value,account_type:$('p_type').value});
  $('p_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>'; if(d.ok)load();}
+async function changePw(){const d=await post('/api/password',{old_password:$('pw_old').value,new_password:$('pw_new').value});
+ $('pw_msg').innerHTML=(d.ok?'<span class="ok">':'<span class="err">')+esc(d.message)+'</span>';
+ if(d.ok){$('pw_old').value='';$('pw_new').value='';}}
 async function logout(){await post('/api/logout',{}); load();}
 load();
 </script></body></html>"""
@@ -468,6 +482,34 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or load_config()
     app = FastAPI(title="Synapse", version="0.2")
     _state: dict = {"engine": None}
+
+    # Sicherheits-Header auf jeder Antwort (Clickjacking-/MIME-/Referrer-Schutz).
+    # CSP erlaubt nur eigene Quellen; Inline-Skripte/-Styles der Seiten sind
+    # zugelassen (keine Fremd-CDNs), Framing ist komplett verboten.
+    _CSP = ("default-src 'self'; img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; "
+            "form-action 'self'")
+
+    @app.middleware("http")
+    async def _security_headers(request: Request, call_next):
+        resp = await call_next(request)
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["X-Frame-Options"] = "DENY"
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        resp.headers["Content-Security-Policy"] = _CSP
+        if cfg.https:
+            resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return resp
+
+    def _set_session(response: Response, token: str) -> None:
+        # HttpOnly (kein JS-Zugriff), SameSite=Lax (CSRF-Schutz), Secure bei HTTPS.
+        response.set_cookie(_COOKIE, token, httponly=True, samesite="lax",
+                            secure=cfg.https, max_age=_COOKIE_MAXAGE, path="/")
+
+    def _client_ip(request: Request) -> str:
+        return request.client.host if request.client else ""
 
     def _engine():
         if _state["engine"] is None:
@@ -607,28 +649,24 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                               p.orcid, p.affiliation, p.bio, p.account_type)
         if not r.ok:
             return JSONResponse({"ok": False, "message": r.message}, status_code=400)
-        tok = accounts.create_session(cfg, r.data["user_id"])
-        response.set_cookie(_COOKIE, tok, httponly=True, samesite="lax",
-                            max_age=_COOKIE_MAXAGE)
+        _set_session(response, accounts.create_session(cfg, r.data["user_id"]))
         return {"ok": True, "message": r.message}
 
     @app.post("/api/login")
-    def api_login(p: LoginIn, response: Response):
+    def api_login(p: LoginIn, request: Request, response: Response):
         from synapse import accounts
-        uid = accounts.authenticate(cfg, p.username, p.password)
-        if not uid:
-            return JSONResponse({"ok": False, "message": "Nutzername oder Passwort falsch."},
-                                status_code=401)
-        tok = accounts.create_session(cfg, uid)
-        response.set_cookie(_COOKIE, tok, httponly=True, samesite="lax",
-                            max_age=_COOKIE_MAXAGE)
-        return {"ok": True, "message": "Angemeldet."}
+        # Brute-Force-Schutz: zählt Fehlversuche je Konto + IP, sperrt kurzzeitig.
+        res = accounts.attempt_login(cfg, p.username, p.password, _client_ip(request))
+        if not res.ok:
+            return JSONResponse({"ok": False, "message": res.message}, status_code=401)
+        _set_session(response, accounts.create_session(cfg, res.data["user_id"]))
+        return {"ok": True, "message": res.message}
 
     @app.post("/api/logout")
     def api_logout(request: Request, response: Response):
         from synapse import accounts
         accounts.destroy_session(cfg, request.cookies.get(_COOKIE, ""))
-        response.delete_cookie(_COOKIE)
+        response.delete_cookie(_COOKIE, path="/")
         return {"ok": True}
 
     @app.post("/api/profile")
@@ -640,5 +678,17 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         r = accounts.update_profile(cfg, u["id"], p.name, p.affiliation, p.orcid,
                                     p.bio, p.account_type)
         return {"ok": r.ok, "message": r.message}
+
+    @app.post("/api/password")
+    def api_password(p: PasswordIn, request: Request):
+        u = _user(request)
+        if not u:
+            return JSONResponse({"ok": False, "message": "Bitte anmelden."}, status_code=401)
+        from synapse import accounts
+        # Aktuelle Sitzung behalten, alle anderen werden abgemeldet.
+        r = accounts.change_password(cfg, u["id"], p.old_password, p.new_password,
+                                     keep_token=request.cookies.get(_COOKIE, ""))
+        code = 200 if r.ok else 400
+        return JSONResponse({"ok": r.ok, "message": r.message}, status_code=code)
 
     return app

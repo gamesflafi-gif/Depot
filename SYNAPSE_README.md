@@ -117,6 +117,18 @@ bash deploy/synapse/harden.sh   # Firewall, fail2ban, Auto-Updates, SSH-Härtung
 ```
 **Wichtig:** Vor der SSH-Härtung einen SSH-Key hinterlegen (sonst Aussperr-Gefahr).
 
+### Konten-Sicherheit (eingebaut)
+- **Passwörter**: scrypt-Hash + Salt (nie im Klartext); Richtlinie min. 10 Zeichen,
+  keine Allerwelts-Passwörter, nicht = Nutzername.
+- **Brute-Force-Schutz**: Login-Fehlversuche werden je Konto **und** je IP gezählt;
+  nach zu vielen folgt eine kurze Sperre (Lockout).
+- **Timing-sicher**: Login verrät über die Antwortzeit nicht, ob ein Konto existiert.
+- **Sitzungen**: in der DB liegt nur der Token-*Hash*; Passwortwechsel meldet alle
+  anderen Geräte ab.
+- **Security-Header** auf jeder Antwort (CSP, X-Frame-Options, nosniff, Referrer-Policy).
+- **HTTPS**: sobald hinter TLS betrieben, `SYNAPSE_HTTPS=1` setzen → `Secure`-Cookies
+  + HSTS. Empfohlen: Reverse-Proxy (Caddy/Nginx) mit Let's-Encrypt vor `127.0.0.1:8000`.
+
 ## Nächste Phasen (siehe Plan)
 - **Phase 1:** vorberechnete Embeddings (SPECTER2) → Qdrant-Index → semantische
   Hybrid-Suche + API + Mini-Frontend.

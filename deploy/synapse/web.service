@@ -10,6 +10,8 @@ After=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/root/Depot
+# Hinter HTTPS-Reverse-Proxy (Caddy/Nginx) zusätzlich aktivieren:
+#   Environment=SYNAPSE_HTTPS=1   -> Secure-Cookies + HSTS
 ExecStart=/root/Depot/.venv/bin/python -m synapse.cli serve --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5

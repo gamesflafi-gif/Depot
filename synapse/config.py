@@ -28,6 +28,10 @@ class Config:
     source_mode: str = field(
         default_factory=lambda: os.environ.get("SYNAPSE_SOURCE", "openalex"))
 
+    # Sicherheit: hinter HTTPS „Secure"-Cookies setzen (SYNAPSE_HTTPS=1).
+    https: bool = field(
+        default_factory=lambda: os.environ.get("SYNAPSE_HTTPS", "") in ("1", "true", "yes"))
+
     @property
     def db_path(self) -> Path:
         return Path(self.data_dir) / self.db_file

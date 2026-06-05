@@ -100,6 +100,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at VARCHAR,
     created_at VARCHAR
 );
+CREATE TABLE IF NOT EXISTS login_attempts (
+    bucket  VARCHAR,          -- 'user:<name>' oder 'ip:<addr>'
+    ts      VARCHAR,          -- Zeitpunkt des Fehlversuchs (ISO)
+    success BOOLEAN
+);
 """
 
 # Spalten, die ältere DBs evtl. noch nicht haben (Migration, idempotent).
