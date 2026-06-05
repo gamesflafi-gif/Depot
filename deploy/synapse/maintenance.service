@@ -1,0 +1,10 @@
+# Synapse Wartung: abgelaufene Sitzungen + alte Login-Versuche aufräumen.
+#   sudo cp deploy/synapse/maintenance.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now synapse-maintenance.timer
+[Unit]
+Description=Synapse Wartung (Sitzungen/Login-Versuche aufräumen)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Depot
+ExecStart=/root/Depot/.venv/bin/python -m synapse.cli maintenance

@@ -1,0 +1,10 @@
+# Health-Check alle 5 Minuten.
+[Unit]
+Description=Synapse Health-Watchdog alle 5 Minuten
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

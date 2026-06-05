@@ -242,6 +242,20 @@ def destroy_user_sessions(cfg: Config, user_id: str, keep_token: str = "") -> No
             store.con.execute("DELETE FROM sessions WHERE user_id=?", [user_id])
 
 
+def cleanup_expired(cfg: Config) -> dict:
+    """Abgelaufene Sitzungen und alte Login-Versuche entfernen (Wartung)."""
+    now = _now().isoformat()
+    cutoff = (_now() - timedelta(days=1)).isoformat()
+    with SynapseStore(cfg) as store:
+        s = store.con.execute("SELECT COUNT(*) FROM sessions WHERE expires_at<?",
+                              [now]).fetchone()[0]
+        store.con.execute("DELETE FROM sessions WHERE expires_at<?", [now])
+        a = store.con.execute("SELECT COUNT(*) FROM login_attempts WHERE ts<?",
+                              [cutoff]).fetchone()[0]
+        store.con.execute("DELETE FROM login_attempts WHERE ts<?", [cutoff])
+    return {"sessions_removed": int(s), "attempts_removed": int(a)}
+
+
 def change_password(cfg: Config, user_id: str, old_pw: str, new_pw: str,
                     keep_token: str = "") -> Outcome:
     """Passwort ändern: altes prüfen, neues härten, danach **alle anderen
