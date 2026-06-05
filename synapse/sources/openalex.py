@@ -56,6 +56,26 @@ def iter_works(cfg: Config, filter_str: str = "", max_records: int = 1000) -> It
         cursor = (data.get("meta") or {}).get("next_cursor")
 
 
+def fetch_by_doi(cfg: Config, doi: str) -> dict | None:
+    """Holt eine Arbeit anhand ihres **DOI** aus OpenAlex – nur wenn sie dort
+    offiziell registriert ist. Liefert None, wenn es den DOI nicht gibt.
+    Damit lässt sich „belegte" Forschung verifizieren, bevor sie aufgenommen wird.
+    """
+    doi = doi.strip().replace("https://doi.org/", "").replace("http://doi.org/", "")
+    doi = doi.replace("doi:", "").strip().lower()
+    if not doi or "/" not in doi:
+        return None
+    params = {}
+    if cfg.mailto:
+        params["mailto"] = cfg.mailto
+    qs = ("?" + urllib.parse.urlencode(params)) if params else ""
+    url = f"https://api.openalex.org/works/https://doi.org/{doi}{qs}"
+    try:
+        return _get_json(url, cfg)
+    except Exception:  # noqa: BLE001 (nicht gefunden = None)
+        return None
+
+
 def count_works(cfg: Config, query: str) -> int | None:
     """Wie viele Arbeiten gibt es **weltweit** zu einer Suchanfrage? (OpenAlex
     meta.count). Liefert None offline/bei Fehler."""

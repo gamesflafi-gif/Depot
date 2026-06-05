@@ -96,6 +96,38 @@ def test_web_api(tmp_path):
         assert store.count_events("click") == 1 and store.count_events("search") >= 1
 
 
+def test_add_to_index_incremental(tmp_path):
+    """Belegte Arbeit nachträglich in den Index aufnehmen (ohne Neu-Bau)."""
+    from synapse.ingest import ingest
+    from synapse.index import build_index, add_to_index, SearchEngine
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+
+    new = {"id": "W9999", "title": "Quantum error correction with surface codes",
+           "abstract": "We demonstrate fault tolerant quantum error correction.",
+           "year": 2024, "doi": "10.9/qec", "venue": "Nature", "cited_by_count": 5}
+    assert add_to_index(cfg, [new]) == 1
+    assert add_to_index(cfg, [new]) == 0          # idempotent (kein Duplikat)
+
+    eng = SearchEngine(cfg)                         # lädt erweiterten Index
+    hits = eng.search("quantum error correction surface codes", k=3)
+    assert any(h.id == "W9999" for h in hits)
+
+
+def test_assistant_no_markdown(tmp_path):
+    """Verdikt enthält kein rohes Markdown (kein '**')."""
+    from synapse import assistant
+    from synapse.ingest import ingest
+    from synapse.index import build_index
+    cfg = _cfg(tmp_path)
+    ingest(cfg, max_records=100)
+    build_index(cfg, prefer="hash")
+    b = assistant.analyze(cfg, "deep learning")
+    assert "**" not in b.verdict
+    assert assistant._keywords("Gibt es Forschung zu Schlaf und Gedächtnis?") == "schlaf gedächtnis"
+
+
 def test_assistant_briefing(tmp_path):
     """Forschungs-Assistent: liefert Einordnung, Themen, Top-/neueste Arbeiten."""
     from synapse import assistant
