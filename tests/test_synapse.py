@@ -172,6 +172,29 @@ def test_corpus_load_orchestration(tmp_path):
     assert res.total_ingested >= 3
 
 
+def test_shareable_links_and_seo(tmp_path):
+    """Teilbare Analyse-Links (?q=) + OpenGraph-Vorschau + robots/sitemap."""
+    from fastapi.testclient import TestClient
+    from synapse.web import create_app
+    client = TestClient(create_app(_cfg(tmp_path)))
+
+    # Startseite: keine Platzhalter, OG-Tags vorhanden
+    home = client.get("/").text
+    for ph in ("__TITLE__", "__OGDESC__", "__OGTITLE__", "__QSEED__"):
+        assert ph not in home
+    assert 'property="og:title"' in home and "shareLink()" in home
+
+    # Deep-Link: Frage steht in Titel/Meta und wird per Seed auto-ausgeführt
+    deep = client.get("/", params={"q": "schlaf und gedächtnis"}).text
+    assert "schlaf und ged" in deep and "__seed=" in deep
+
+    # robots.txt + sitemap.xml
+    rob = client.get("/robots.txt")
+    assert rob.status_code == 200 and "Sitemap:" in rob.text and "/api/" in rob.text
+    sm = client.get("/sitemap.xml")
+    assert sm.status_code == 200 and "urlset" in sm.text and "/impressum" in sm.text
+
+
 def test_legal_pages_and_status(tmp_path):
     """Rechtliche Pflichtseiten + Betriebs-Status sind erreichbar."""
     from fastapi.testclient import TestClient
