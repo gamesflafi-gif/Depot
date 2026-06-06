@@ -174,6 +174,14 @@ python -m synapse.cli security
   (Vorlagen — Platzhalter `[[…]]` vor Launch füllen und fachkundig prüfen lassen).
 - **Status/Monitoring**: `GET /api/status` liefert Bestand/Index/HTTPS-Status für den Watchdog.
 
+### Reichweite (organisches Wachstum)
+- **Teilbare Analyse-Links**: jede Frage hat eine eigene URL (`/?q=…`); Aufruf
+  führt die Analyse automatisch aus. Button „Teilen / Link kopieren" nutzt auf
+  dem Handy den nativen Teilen-Dialog.
+- **Link-Vorschau (OpenGraph)**: geteilte Links zeigen Titel/Beschreibung der
+  Frage (WhatsApp/Slack/X). Bei eigener Domain ggf. `og:url`/Bild ergänzen.
+- **SEO**: `/robots.txt` + `/sitemap.xml` eingebaut (API ist ausgeschlossen).
+
 ## Nächste Phasen (siehe Plan)
 - **Phase 1:** vorberechnete Embeddings (SPECTER2) → Qdrant-Index → semantische
   Hybrid-Suche + API + Mini-Frontend.

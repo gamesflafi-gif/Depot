@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from synapse.config import Config, load_config
@@ -81,7 +81,12 @@ log = logging.getLogger(__name__)
 
 _PAGE = """<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Synapse — Forschungs-Assistent</title>
+<title>__TITLE__</title>
+<meta name="description" content="__OGDESC__">
+<meta property="og:title" content="__OGTITLE__">
+<meta property="og:description" content="__OGDESC__">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
 <style>
  :root{--bg:#f5f7fb;--surface:#fff;--fg:#1f2a37;--mut:#64748b;--border:#e2e8f0;
    --acc:#1d4ed8;--accsoft:#eef3ff}
@@ -191,6 +196,7 @@ function link(w){return w.doi?('https://doi.org/'+w.doi):('https://openalex.org/
 function renderBrief(b){
  if(b.error){br.innerHTML='<div class="empty">'+esc(b.error)+'</div>';return;}
  let h='<div class="brief"><div class="verdict">'+esc(b.verdict)+'</div>';
+ h+='<button class="relbtn" onclick="shareLink()">🔗 Teilen / Link kopieren</button>';
  if(b.activity)h+='<div class="act">Einordnung: '+esc(b.activity)+
    (b.year_min?(' · Zeitraum '+b.year_min+'–'+b.year_max):'')+'</div>';
  if(b.themes&&b.themes.length){h+='<div class="chips">';
@@ -256,13 +262,25 @@ async function doSearch(query){
  query=(query||'').trim(); if(!query)return;
  const ex=document.getElementById('examples'), how=document.getElementById('how');
  if(ex)ex.style.display='none'; if(how)how.style.display='none';   // Intro ausblenden
+ try{history.replaceState(null,'','/?q='+encodeURIComponent(query));}catch(_){}  // teilbarer Link
+ document.title=query+' — Synapse';
  br.innerHTML='<div class="empty">Analysiere Forschungslage …</div>'; r.innerHTML='';
  let b; try{b=await(await fetch('/api/ask?q='+encodeURIComponent(query))).json();}
  catch(_){br.innerHTML='<div class="empty">Fehler.</div>';return;}
  renderBrief(b); renderResults(query,b.results);
 }
 function runEx(t){q.value=t; doSearch(t);}
+function shareLink(){
+ const query=(q.value||'').trim(); if(!query)return;
+ const url=location.origin+'/?q='+encodeURIComponent(query);
+ if(navigator.share){navigator.share({title:'Synapse — '+query,url:url}).catch(()=>{});}
+ else if(navigator.clipboard){navigator.clipboard.writeText(url);
+   const el=event&&event.target; if(el){const o=el.textContent;el.textContent='✓ Link kopiert';setTimeout(()=>el.textContent=o,1500);}}
+}
 document.getElementById('f').addEventListener('submit',e=>{e.preventDefault(); doSearch(q.value);});
+// Deep-Link: ?q=… beim Laden automatisch analysieren (teilbare Ergebnisse)
+const __seed=__QSEED__;
+if(__seed){ q.value=__seed; doSearch(__seed); }
 
 const cf=document.getElementById('cf'), cmsg=document.getElementById('cmsg'), doi=document.getElementById('doi');
 cf.addEventListener('submit',async e=>{
@@ -640,6 +658,34 @@ Rahmen.</p>
 """)
 
 
+_DEFAULT_DESC = ("Stelle eine Forschungsfrage — Synapse ordnet die Studienlage ein, "
+                 "nennt die Quellen und zeigt Trend & Forschungslücken. "
+                 "Lokal & quellenbasiert, keine Beratung.")
+
+
+def _render_home(q: str = "") -> str:
+    """Startseite rendern; bei ?q=… teilbare Vorschau-Meta + Auto-Analyse."""
+    import html as _html
+    import json as _json
+    q = (q or "").strip()[:200]
+    if q:
+        title = f"{q} — Synapse"
+        desc = (f"Studienlage, Quellen, Trend und Forschungslücken zu: {q}. "
+                "Von Synapse — lokal und quellenbasiert.")
+    else:
+        title = "Synapse — Forschungs-Assistent"
+        desc = _DEFAULT_DESC
+    page = (_PAGE
+            .replace("__TITLE__", _html.escape(title))
+            .replace("__OGTITLE__", _html.escape(title, quote=True))
+            .replace("__OGDESC__", _html.escape(desc, quote=True))
+            .replace("__QSEED__", _json.dumps(q)))
+    return page
+
+
+_ROBOTS = "User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: {base}/sitemap.xml\n"
+
+
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or load_config()
     app = FastAPI(title="Synapse", version="0.2")
@@ -729,8 +775,24 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                                 status_code=500)
 
     @app.get("/", response_class=HTMLResponse)
-    def home():
-        return _PAGE
+    def home(q: str = ""):
+        return _render_home(q)
+
+    @app.get("/robots.txt", response_class=PlainTextResponse)
+    def robots(request: Request):
+        base = str(request.base_url).rstrip("/")
+        return _ROBOTS.format(base=base)
+
+    @app.get("/sitemap.xml")
+    def sitemap(request: Request):
+        base = str(request.base_url).rstrip("/")
+        paths = ["/", "/projekte", "/konto", "/impressum",
+                 "/datenschutz", "/nutzungsbedingungen"]
+        body = ('<?xml version="1.0" encoding="UTF-8"?>'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                + "".join(f"<url><loc>{base}{p}</loc></url>" for p in paths)
+                + "</urlset>")
+        return Response(content=body, media_type="application/xml")
 
     @app.get("/impressum", response_class=HTMLResponse)
     def impressum():
