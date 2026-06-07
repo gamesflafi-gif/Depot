@@ -87,3 +87,42 @@ def test_predictor_missing_model(tmp_path):
     import pytest
     with pytest.raises(FileNotFoundError):
         Predictor(_cfg(tmp_path))
+
+
+def test_web_endpoints(tmp_path):
+    """Web liefert Teams, Scouting-Report und Vorhersage; Seiten laden."""
+    from fastapi.testclient import TestClient
+    from gridiron.ingest import ingest
+    from gridiron.model import train
+    from gridiron.web import create_app
+    cfg = _cfg(tmp_path)
+    ingest(cfg)
+    train(cfg)
+    client = TestClient(create_app(cfg))
+
+    assert client.get("/health").json()["status"] == "ok"
+    assert client.get("/").status_code == 200
+    assert client.get("/report").status_code == 200
+
+    t = client.get("/api/teams").json()
+    assert "AIR" in t["teams"] and t["seasons"]
+
+    rep = client.get("/api/scout", params={"team": "AIR"}).json()
+    assert rep["n_plays"] > 100 and rep["pass_rate"] > rep["league_pass_rate"]
+    assert rep["by_down_dist"]
+
+    pr = client.get("/api/predict", params={"team": "AIR", "down": 3, "ydstogo": 12,
+                                            "yardline": 60, "shotgun": 1}).json()
+    assert 0.0 <= pr["pass_prob"] <= 1.0 and pr["likely"] in ("PASS", "RUN")
+
+
+def test_web_predict_without_model(tmp_path):
+    """Ohne trainiertes Modell antwortet /api/predict sauber mit 503."""
+    from fastapi.testclient import TestClient
+    from gridiron.ingest import ingest
+    from gridiron.web import create_app
+    cfg = _cfg(tmp_path)
+    ingest(cfg)
+    client = TestClient(create_app(cfg))
+    r = client.get("/api/predict", params={"team": "AIR"})
+    assert r.status_code == 503 and "Modell" in r.json()["error"]

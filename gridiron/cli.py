@@ -101,7 +101,10 @@ def cmd_predict(cfg, args) -> None:
 
 
 def cmd_serve(cfg, args) -> None:
-    print("Web-Oberfläche folgt in Kürze. Aktuell: CLI (scout/predict/train).")
+    import uvicorn
+    from gridiron.web import create_app
+    print(f"Starte Gridiron-Web auf http://{args.host}:{args.port}  (Strg+C beendet)")
+    uvicorn.run(create_app(cfg), host=args.host, port=args.port)
 
 
 COMMANDS = {"doctor": cmd_doctor, "ingest": cmd_ingest, "stats": cmd_stats,

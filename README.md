@@ -40,6 +40,18 @@ Der Report zeigt u.a.: Pass/Run-Split vs. Liga, **Tells** (vorhersehbare
 Situationen), Aufschlüsselung nach Down & Distanz und Feldzone, Lauf-/Pass-
 Richtungen und Play-Action-Rate.
 
+## Web-Oberfläche
+```bash
+python -m gridiron.cli serve --host 0.0.0.0 --port 8000
+# Browser: http://SERVER-IP:8000
+```
+- **Scouting-Seite**: Team + Saison wählen → Report mit KPI-Karten, Tells,
+  Down&Distanz-Balken (Team vs. Liga), Feldzonen, Richtungen.
+- **Live-Vorhersage**: Situation eingeben → Pass/Lauf-Wahrscheinlichkeit +
+  Vorhersehbarkeit.
+- **Druck-Report** (`/report`): aufgeräumte, druck-/PDF-fertige Variante für die
+  Coaching-Mappe (Browser → Drucken/„Als PDF speichern").
+
 ## Datenquelle
 - **nflverse** Play-by-Play (Parquet je Saison) — frei, vollständig ab 1999.
   Enthält Down, Distanz, Feldposition, Play-Typ, EPA, Win-Probability,
