@@ -3,30 +3,27 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stockai"
+name = "gridiron"
 version = "0.1.0"
-description = "Lernende KI zur Aktien- und News-Analyse mit Empfehlungs- und Portfolio-Engine"
+description = "NFL-Scouting & Tendenz-Analyse für Coaches (lokal, CPU, freie Daten)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    "yfinance>=0.2.40",
-    "pandas>=2.0",
-    "numpy>=1.24",
-    "scikit-learn>=1.3",
+    "duckdb>=0.10",
+    "pyarrow>=14",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
     "joblib>=1.3",
-    "vaderSentiment>=3.3",
-    "pyyaml>=6.0",
-    "streamlit>=1.30",
-    "plotly>=5.18",
-    "matplotlib>=3.7",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
 
 [project.scripts]
-stockai = "stockai.cli:main"
+gridiron = "gridiron.cli:main"
 
 [tool.setuptools]
-packages = ["stockai", "stockai.data", "stockai.features", "stockai.model"]
+packages = ["gridiron", "gridiron.sources"]
