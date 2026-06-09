@@ -807,7 +807,7 @@ async function loadMgr(){
 function renderProfile(){
  $('mgr_out').innerHTML='<div class="card"><div class="sec" style="margin-top:0">Profil erstellen</div>'+
   '<div class="note">Spiel dich mit deinem Namen ein — dein Spielstand wird darunter gespeichert. So könnt ihr getrennt spielen und jederzeit weitermachen.</div>'+
-  '<div class="controls" style="margin-top:14px"><div><label>Dein Name</label><input id="pf_name" placeholder="z. B. Max" style="width:220px" onkeydown="if(event.key===\'Enter\')saveProfile()"></div>'+
+  '<div class="controls" style="margin-top:14px"><div><label>Dein Name</label><input id="pf_name" placeholder="z. B. Max" style="width:220px" onkeydown="if(event.keyCode===13)saveProfile()"></div>'+
   '<button onclick="saveProfile()">Weiter ▶</button></div></div>';
  setTimeout(()=>{const i=$('pf_name');if(i)i.focus();},60);
 }
