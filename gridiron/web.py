@@ -499,7 +499,7 @@ async function drawPlay(concept,coverage,res){
  renderField($('field'),d,parseInt($('sim_y').value)||10);
  playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0});
 }
-function renderField(svg,d,ytg,cols){
+function renderField(svg,d,ytg,cols,fpos){
  cols=cols||{}; const offC=cols.off||'#16c784', defC=cols.def||'#ef5350';
  const P=svg.id;
  let s='<defs>'+
@@ -508,11 +508,27 @@ function renderField(svg,d,ytg,cols){
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
  s+='<rect x="0" y="0" width="533" height="360" fill="url(#turf_'+P+')"/>';
  for(let i=0;i<8;i++)if(i%2)s+='<rect x="0" y="'+(i*45)+'" width="533" height="45" fill="#ffffff" opacity="0.025"/>';
+ // feines 5-Yard-Raster + Hashmarks (Textur)
  for(let fy=-5;fy<=25;fy+=5){const y=mapY(fy).toFixed(1);
-  s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="'+(fy===0?0:1)+'" opacity="0.22"/>';
-  [23.58,29.72].forEach(hx=>{s+='<line x1="'+(mapX(hx)-3).toFixed(1)+'" y1="'+y+'" x2="'+(mapX(hx)+3).toFixed(1)+'" y2="'+y+'" stroke="#cdeede" stroke-width="1" opacity="0.32"/>';});
-  if(fy>0&&fy%10===0){s+='<text x="13" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4">'+fy+'</text>'+
-    '<text x="520" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4" text-anchor="end">'+fy+'</text>';}}
+  s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="'+(fy===0?0:1)+'" opacity="0.16"/>';
+  [23.58,29.72].forEach(hx=>{s+='<line x1="'+(mapX(hx)-3).toFixed(1)+'" y1="'+y+'" x2="'+(mapX(hx)+3).toFixed(1)+'" y2="'+y+'" stroke="#cdeede" stroke-width="1" opacity="0.30"/>';});}
+ if(fpos!=null){
+  // Echte Feldposition: Endzone + reale Yard-Linien (Feld scrollt mit dem Ball)
+  if(fpos<=26){const ey=mapY(Math.min(fpos,26)),ty=mapY(26);
+   s+='<rect x="0" y="'+ty+'" width="533" height="'+(ey-ty).toFixed(1)+'" fill="'+defC+'" opacity="0.22"/>';
+   s+='<line x1="0" y1="'+ey+'" x2="533" y2="'+ey+'" stroke="#ffffff" stroke-width="2.5" opacity="0.85"/>';
+   s+='<text x="266" y="'+(ty+18)+'" font-size="13" font-weight="800" fill="#ffffff" opacity="0.55" text-anchor="middle" letter-spacing="4">END ZONE</text>';}
+  for(let g=0;g<=100;g+=10){const fy=fpos-g; if(fy<-7||fy>26.5)continue; const y=mapY(fy).toFixed(1);
+   const lab=(g<=50?g:100-g);
+   s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="1" opacity="0.30"/>';
+   if(lab>0){s+='<text x="15" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.45">'+lab+'</text>'+
+     '<text x="518" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.45" text-anchor="end">'+lab+'</text>';}}
+ }else{
+  // Sim-Tool ohne Feldkontext: Abstand vom LOS
+  for(let fy=10;fy<=25;fy+=5)if(fy%10===0){const y=mapY(fy).toFixed(1);
+   s+='<text x="13" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4">'+fy+'</text>'+
+    '<text x="520" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4" text-anchor="end">'+fy+'</text>';}
+ }
  s+='<line x1="0" y1="'+mapY(0)+'" x2="533" y2="'+mapY(0)+'" stroke="#5fa8ff" stroke-width="2.5" opacity="0.9"/>';
  if(ytg<=24)s+='<line x1="0" y1="'+mapY(ytg)+'" x2="533" y2="'+mapY(ytg)+'" stroke="#ffd34d" stroke-width="2" opacity="0.7" stroke-dasharray="7 5"/>';
  d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
@@ -543,7 +559,7 @@ const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5
 function _spd(p){return SPD[p]||8;}
 function _toward(o,tx,ty,mx){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx,dy);if(d<=mx||d<1e-6){o.x=tx;o.y=ty;}else{o.x+=dx/d*mx;o.y+=dy/d*mx;}}
 function _advance(o,mx){if(!o.route)return;let b=mx;while(b>0&&o.ri<o.route.length){const wp=o.route[o.ri],dx=wp[0]-o.x,dy=wp[1]-o.y,d=Math.hypot(dx,dy);if(d<=b){o.x=wp[0];o.y=wp[1];o.ri++;b-=d;}else{o.x+=dx/d*b;o.y+=dy/d*b;b=0;}}}
-function playAnim(svg,d,res){
+function playAnim(svg,d,res,onDone){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
  res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
  const yards=(res.yards!=null?res.yards:(res.mean_yards!=null?res.mean_yards:0));
@@ -574,7 +590,10 @@ function playAnim(svg,d,res){
      if(isPass){let r=null,bd=1e9;D.forEach(p=>{if(p.role!=='rush')return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
        if(r){_toward(o,r.x*0.55+(C+off*1.4)*0.45,Math.max(-2.8,Math.min(-0.4,r.y-0.9)),M('OL'));}  // Blocker stellt sich goalside vor den Rusher
        else _toward(o,C+off*1.7,-2.2,M('OL'));}
-     else{const gx=runEnd?runEnd[0]:C;_toward(o,o.sy>-1?o.x+(gx-o.x)*0.18:o.x,Math.min(3.5,o.y+2.6),M('OL'));}  // Block nach vorn, Loch öffnen
+     else{const lane=runEnd?runEnd[0]:C;  // Run-Block: nächsten Front-Verteidiger aufnehmen und vom Loch wegtreiben
+       let r=null,bd=1e9;D.forEach(p=>{if(p.role==='man'||p.drop)return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
+       if(r){const side=(r.x<=lane)?0.7:-0.7;_toward(o,r.x+side,Math.max(o.y,r.y-0.3),M('OL')*1.08);}  // an die Lade-Schulter, Verteidiger vom Loch wegdrücken
+       else _toward(o,o.x+(lane-o.x)*0.2,Math.min(3.5,o.y+2.4),M('OL'));}
      return;}
    if(o===tgt){
      if(isPass){if(!caught)_advance(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}
@@ -631,7 +650,8 @@ function playAnim(svg,d,res){
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0);
   if(!done)_anim[P]=requestAnimationFrame(frame);
   else{if(kind==='sack')downFig(P,'o'+qb.i);else if(carrier&&kind!=='incomplete')downFig(P,'o'+carrier.i);  // Tackle: Ballträger geht zu Boden
-    showResult(svg,{kind,yards,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,yards]:catchPt))});}
+    showResult(svg,{kind,yards,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,yards]:catchPt))});
+    if(onDone)setTimeout(onDone,1100);}                  // danach Aufstellung am neuen Spot zeigen
  }
  _anim[P]=requestAnimationFrame(frame);
 }
@@ -1046,14 +1066,15 @@ function renderGame(g,play){
  if(play&&play.concept)animateGamePlay(play); else showFormation(g);
 }
 function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
-async function showFormation(g){const svg=$('gfield');if(!svg)return;
+async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
  const concept=g.user_offense?((g.options[0]&&g.options[0].key)||'Inside Zone'):'Inside Zone';
  const coverage=g.user_offense?'Cover 2':((g.options[0]&&g.options[0].key)||'Cover 2');
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
- if(!d.error)renderField(svg,d,g.dist||10,gameCols(g,g.user_offense));}
+ if(!d.error)renderField(svg,d,g.dist||10,gameCols(g,g.user_offense),g.ytz);}   // Ball am aktuellen Feld-Spot
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
- if(d.error)return; renderField(svg,d,10,liveG?gameCols(liveG,play.user_off):null); playAnim(svg,d,{kind:play.kind,yards:play.yards});}
+ if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
+ playAnim(svg,d,{kind:play.kind,yards:play.yards},()=>{const g=liveG;if(g&&!g.over)showFormation(g);});}    // danach: Aufstellung am neuen Spot
 async function gamePlay(choice){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 async function simDrive(){const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}

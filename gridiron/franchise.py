@@ -1459,6 +1459,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
             return {"error": "Unbekannte Coverage."}
         coverage, concept = choice, _scheme_pick(off, off=True)
 
+    ytz0, dist0 = g["ytz"], g["dist"]                # Feldposition vor dem Snap (für die Animation)
     o = play_outcome(concept, coverage,
                      {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
     yards = max(-12, min(o["yards"], int(g["ytz"])))
@@ -1518,7 +1519,8 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored,
                                  "kind": o["kind"], "concept": concept, "coverage": coverage,
-                                 "user_off": user_has_ball}, "game": _game_view(state)}
+                                 "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0)},
+            "game": _game_view(state)}
 
 
 def _play_label(concept: str, o: dict, yards: int) -> str:
