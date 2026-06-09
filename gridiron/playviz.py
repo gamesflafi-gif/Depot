@@ -110,9 +110,28 @@ _PASS_ROUTES = {
     "WR Screen":  ({"Z": "bubble", "SL": "block", "TE": "block", "X": "hitch", "RB": "block"}, "Z"),
 }
 
+# Aufstellungen: pro Play eine echte Formation (verschiebt Skill-Spieler/QB-Tiefe).
+FORMATIONS = {
+    "Shotgun":    {},
+    "Singleback": {"QB": (26.65, -1.6)},
+    "I-Form":     {"QB": (26.65, -1.6), "RB": (26.65, -7.6)},
+    "Trips Re":   {"X": (5.0, 0.0), "TE": (39.0, -0.6), "SL": (44.0, -0.6), "Z": (49.0, 0.0)},
+    "Empty":      {"QB": (26.65, -5.0), "RB": (11.0, -0.4)},
+}
+_PASS_FORMS = ["Shotgun", "Trips Re", "Empty", "Singleback"]
+_RUN_FORMS = ["Singleback", "I-Form", "Shotgun"]
+
+
+def _formation(concept: str, is_pass: bool) -> tuple[str, dict]:
+    """Deterministische, zum Konzept passende Formation (gleiches Konzept -> gleicher Look)."""
+    forms = _PASS_FORMS if is_pass else _RUN_FORMS
+    name = forms[sum(ord(c) for c in concept) % len(forms)]
+    return name, FORMATIONS[name]
+
+
 # Laufkonzept -> RB-Pfad (absolute Wegpunkte) und optionale Puller.
-def _run_path(concept: str) -> dict:
-    rbx, rby = POS["RB"]
+def _run_path(concept: str, rb: tuple[float, float]) -> dict:
+    rbx, rby = rb
     paths = {
         "Inside Zone":  [(rbx, rby), (C + 1.2, 0.5), (C + 1.5, 6)],
         "Outside Zone": [(rbx, rby), (C + 4, -0.5), (38, 2), (40, 8)],
@@ -204,40 +223,43 @@ def diagram(concept: str, coverage: str) -> dict:
     if not is_pass and concept not in RUN_CONCEPTS:
         raise ValueError(f"Unbekanntes Konzept: {concept}")
 
+    fname, fov = _formation(concept, is_pass)
+    pos = {**POS, **fov}                                  # Aufstellung dieses Plays
+
     offense: list[dict] = []
     for k in OL:
-        offense.append({"pos": "OL", "x": POS[k][0], "y": POS[k][1], "route": None})
-    offense.append({"pos": "QB", "x": POS["QB"][0], "y": POS["QB"][1], "route": None})
+        offense.append({"pos": "OL", "x": pos[k][0], "y": pos[k][1], "route": None})
+    offense.append({"pos": "QB", "x": pos["QB"][0], "y": pos["QB"][1], "route": None})
 
     defense = _defense(coverage)
     ball_target = None
     if is_pass:
         routes, primary = _PASS_ROUTES[concept]
-        skill_routes = {k: (routes.get(k, "block"), _route(routes.get(k, "block"), POS[k]))
+        skill_routes = {k: (routes.get(k, "block"), _route(routes.get(k, "block"), pos[k]))
                         for k in SKILL}
         target = _open_receiver(skill_routes, defense, primary)   # offene Anspielstation
         for k in SKILL:
             rname, r = skill_routes[k]
             is_target = (k == target)
-            offense.append({"pos": k, "x": POS[k][0], "y": POS[k][1],
+            offense.append({"pos": k, "x": pos[k][0], "y": pos[k][1],
                             "route": r, "rname": rname, "target": is_target})
             if is_target:
                 ball_target = r[-1]
         kind = "pass"
     else:
-        run = _run_path(concept)
+        run = _run_path(concept, pos["RB"])
         # RB läuft den Pfad, andere Skill-Spieler blocken/stehen
         for k in SKILL:
             if k == "RB":
-                offense.append({"pos": "RB", "x": POS[k][0], "y": POS[k][1],
+                offense.append({"pos": "RB", "x": pos[k][0], "y": pos[k][1],
                                 "route": run["path"], "rname": "run", "carry": True})
             else:
-                offense.append({"pos": k, "x": POS[k][0], "y": POS[k][1], "route": None})
+                offense.append({"pos": k, "x": pos[k][0], "y": pos[k][1], "route": None})
         ball_target = run["path"][-1]
         kind = "run"
 
     return {
-        "concept": concept, "coverage": coverage, "kind": kind,
+        "concept": concept, "coverage": coverage, "kind": kind, "formation": fname,
         "coverage_label": COVERAGES[coverage]["label"],
         "offense": offense, "defense": defense,
         "ball_target": ball_target, "width": W,
