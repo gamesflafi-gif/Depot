@@ -14,8 +14,10 @@ import os
 import random
 from dataclasses import dataclass
 
+import numpy as np
+
 from gridiron.config import Config
-from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS, simulate
+from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS, play_outcome, simulate
 
 # Einheiten (Roster-Gruppen) und ihre Gewichte für Offense-/Defense-Stärke.
 OFF_UNITS = {"QB": 0.34, "OL": 0.30, "WR": 0.20, "RB": 0.16}
@@ -91,15 +93,22 @@ def _rating(units: dict, weights: dict) -> int:
 
 
 def offense(team: dict) -> int:
-    return _rating(team["units"], OFF_UNITS)
+    s = team.get("staff", {})
+    b = _rating(team["units"], OFF_UNITS)
+    return min(99, b + round((s.get("OC", 60) - 60) * 0.30) + round((s.get("HC", 60) - 60) * 0.12))
 
 
 def defense(team: dict) -> int:
-    return _rating(team["units"], DEF_UNITS)
+    s = team.get("staff", {})
+    b = _rating(team["units"], DEF_UNITS)
+    return min(99, b + round((s.get("DC", 60) - 60) * 0.30) + round((s.get("HC", 60) - 60) * 0.12))
 
 
 def overall(team: dict) -> int:
     return round((offense(team) + defense(team)) / 2)
+
+
+STAFF_LABELS = {"HC": "Head Coach", "OC": "Offensive Coordinator", "DC": "Defensive Coordinator"}
 
 
 # --------------------------------------------------------------------------- #
@@ -150,9 +159,11 @@ def _round_robin(n: int) -> list[list[tuple[int, int]]]:
 def _new_team(name: str, abbr: str, color: str, color2: str, base: int,
               rng: random.Random, user: bool = False) -> dict:
     units = {u: max(50, min(95, base + rng.randint(-6, 6))) for u in ALL_UNITS}
+    sb = base if user else base
+    staff = {k: max(50, min(90, sb - 8 + rng.randint(-4, 8))) for k in ("HC", "OC", "DC")}
     return {
         "name": name, "abbr": abbr, "color": color, "color2": color2, "user": user,
-        "units": units,
+        "units": units, "staff": staff, "stadium": 1,
         "off_scheme": "Ausgeglichen" if user else rng.choice(list(OFF_SCHEMES)),
         "def_scheme": "Ausgeglichen" if user else rng.choice(list(DEF_SCHEMES)),
         "w": 0, "l": 0, "t": 0, "pf": 0, "pa": 0,
@@ -303,7 +314,9 @@ def _idx(teams: list[dict], name: str) -> int:
 # --------------------------------------------------------------------------- #
 # Woche / Saison fortschreiben
 # --------------------------------------------------------------------------- #
-def sim_week(cfg: Config, state: dict) -> dict:
+def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
+    """Spielt die aktuelle Woche. user_result: selbst gespieltes Nutzer-Spiel
+    (wird gewertet statt simuliert)."""
     if state["phase"] == "done":
         return {"error": "Saison beendet — starte eine neue Saison."}
     rng = random.Random()
@@ -315,11 +328,16 @@ def sim_week(cfg: Config, state: dict) -> dict:
         pairs = state["schedule"][wk]
         games = []
         for hi, ai in pairs:
-            r, pbp = _decide(teams[hi], teams[ai], rng)
-            _apply(teams[hi], teams[ai], r)
-            games.append(_strip(r))
-            if pbp:
-                user_game = pbp
+            if user_result and (hi == 0 or ai == 0):
+                r = user_result
+                _apply(teams[hi], teams[ai], r)
+                games.append(_strip(r))
+            else:
+                r, pbp = _decide(teams[hi], teams[ai], rng)
+                _apply(teams[hi], teams[ai], r)
+                games.append(_strip(r))
+                if pbp:
+                    user_game = pbp
         state["results"].append({"week": wk + 1, "games": games})
         _earn(state, games)
         state["week"] += 1
@@ -327,7 +345,7 @@ def sim_week(cfg: Config, state: dict) -> dict:
             _start_playoffs(state)
         out = {"phase": "regular", "week": wk + 1, "games": games}
     else:
-        out = _sim_playoff_round(state, rng)
+        out = _sim_playoff_round(state, rng, user_result)
         user_game = out.pop("_user_game", None)
 
     if user_game:
@@ -343,9 +361,10 @@ def _strip(r: dict) -> dict:
 
 
 def _earn(state: dict, games: list[dict]) -> None:
-    user = state["teams"][0]["name"]
+    team = state["teams"][0]
+    user = team["name"]
     g = next((x for x in games if user in (x["home"], x["away"])), None)
-    income = 6
+    income = 6 + 2 * (team.get("stadium", 1) - 1)            # Stadion bringt Mehreinnahmen
     if g:
         income += 10 if g["winner"] == user else 3
     state["budget"] += income
@@ -370,11 +389,15 @@ def _start_playoffs(state: dict) -> None:
                         "final": None}
 
 
-def _sim_playoff_round(state: dict, rng: random.Random) -> dict:
+def _sim_playoff_round(state: dict, rng: random.Random, user_result: dict | None = None) -> dict:
     teams = state["teams"]
     po = state["playoff"]
+    user = teams[0]["name"]
     games, user_game = [], None
     for hn, an in po["pairs"]:
+        if user_result and user in (hn, an):
+            games.append(_strip(user_result))
+            continue
         r, pbp = _decide(teams[_idx(teams, hn)], teams[_idx(teams, an)], rng)
         games.append(_strip(r))
         if pbp:
@@ -413,6 +436,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["champion"] = None
     state["results"] = []
     state["last_user_game"] = None
+    state["active_game"] = None
     state["schedule"] = _round_robin(len(state["teams"]))
     state["budget"] += 20                                 # Saisonbudget
     save(cfg, state)
@@ -426,21 +450,38 @@ def upgrade_cost(level: int) -> int:
     return max(5, round((level - 50) * 0.6) + 5)
 
 
-def upgrade_unit(cfg: Config, state: dict, unit: str) -> dict:
-    if unit not in ALL_UNITS:
-        return {"error": "Unbekannte Einheit."}
+def upgrade_unit(cfg: Config, state: dict, key: str) -> dict:
+    """Verbessert Einheit (Kader), Trainerstab (HC/OC/DC) oder Stadion."""
     team = state["teams"][0]
-    lvl = team["units"][unit]
-    if lvl >= 95:
-        return {"error": f"{UNIT_LABELS[unit]} ist bereits auf Maximum (95)."}
+    if key in ALL_UNITS:
+        store, cap, label = team["units"], 95, UNIT_LABELS[key]
+    elif key in STAFF_LABELS:
+        team.setdefault("staff", {"HC": 60, "OC": 60, "DC": 60})
+        store, cap, label = team["staff"], 95, STAFF_LABELS[key]
+    elif key == "stadium":
+        lvl = team.get("stadium", 1)
+        if lvl >= 5:
+            return {"error": "Stadion ist bereits auf Maximum (Stufe 5)."}
+        cost = 18 + (lvl - 1) * 14
+        if state["budget"] < cost:
+            return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
+        team["stadium"] = lvl + 1
+        state["budget"] -= cost
+        save(cfg, state)
+        return {"ok": True, "unit": "stadium", "level": team["stadium"], "cost": cost,
+                "budget": state["budget"]}
+    else:
+        return {"error": "Unbekannte Verbesserung."}
+    lvl = store[key]
+    if lvl >= cap:
+        return {"error": f"{label} ist bereits auf Maximum ({cap})."}
     cost = upgrade_cost(lvl)
     if state["budget"] < cost:
         return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
-    team["units"][unit] = min(95, lvl + 2)
+    store[key] = min(cap, lvl + 2)
     state["budget"] -= cost
     save(cfg, state)
-    return {"ok": True, "unit": unit, "level": team["units"][unit], "cost": cost,
-            "budget": state["budget"]}
+    return {"ok": True, "unit": key, "level": store[key], "cost": cost, "budget": state["budget"]}
 
 
 def set_scheme(cfg: Config, state: dict, off_scheme: str | None, def_scheme: str | None) -> dict:
@@ -487,6 +528,12 @@ def view(state: dict) -> dict:
         "units": [{"key": u, "label": UNIT_LABELS[u], "level": team["units"][u],
                    "cost": upgrade_cost(team["units"][u]), "side": "Offense" if u in OFF_UNITS else "Defense"}
                   for u in ALL_UNITS],
+        "staff": [{"key": k, "label": STAFF_LABELS[k], "level": team.get("staff", {}).get(k, 60),
+                   "cost": upgrade_cost(team.get("staff", {}).get(k, 60))} for k in ("HC", "OC", "DC")],
+        "stadium": {"level": team.get("stadium", 1),
+                    "cost": 18 + (team.get("stadium", 1) - 1) * 14,
+                    "income": 6 + 2 * (team.get("stadium", 1) - 1)},
+        "active_game": bool(state.get("active_game")),
         "scheme": {"off": team.get("off_scheme", "Ausgeglichen"),
                    "def": team.get("def_scheme", "Ausgeglichen")},
         "off_schemes": {k: OFF_SCHEMES[k] for k in OFF_SCHEMES},
@@ -498,4 +545,189 @@ def view(state: dict) -> dict:
         "n_weeks": len(state["schedule"]),
         "history": state["history"],
         "has_last_game": bool(state.get("last_user_game")),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Interaktiver Spielmodus (selbst Plays callen)
+# --------------------------------------------------------------------------- #
+MAX_DRIVES = 12
+_RNG = np.random.default_rng()
+
+
+def _user_pair(state: dict):
+    """(home_idx, away_idx) des aktuellen Nutzer-Spiels oder None."""
+    teams = state["teams"]
+    if state["phase"] == "regular" and state["week"] < len(state["schedule"]):
+        for hi, ai in state["schedule"][state["week"]]:
+            if hi == 0 or ai == 0:
+                return hi, ai
+    elif state["phase"] == "playoffs" and state.get("playoff"):
+        user = teams[0]["name"]
+        for hn, an in state["playoff"]["pairs"]:
+            if user in (hn, an):
+                return _idx(teams, hn), _idx(teams, an)
+    return None
+
+
+def start_game(cfg: Config, state: dict) -> dict:
+    if state.get("active_game"):
+        return {"ok": True, "game": _game_view(state)}
+    pair = _user_pair(state)
+    if not pair:
+        return {"error": "Diese Woche kein Nutzer-Spiel."}
+    hi, ai = pair
+    teams = state["teams"]
+    pos = 0 if random.random() < 0.5 else 1
+    g = {
+        "hi": hi, "ai": ai, "user_is_home": hi == 0,
+        "score": [0, 0], "pos": pos, "drive": 0, "q": 1,
+        "down": 1, "dist": 10, "ytz": 75.0,
+        "absx": 25.0 if pos == 0 else 75.0,
+        "log": [], "over": False,
+    }
+    state["active_game"] = g
+    save(cfg, state)
+    return {"ok": True, "game": _game_view(state)}
+
+
+def _scheme_pick(team: dict, off: bool) -> str:
+    pool = OFF_SCHEMES.get(team.get("off_scheme", "Ausgeglichen"), list(PASS_CONCEPTS)) if off \
+        else DEF_SCHEMES.get(team.get("def_scheme", "Ausgeglichen"), list(COVERAGES))
+    return random.choice(pool)
+
+
+def game_play(cfg: Config, state: dict, choice: str) -> dict:
+    g = state.get("active_game")
+    if not g or g["over"]:
+        return {"error": "Kein laufendes Spiel."}
+    teams = state["teams"]
+    off_i = g["hi"] if g["pos"] == 0 else g["ai"]
+    def_i = g["ai"] if g["pos"] == 0 else g["hi"]
+    off, deff = teams[off_i], teams[def_i]
+    user_has_ball = (g["pos"] == 0) == g["user_is_home"]
+
+    if user_has_ball:
+        if choice not in PASS_CONCEPTS and choice not in RUN_CONCEPTS:
+            return {"error": "Unbekanntes Konzept."}
+        concept, coverage = choice, _scheme_pick(deff, off=False)
+    else:
+        if choice not in COVERAGES:
+            return {"error": "Unbekannte Coverage."}
+        coverage, concept = choice, _scheme_pick(off, off=True)
+
+    o = play_outcome(concept, coverage,
+                     {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
+    yards = max(-12, min(o["yards"], int(g["ytz"])))
+    attack_right = (g["pos"] == 0)
+    g["absx"] = max(0.0, min(100.0, g["absx"] + (yards if attack_right else -yards)))
+    label = _play_label(concept, o, yards)
+    scored = False
+    switch = True
+
+    if o["turnover"]:
+        pass                                              # Ballverlust -> anderes Team
+    elif g["ytz"] - yards <= 0:
+        g["score"][g["pos"]] += 7
+        g["absx"] = 100.0 if attack_right else 0.0
+        label = "TOUCHDOWN! " + off["name"]
+        scored = True
+    else:
+        g["ytz"] -= yards
+        g["dist"] -= yards
+        if g["dist"] <= 0:
+            g["down"], g["dist"] = 1, 10
+            label += " — First Down"
+            switch = False
+        else:
+            g["down"] += 1
+            if g["down"] > 4:
+                if g["ytz"] <= 22 and random.random() < 0.82:
+                    g["score"][g["pos"]] += 3
+                    label = "Field Goal gut (3)"
+                    scored = True
+                else:
+                    label = "4th Down vergeben" if g["ytz"] > 22 else "Field Goal daneben"
+            else:
+                switch = False
+
+    g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
+                        "hs": g["score"][0], "as_": g["score"][1],
+                        "off": user_has_ball, "yards": yards})
+
+    if switch:
+        g["pos"] ^= 1
+        g["drive"] += 1
+        g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
+        g["down"], g["dist"], g["ytz"] = 1, 10, 75.0
+        g["absx"] = 25.0 if g["pos"] == 0 else 75.0
+        if g["drive"] >= MAX_DRIVES:
+            g["over"] = True
+
+    save(cfg, state)
+    return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored,
+                                 "kind": o["kind"]}, "game": _game_view(state)}
+
+
+def _play_label(concept: str, o: dict, yards: int) -> str:
+    if o["kind"] == "sack":
+        return f"Sack! {yards}"
+    if o["kind"] == "int":
+        return "Interception!"
+    if o["kind"] == "incomplete":
+        return "Pass unvollständig"
+    if o["kind"] == "complete":
+        return f"{concept}: Fang über {yards}" if not o["turnover"] else "Fumble nach Fang!"
+    return f"{concept}: Lauf {'+' if yards >= 0 else ''}{yards}" if not o["turnover"] else "Fumble!"
+
+
+def finish_game(cfg: Config, state: dict) -> dict:
+    """Wertet das selbst gespielte Spiel und schließt die Woche ab."""
+    g = state.get("active_game")
+    if not g:
+        return {"error": "Kein Spiel aktiv."}
+    if not g["over"]:
+        return {"error": "Spiel läuft noch."}
+    teams = state["teams"]
+    home, away = teams[g["hi"]], teams[g["ai"]]
+    hs, as_ = g["score"][0], g["score"][1]
+    while hs == as_:
+        hs += 3 if random.random() < 0.5 else 0
+        as_ += 3 if hs == as_ else 0
+    result = {"home": home["name"], "away": away["name"], "hs": hs, "as": as_,
+              "winner": home["name"] if hs > as_ else away["name"]}
+    state["active_game"] = None
+    out = sim_week(cfg, state, user_result=result)
+    return {"ok": True, "result": result, "advance": out, "view": view(state)}
+
+
+def abort_game(cfg: Config, state: dict) -> dict:
+    state["active_game"] = None
+    save(cfg, state)
+    return {"ok": True}
+
+
+def _game_view(state: dict) -> dict:
+    g = state["active_game"]
+    teams = state["teams"]
+    home, away = teams[g["hi"]], teams[g["ai"]]
+    off_i = g["hi"] if g["pos"] == 0 else g["ai"]
+    user_has_ball = (g["pos"] == 0) == g["user_is_home"]
+    if user_has_ball:
+        opts = [{"key": k, "label": (PASS_CONCEPTS.get(k) or RUN_CONCEPTS[k])["label"],
+                 "type": "Pass" if k in PASS_CONCEPTS else "Lauf"}
+                for k in OFF_SCHEMES.get(teams[0].get("off_scheme", "Ausgeglichen"), [])]
+    else:
+        opts = [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in COVERAGES]
+    return {
+        "home": home["name"], "away": away["name"],
+        "habbr": home.get("abbr", "HOM"), "aabbr": away.get("abbr", "AWY"),
+        "hcolor": home.get("color", "#16c784"), "acolor": away.get("color", "#ef5350"),
+        "hs": g["score"][0], "as": g["score"][1], "q": g["q"],
+        "down": g["down"], "dist": g["dist"], "ytz": round(g["ytz"]), "absx": round(g["absx"], 1),
+        "drive": g["drive"], "max_drives": MAX_DRIVES, "over": g["over"],
+        "possession": teams[off_i]["name"], "user_offense": user_has_ball,
+        "awaiting": "offense" if user_has_ball else "defense",
+        "options": opts, "log": g["log"][:12],
+        "user_is_home": g["user_is_home"],
     }

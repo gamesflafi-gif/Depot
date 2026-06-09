@@ -132,6 +132,9 @@ class SimResult:
     turnover_rate: float
     sack_rate: float
     expected_epa: float
+    completion_rate: float = 0.0
+    int_rate: float = 0.0
+    outcomes: list[dict] = field(default_factory=list)
     hist: list[dict] = field(default_factory=list)
     verdict: str = ""
     note: str = ""
@@ -196,6 +199,54 @@ def _run_matchup(concept: dict, cov: dict, box: int) -> float:
     return float(np.clip(f, 0.6, 1.5))
 
 
+def _pass_params(c: dict, cov: dict):
+    """Wahrscheinlichkeiten eines Pass-Konzepts gegen die Coverage.
+    Liefert (Matchup-Faktor, Tiefenband, Completion-, Sack-, Int-Wahrsch.)."""
+    mf = _pass_matchup(c, cov)
+    band = _depth_band(c["depth"])
+    comp_base = {"screen": 0.86, "short": 0.71, "inter": 0.60, "deep": 0.46}[band]
+    comp_p = float(np.clip(comp_base + 0.20 * (mf - 1.0), 0.20, 0.93))
+    sack_p = float(np.clip(0.055 + 0.10 * cov["blitz"] * (2.0 - c["beats_blitz"]), 0.01, 0.22))
+    int_p = float(np.clip(0.018 + 0.020 * (1 - comp_p) * (1.6 if band == "deep" else 1.0), 0.005, 0.07))
+    return mf, band, comp_p, sack_p, int_p
+
+
+def play_outcome(concept: str, coverage: str, situation: dict,
+                 rng: np.random.Generator, rates: BaseRates | None = None) -> dict:
+    """Ein einzelner, gezogener Spielzug (für den interaktiven Spielmodus).
+    Liefert realisierte Yards + Ergebnis-Art (Completion/Incomplete/Sack/INT/Lauf)."""
+    rates = rates or BaseRates()
+    cov = COVERAGES[coverage]
+    is_pass = concept in PASS_CONCEPTS
+    if is_pass:
+        c = PASS_CONCEPTS[concept]
+        mf, band, comp_p, sack_p, int_p = _pass_params(c, cov)
+        u = rng.random()
+        if u < sack_p:
+            return {"yards": -int(rng.integers(4, 10)), "kind": "sack", "turnover": False, "pass": True}
+        if u < sack_p + int_p:
+            return {"yards": 0, "kind": "int", "turnover": True, "pass": True}
+        if rng.random() < comp_p:
+            air = c["depth"] + rng.normal(0, _AIR_SPREAD[band])
+            yac = rng.gamma(1.6, ({"screen": 8.0, "short": 4.5, "inter": 3.0, "deep": 2.2}[band] * mf) / 1.6)
+            fum = rng.random() < 0.012
+            return {"yards": max(int(round(air + yac)) - (3 if fum else 0), -2),
+                    "kind": "complete", "turnover": fum, "pass": True}
+        return {"yards": 0, "kind": "incomplete", "turnover": False, "pass": True}
+    # Lauf
+    c = RUN_CONCEPTS[concept]
+    box = _box_for(coverage, str(situation.get("personnel", "11")))
+    mf = _run_matchup(c, cov, box)
+    mean_target = max(rates.run_yards_mean * mf, 1.0)
+    y = rng.gamma(2.6, (mean_target + 1.6) / 2.6) - 1.6
+    if rng.random() < 0.05 * c["expl"] * mf:
+        y += int(rng.integers(8, 45))
+    if rng.random() < 0.08 / mf:
+        y = -int(rng.integers(1, 4))
+    fum = rng.random() < 0.011
+    return {"yards": int(round(y)), "kind": "run", "turnover": fum, "pass": False}
+
+
 # --------------------------------------------------------------------------- #
 # Simulation
 # --------------------------------------------------------------------------- #
@@ -221,14 +272,7 @@ def simulate(cfg: Config | None, concept: str, coverage: str, situation: dict,
 
     if is_pass:
         c = PASS_CONCEPTS[concept]
-        mf = _pass_matchup(c, cov)
-        band = _depth_band(c["depth"])
-        # Completion-Basis je Tiefe (NFL-realistisch), durch Matchup moduliert.
-        comp_base = {"screen": 0.86, "short": 0.71, "inter": 0.60, "deep": 0.46}[band]
-        comp_p = float(np.clip(comp_base + 0.20 * (mf - 1.0), 0.20, 0.93))
-        # Pressure: Blitz erhöht Sack-Risiko, Quick-Game/Screen senkt es
-        sack_p = float(np.clip(0.055 + 0.10 * cov["blitz"] * (2.0 - c["beats_blitz"]), 0.01, 0.22))
-        int_p = float(np.clip(0.018 + 0.020 * (1 - comp_p) * (1.6 if band == "deep" else 1.0), 0.005, 0.07))
+        mf, band, comp_p, sack_p, int_p = _pass_params(c, cov)
 
         u = rng.random(n)
         sack = u < sack_p
@@ -277,6 +321,28 @@ def simulate(cfg: Config | None, concept: str, coverage: str, situation: dict,
     succ = float(success.mean())
     expl = float(explosive.mean())
     to_rate = float(turnover.mean())
+
+    # Ergebnis-Aufschlüsselung (für die visuelle Darstellung)
+    if is_pass:
+        comp_rate = float(complete.mean())
+        int_rate = float(intc.mean())
+        sack_rate = float(sack.mean())
+        incomp = max(0.0, 1.0 - comp_rate - int_rate - sack_rate)
+        outcomes = [{"label": "Completion", "pct": round(comp_rate, 4), "cls": "ok"},
+                    {"label": "Incomplete", "pct": round(incomp, 4), "cls": "mid"},
+                    {"label": "Sack", "pct": round(sack_rate, 4), "cls": "warn"},
+                    {"label": "Interception", "pct": round(int_rate, 4), "cls": "bad"}]
+    else:
+        comp_rate = 0.0
+        int_rate = 0.0
+        sack_rate = 0.0
+        stuff = float((yards <= 0).mean())
+        big = float((yards >= 10).mean())
+        mid = max(0.0, 1.0 - stuff - big - to_rate)
+        outcomes = [{"label": "Raumgewinn", "pct": round(mid, 4), "cls": "ok"},
+                    {"label": "Big Run", "pct": round(big, 4), "cls": "ok2"},
+                    {"label": "Stuff (≤0)", "pct": round(stuff, 4), "cls": "warn"},
+                    {"label": "Fumble", "pct": round(to_rate, 4), "cls": "bad"}]
     # EPA-Schätzung: Basis + Abweichung von Erfolg/Big-Play - Turnover-Strafe
     epa = (base_epa + 1.6 * (succ - base_succ) + 2.2 * (expl - base_expl)
            - 4.0 * to_rate + 0.012 * (mean_y - (rates.pass_yards_mean if is_pass else rates.run_yards_mean)))
@@ -289,7 +355,8 @@ def simulate(cfg: Config | None, concept: str, coverage: str, situation: dict,
         success_rate=round(succ, 4), explosive_rate=round(expl, 4),
         td_rate=round(float(td.mean()), 4), turnover_rate=round(to_rate, 4),
         sack_rate=round(float(sack.mean()), 4), expected_epa=round(epa, 3),
-        hist=hist, note=c["note"], matchup_factor=round(mf, 2))
+        completion_rate=round(comp_rate, 4), int_rate=round(int_rate, 4),
+        outcomes=outcomes, hist=hist, note=c["note"], matchup_factor=round(mf, 2))
     res.verdict = _verdict(res)
     return res
 

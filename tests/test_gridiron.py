@@ -264,6 +264,66 @@ def test_franchise_detailed_game(tmp_path):
     assert len(dia["offense"]) == 11
 
 
+def test_simulator_outcomes_and_sampler():
+    from gridiron.simulator import simulate, play_outcome
+    import numpy as np
+    r = simulate(None, "Four Verts", "Cover 0", {"down": 3, "ydstogo": 8, "yardline_100": 60})
+    assert abs(sum(o["pct"] for o in r.outcomes) - 1.0) < 0.02
+    assert 0 <= r.completion_rate <= 1 and 0 <= r.int_rate <= 1 and r.sack_rate > 0
+    rng = np.random.default_rng(0)
+    kinds = set()
+    for _ in range(400):
+        kinds.add(play_outcome("Four Verts", "Cover 0", {"yardline_100": 60}, rng)["kind"])
+    assert {"complete", "incomplete"} & kinds
+
+
+def test_franchise_upgrades_staff_stadium(tmp_path):
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    st["budget"] = 200
+    ov0 = F.overall(st["teams"][0])
+    assert F.upgrade_unit(cfg, st, "OC")["ok"]
+    assert F.upgrade_unit(cfg, st, "DC")["ok"]
+    assert F.overall(st["teams"][0]) >= ov0                     # Coaches heben OVR
+    s = F.upgrade_unit(cfg, st, "stadium")
+    assert s["ok"] and s["level"] == 2
+    assert F.upgrade_unit(cfg, st, "quatsch").get("error")
+
+
+def test_franchise_interactive_game(tmp_path):
+    """Selbst spielen: Plays callen bis Spielende, Ergebnis wird gewertet."""
+    import random
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=5)
+    g = F.start_game(cfg, st)["game"]
+    assert g["awaiting"] in ("offense", "defense") and g["options"]
+    guard = 0
+    while not g["over"] and guard < 300:
+        g = F.game_play(cfg, st, g["options"][0]["key"])["game"]
+        guard += 1
+    assert g["over"] and g["drive"] >= F.MAX_DRIVES
+    fin = F.finish_game(cfg, st)
+    assert fin["ok"] and fin["view"]["week"] == 1            # Woche fortgeschritten
+    assert not F.load(cfg).get("active_game")                # Spiel abgeschlossen
+    # Selbst-Ergebnis steht in der Tabelle (Bilanz Summe 1 Spiel)
+    me = next(t for t in fin["view"]["standings"] if t["user"])
+    assert me["w"] + me["l"] == 1
+
+
+def test_franchise_game_web(tmp_path):
+    from fastapi.testclient import TestClient
+    from gridiron.web import create_app
+    client = TestClient(create_app(_cfg(tmp_path)))
+    client.post("/api/fr/new", params={"team": "FC", "teams": 6})
+    g = client.post("/api/fr/game/start").json()["game"]
+    assert g["options"]
+    r = client.post("/api/fr/game/play", params={"choice": g["options"][0]["key"]}).json()
+    assert r["ok"] and "game" in r
+    assert client.post("/api/fr/upgrade", params={"unit": "HC"}).json()["result"]
+
+
 def test_web_predict_without_model(tmp_path):
     """Ohne trainiertes Modell antwortet /api/predict sauber mit 503."""
     from fastapi.testclient import TestClient
