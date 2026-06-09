@@ -172,7 +172,7 @@ def test_franchise_full_season(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Berlin Adler", n_teams=8, difficulty="normal", seed=1)
-    assert len(st["teams"]) == 8 and len(st["schedule"]) == 7
+    assert len(st["teams"]) == 8 and len(st["schedule"]) == 8 and [] in st["schedule"]  # 7 Spiele + 1 Bye
     assert st["teams"][0]["user"] and st["teams"][0]["name"] == "Berlin Adler"
 
     # Upgrade hebt die Stufe, kostet Budget
@@ -275,6 +275,24 @@ def test_simulator_outcomes_and_sampler():
     for _ in range(400):
         kinds.add(play_outcome("Four Verts", "Cover 0", {"yardline_100": 60}, rng)["kind"])
     assert {"complete", "incomplete"} & kinds
+
+
+def test_franchise_weekly_training(tmp_path):
+    """1× Training pro Woche, Bye-Week, Film-Bonus, Reset bei Wochenwechsel."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=5)
+    assert st["week_trained"] is False and [] in st["schedule"]      # Bye vorhanden
+    assert F.do_training(cfg, st, "team")["ok"] and st["week_trained"] is True
+    assert F.do_training(cfg, st, "team").get("error")               # nur 1× pro Woche
+    F.sim_week(cfg, st)
+    assert st["week_trained"] is False                               # neue Woche -> wieder möglich
+    F.do_training(cfg, st, "film")
+    assert st["teams"][0]["game_bonus"] > 0
+    F.sim_week(cfg, st)
+    assert st["teams"][0]["game_bonus"] == 0                         # Bonus verbraucht
+    v = F.view(st)
+    assert len(v["trainings"]) >= 6 and "week_trained" in v and "is_bye" in v
 
 
 def test_franchise_game_sim_options(tmp_path):
