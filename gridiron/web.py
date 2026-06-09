@@ -149,11 +149,22 @@ _STYLE2 = """
  .pbadge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;min-width:30px;text-align:center;flex:none}
  .pb-td{background:#16c784;color:#04140c}.pb-fg{background:#5fa8ff;color:#04121f}
  .pb-fd{background:#2c3a34;color:#d6efe4}.pb-to{background:#ef5350;color:#240606}.pb-pl{background:#1a221e;color:var(--mut)}
+ .obar{display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid var(--line);margin-top:2px}
+ .oseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#06140d;min-width:0}
+ .o-ok{background:#16c784}.o-ok2{background:#0e9f6a;color:#eafff5}.o-mid{background:#3a4a44;color:#d6efe4}
+ .o-warn{background:#e9b949}.o-bad{background:#ef5350;color:#fff}
  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
  .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
  .livedot{width:8px;height:8px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
  .modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+ /* Interaktiver Spielmodus */
+ .dd{display:flex;justify-content:space-between;align-items:center;background:#0a0f0d;border:1px solid var(--line);border-radius:9px;padding:10px 14px;margin:10px 0;font-weight:700;font-variant-numeric:tabular-nums}
+ .posbanner{padding:10px 13px;border-radius:9px;margin:10px 0;font-weight:700;font-size:14px}
+ .posbanner.off{background:var(--accsoft);color:#4be3a0}.posbanner.def{background:#2c1c12;color:#eaa877}
+ .optgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:6px 0 4px}
+ .optbtn{padding:11px 13px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:9px;cursor:pointer;text-align:left;font-weight:700;transition:border-color .12s}
+ .optbtn:hover{border-color:var(--acc)} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -349,6 +360,7 @@ async function initSim(){
  simReady=true; runSim();
 }
 function kpi(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';}
+function segCol(cls){return {ok:'#16c784',ok2:'#0e9f6a',mid:'#3a4a44',warn:'#e9b949',bad:'#ef5350'}[cls]||'#3a4a44';}
 async function runSim(){
  const c=$('sim_c').value,cov=$('sim_cov').value;
  const qs='concept='+encodeURIComponent(c)+'&coverage='+encodeURIComponent(cov)+'&'+simSit('sim_');
@@ -361,8 +373,15 @@ async function runSim(){
    kpi('Ø Yards',r.mean_yards.toFixed(1))+kpi('Erfolgsrate',pct(r.success_rate))+
    kpi('Big Play',pct(r.explosive_rate))+kpi('Touchdown',pct(r.td_rate))+
    kpi('Turnover',pct(r.turnover_rate))+kpi('Sack',pct(r.sack_rate))+
-   kpi('Ø EPA',sgn(r.expected_epa))+kpi('Matchup-Faktor','×'+r.matchup_factor.toFixed(2))+
-   '</div><div class="sec">Ertragsverteilung (Yards)</div>';
+   (r.is_pass?kpi('Completion',pct(r.completion_rate))+kpi('Interception',pct(r.int_rate)):kpi('Ø EPA',sgn(r.expected_epa)))+
+   kpi('Matchup','×'+r.matchup_factor.toFixed(2))+
+   '</div>';
+ // Ergebnis-Wahrscheinlichkeiten (Stacked Bar)
+ h+='<div class="sec">Ergebnis-Wahrscheinlichkeiten</div><div class="obar">';
+ r.outcomes.forEach(o=>{if(o.pct>0.004)h+='<div class="oseg o-'+o.cls+'" style="width:'+(o.pct*100)+'%">'+(o.pct>=0.09?Math.round(o.pct*100)+'%':'')+'</div>';});
+ h+='</div><div class="fieldlegend" style="margin-top:7px">'+
+   r.outcomes.map(o=>'<span><i class="dot" style="background:'+segCol(o.cls)+'"></i>'+esc(o.label)+' '+pct(o.pct)+'</span>').join('')+'</div>';
+ h+='<div class="sec">Ertragsverteilung (Yards)</div>';
  const mx=Math.max(...r.hist.map(b=>b.pct))||1;
  r.hist.forEach(b=>{h+='<div class="hbar"><div class="lab">'+esc(b.label)+'</div>'+
    '<div class="tr"><div class="fl" style="width:'+(b.pct/mx*100)+'%"></div></div>'+
@@ -528,7 +547,9 @@ function renderMgr(v){
    'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';}
  if(v.phase==='playoffs'&&v.playoff){h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
    v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';}
- if(v.phase!=='done')h+='<button onclick="simWeek()">Woche simulieren</button> ';
+ if(v.active_game)h+='<button onclick="resumeGame()">Spiel fortsetzen</button> ';
+ else if(v.phase!=='done'){h+='<button onclick="startGame()">Selbst spielen</button> '+
+   '<button class="ghost" onclick="simWeek()">Simulieren</button> ';}
  else h+='<button onclick="newSeason()">Neue Saison</button> ';
  if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Letztes Spiel ansehen</button> ';
  h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
@@ -536,11 +557,19 @@ function renderMgr(v){
  h+='</div>';
 
  // Team-Aufbau
+ const upRow=(key,label,sub,level,cost,maxed)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
+   '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>+'+(key==='stadium'?'1':'2')+' ('+cost+' Mio)</button></div>';
  h+='<div class="grid" style="grid-template-columns:1fr 1fr">';
- h+='<div class="card"><div class="sec" style="margin-top:0">Kader verbessern (Budget: '+v.budget+' Mio)</div>';
- v.units.forEach(u=>{h+='<div class="reco"><span><b>'+esc(u.label)+'</b> <span class="mut">'+u.side+'</span> — Stufe '+u.level+'</span>'+
-   '<button data-u="'+esc(u.key)+'" onclick="upg(this.dataset.u)" '+(v.budget<u.cost||u.level>=95?'disabled':'')+'>+2 ('+u.cost+' Mio)</button></div>';});
+ h+='<div class="card"><div class="sec" style="margin-top:0">Kader (Budget: '+v.budget+' Mio)</div>';
+ v.units.forEach(u=>{h+=upRow(u.key,u.label,u.side,u.level,u.cost,u.level>=95);});
  h+='</div>';
+ h+='<div class="card"><div class="sec" style="margin-top:0">Trainerstab</div>';
+ v.staff.forEach(s=>{h+=upRow(s.key,s.label,'',s.level,s.cost,s.level>=95);});
+ h+='<div class="note">OC hebt die Offense, DC die Defense, Head Coach beides.</div></div>';
+ h+='</div>';
+ // Anlagen
+ h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen</div>'+
+   upRow('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Woche',v.stadium.level,v.stadium.cost,v.stadium.level>=5)+'</div>';
  // Team-Schema
  const offk=Object.keys(v.off_schemes),defk=Object.keys(v.def_schemes);
  h+='<div class="card"><div class="sec" style="margin-top:0">Team-Schema</div><div class="controls">'+
@@ -549,7 +578,6 @@ function renderMgr(v){
    '<button onclick="setScheme()">Übernehmen</button></div>'+
    '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+
    '<br>Dein Schema wirkt über das ganze Spiel und trifft auf das Schema des Gegners.</div></div>';
- h+='</div>';
 
  // Tabelle
  h+='<div class="card scroll"><div class="sec" style="margin-top:0">Tabelle</div><table class="tbl"><tr>'+
@@ -620,6 +648,41 @@ function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const 
  if(g.plays.length)$('bc_ball').style.left=bcBallLeft(g.plays[g.plays.length-1].x);
  const feed=$('bc_feed');feed.innerHTML='';g.plays.slice().reverse().forEach(p=>feed.appendChild(cmtRow(p)));}
 function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();}
+
+/* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
+let liveG=null;
+async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
+async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
+function openGame(g){closeGame();liveG=g;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
+ o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);renderGame(g);}
+function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div class="yl" style="left:'+p+'%"></div>';
+ const lab=(p===50?'50':(p<50?p:100-p));t+='<div class="yn" style="left:'+p+'%">'+lab+'</div><div class="yn b" style="left:'+p+'%">'+lab+'</div>';});
+ return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
+function renderGame(g,play){
+ let h='<div class="modalhead"><h3><span class="livedot"></span> Dein Spiel</h3>'+
+   '<button class="ghost" onclick="abortGame()">Verlassen</button></div>'+
+   '<div class="tvscore">'+
+     '<div class="tvteam" style="--tc:'+esc(g.acolor)+'"><span class="ab">'+esc(g.aabbr)+'</span><span class="nm">'+esc(g.away)+'</span></div>'+
+     '<div class="tvpts">'+g['as']+'</div>'+
+     '<div class="tvmid"><div class="qn">Q'+g.q+'</div><div class="sub">Drive '+g.drive+'/'+g.max_drives+'</div></div>'+
+     '<div class="tvpts">'+g.hs+'</div>'+
+     '<div class="tvteam r" style="--tc:'+esc(g.hcolor)+'"><span class="nm">'+esc(g.home)+'</span><span class="ab">'+esc(g.habbr)+'</span></div>'+
+   '</div>'+
+   '<div class="tvfield"><div class="ez" style="background:'+esc(g.acolor)+'">'+esc(g.aabbr)+'</div>'+
+     gameTurf(g)+'<div class="ez" style="background:'+esc(g.hcolor)+'">'+esc(g.habbr)+'</div></div>'+
+   '<div class="dd"><span>'+g.down+'. &amp; '+g.dist+'</span><span class="mut">noch '+g.ytz+' Yd bis TD · Ball: '+esc(g.possession)+'</span></div>';
+ if(play)h+='<div class="reco'+(play.scored?' win':'')+'"><span>'+esc(play.desc)+'</span><span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span></div>';
+ if(g.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(g.away)+' '+g['as']+' : '+g.hs+' '+esc(g.home)+'</div>'+
+   '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
+ else{h+='<div class="posbanner '+(g.user_offense?'off':'def')+'">'+(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:')+'</div>'+
+   '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>';}
+ h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
+ $('gamemodal').innerHTML=h;
+}
+async function gamePlay(choice){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}closeGame();if(r.view)renderMgr(r.view);}
+async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
+function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 init();
@@ -846,6 +909,38 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         from gridiron import franchise as F
         st = F.load(cfg)
         return {"game": (st.get("last_user_game") if st else None)}
+
+    @app.post("/api/fr/game/start")
+    def fr_game_start():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.start_game(cfg, st)
+
+    @app.post("/api/fr/game/play")
+    def fr_game_play(choice: str):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.game_play(cfg, st, choice)
+
+    @app.post("/api/fr/game/finish")
+    def fr_game_finish():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.finish_game(cfg, st)
+
+    @app.post("/api/fr/game/abort")
+    def fr_game_abort():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.abort_game(cfg, st)
 
     @app.post("/api/fr/reset")
     def fr_reset():
