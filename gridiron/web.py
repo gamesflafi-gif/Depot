@@ -19,8 +19,8 @@ from gridiron.tendencies import scout
 log = logging.getLogger(__name__)
 
 _STYLE = """
- :root{--bg:#0a0e0d;--panel:#111715;--panel2:#161e1b;--fg:#eaf0ed;--mut:#8d9d97;
-   --line:#222b28;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
+ :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
+   --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
  *{box-sizing:border-box}
  body{margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;
    font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
@@ -45,13 +45,13 @@ _STYLE = """
    font-weight:700;cursor:pointer;font-size:14.5px;transition:filter .12s,transform .04s}
  button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
  button[disabled]{opacity:.35;cursor:not-allowed;filter:none}
- button.ghost{background:transparent;color:var(--mut);border:1px solid var(--line)}
- button.ghost:hover{color:var(--fg);border-color:var(--mut);filter:none}
+ button.ghost{background:var(--tile);color:var(--fg);border:1px solid #46544e;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+ button.ghost:hover{color:var(--acc);border-color:var(--acc);filter:none}
  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0;
    box-shadow:0 1px 2px rgba(0,0,0,.25)}
  .big{font-size:25px;font-weight:800;letter-spacing:-.01em}
  .row{display:flex;gap:24px;flex-wrap:wrap}
- .kpi{flex:1;min-width:96px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+ .kpi{flex:1;min-width:96px;background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
  .kpi .l{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
  .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px}
  .sec{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--fg);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 11px;font-weight:800}
@@ -206,8 +206,8 @@ _STYLE2 = """
  .posbanner{padding:10px 13px;border-radius:9px;margin:10px 0;font-weight:700;font-size:14px}
  .posbanner.off{background:var(--accsoft);color:#4be3a0}.posbanner.def{background:#2c1c12;color:#eaa877}
  .optgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:6px 0 4px}
- .optbtn{padding:11px 13px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:9px;cursor:pointer;text-align:left;font-weight:700;transition:border-color .12s}
- .optbtn:hover{border-color:var(--acc)} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
+ .optbtn{padding:11px 13px;border:1px solid #46544e;background:var(--tile);color:var(--fg);border-radius:9px;cursor:pointer;text-align:left;font-weight:700;transition:border-color .12s,background .12s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+ .optbtn:hover{border-color:var(--acc);background:#2d3a34} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
@@ -1068,7 +1068,9 @@ function renderGame(g,play){
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
- if(play&&play.concept)animateGamePlay(play); else {playBusy=false; showFormation(g);}   // ohne Animation (Kick/Wechsel): sofort wieder spielbar
+ if(play&&play.concept)animateGamePlay(play);
+ else if(play&&play.kind==='fg')animateFG(play);            // Field Goal / Extra-Punkt mit Kick-Animation
+ else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
 }
 function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
 async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
@@ -1080,6 +1082,47 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
  playAnim(svg,d,{kind:play.kind,yards:play.yards},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
+function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
+function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
+ g.appendChild(el('rect',{x:x-72,y:y-19,width:144,height:34,rx:8,fill:'#0a0f0d',stroke:made?'#19e08f':'#ef5350','stroke-width':2}));
+ const t=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':17,fill:made?'#19e08f':'#ef5350','font-weight':800});t.textContent=made?'GUT! +':'KEIN GUT';g.appendChild(t);svg.appendChild(g);}
+function animateFG(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
+ const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
+ const made=!!(play.good!=null?play.good:play.scored), isXP=/Extra/.test(play.desc||''), dist=play.fg_dist||0;
+ const gx1=232,gx2=301,cby=86,postTop=22,stemY=106, snapX=266,losY=292,holdX=252,holdY=312,kickX0=234,kickY0=320;
+ let s='<defs><linearGradient id="fgt_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e4a2d"/><stop offset="1" stop-color="#0b3a22"/></linearGradient></defs>'+
+  '<rect x="0" y="0" width="533" height="360" fill="url(#fgt_'+P+')"/>'+
+  '<rect x="0" y="0" width="533" height="'+(cby+16)+'" fill="'+cols.def+'" opacity="0.18"/>'+
+  '<line x1="0" y1="'+(cby+16)+'" x2="533" y2="'+(cby+16)+'" stroke="#ffffff" stroke-width="2" opacity="0.7"/>'+
+  '<text x="266" y="44" text-anchor="middle" font-size="15" font-weight="800" fill="#cdeede" opacity="0.9">'+(isXP?'Extra-Punkt':(dist?dist+' Yard Field Goal':'Field Goal'))+'</text>'+
+  '<line x1="'+gx1+'" y1="'+cby+'" x2="'+gx2+'" y2="'+cby+'" stroke="#ffd34d" stroke-width="4"/>'+
+  '<line x1="'+gx1+'" y1="'+cby+'" x2="'+gx1+'" y2="'+postTop+'" stroke="#ffd34d" stroke-width="4"/>'+
+  '<line x1="'+gx2+'" y1="'+cby+'" x2="'+gx2+'" y2="'+postTop+'" stroke="#ffd34d" stroke-width="4"/>'+
+  '<line x1="266" y1="'+cby+'" x2="266" y2="'+stemY+'" stroke="#ffd34d" stroke-width="4"/>';
+ for(let i=0;i<5;i++)s+=_fgFig(200+i*33,losY,cols.off);                     // O-Line
+ s+=_fgFig(186,losY+7,cols.off)+_fgFig(346,losY+7,cols.off);               // Wings
+ for(let i=0;i<4;i++)s+=_fgFig(214+i*32,losY-13,cols.def);                 // Rusher
+ s+=_fgFig(250,138,cols.def)+_fgFig(holdX,holdY,cols.off);                 // Returner + Holder
+ s+='<g id="'+P+'_fgk" transform="translate('+kickX0+' '+kickY0+')">'+_fgFig(0,0,cols.off)+'</g>';
+ svg.innerHTML=s;
+ const ball=el('ellipse',{id:P+'_pball',cx:snapX,cy:losY,rx:4,ry:2.5,fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:1});svg.appendChild(ball);
+ const kg=$(P+'_fgk');
+ const endX=made?266:(Math.random()<0.5?gx1-28:gx2+28), shortMiss=!made&&Math.random()<0.34;
+ const t0=performance.now();
+ function frame(now){const e=(now-t0)/1000;
+  if(kg){const t=Math.min(1,e/0.6);kg.setAttribute('transform','translate('+(kickX0+t*(holdX-kickX0-7))+' '+(kickY0+t*(holdY-kickY0-2))+')');}
+  let bx=snapX,by=losY;
+  if(e<0.32){const t=e/0.32;bx=snapX+(holdX-snapX)*t;by=losY+(holdY-losY)*t;}        // Snap
+  else if(e<0.62){bx=holdX;by=holdY;}                                                 // Hold
+  else{const t=Math.min(1,(e-0.62)/0.9);bx=holdX+(endX-holdX)*t;
+   if(shortMiss){const ap=cby+40;by=holdY+(ap-holdY)*Math.min(1,t*1.7);if(t>0.58)by+=(t-0.58)*150;}
+   else{by=holdY+((postTop-34)-holdY)*t-Math.sin(Math.PI*t)*22;}}
+  ball.setAttribute('cx',bx);ball.setAttribute('cy',by);
+  if(e<=1.9)_anim[P]=requestAnimationFrame(frame);
+  else{ball.setAttribute('opacity',0);_fgResult(svg,made);setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},1100);}
+ }
+ _anim[P]=requestAnimationFrame(frame);
+}
 async function gamePlay(choice){if(playBusy)return;playBusy=true;const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){playBusy=false;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 async function simDrive(){if(playBusy)return;const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
