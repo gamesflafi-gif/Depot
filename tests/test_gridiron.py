@@ -183,8 +183,11 @@ def test_franchise_full_season(tmp_path):
 
     # ganze Saison + Playoffs durchspielen
     guard = 0
-    while st["phase"] != "done" and guard < 40:
-        F.sim_week(cfg, st)
+    while st["phase"] != "done" and guard < 80:
+        if st.get("week_done"):
+            F.next_week(cfg, st)
+        else:
+            F.sim_week(cfg, st)
         guard += 1
     assert st["phase"] == "done" and st["champion"]
     tbl = F.standings(st)
@@ -210,7 +213,9 @@ def test_franchise_web(tmp_path):
     assert client.get("/api/fr/state").json()["exists"] is True
 
     r = client.post("/api/fr/sim_week").json()
-    assert r["view"]["week"] == 1 and r["result"]["games"]
+    assert r["result"]["games"] and r["view"]["week_done"] is True
+    nw = client.post("/api/fr/next_week").json()
+    assert nw["view"]["week"] == 1 and nw["view"]["week_done"] is False
 
     up = client.post("/api/fr/improve_coach", params={"role": "HC"}).json()
     assert up["result"].get("ok") or up["result"].get("error")
@@ -285,11 +290,11 @@ def test_franchise_weekly_training(tmp_path):
     assert st["week_trained"] is False and [] in st["schedule"]      # Bye vorhanden
     assert F.do_training(cfg, st, "team")["ok"] and st["week_trained"] is True
     assert F.do_training(cfg, st, "team").get("error")               # nur 1× pro Woche
-    F.sim_week(cfg, st)
+    F.sim_week(cfg, st); F.next_week(cfg, st)
     assert st["week_trained"] is False                               # neue Woche -> wieder möglich
     F.do_training(cfg, st, "film")
     assert st["teams"][0]["game_bonus"] > 0
-    F.sim_week(cfg, st)
+    F.sim_week(cfg, st); F.next_week(cfg, st)
     assert st["teams"][0]["game_bonus"] == 0                         # Bonus verbraucht
     v = F.view(st)
     assert len(v["trainings"]) >= 6 and "week_trained" in v and "is_bye" in v
@@ -305,7 +310,9 @@ def test_franchise_game_sim_options(tmp_path):
     assert ("game" in r) or ("result" in r)                # weiter ODER schon vorbei
     fin = F.game_sim_rest(cfg, st)
     assert fin["ok"] and fin["result"]["hs"] != fin["result"]["as"]
-    assert fin["view"]["week"] == 1 and not F.load(cfg).get("active_game")
+    assert fin["view"]["week_done"] is True and not F.load(cfg).get("active_game")
+    nw = F.next_week(cfg, st)
+    assert nw["view"]["week"] == 1
 
 
 def test_franchise_player_season_career_stats(tmp_path):
@@ -314,7 +321,7 @@ def test_franchise_player_season_career_stats(tmp_path):
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=71)
     for _ in range(3):
-        F.sim_week(cfg, st)
+        F.sim_week(cfg, st); F.next_week(cfg, st)
     team = st["teams"][0]
     assert any(p["season"]["games"] > 0 for p in team["roster"])
     assert all(p["career"]["games"] >= p["season"]["games"] for p in team["roster"])
@@ -353,6 +360,7 @@ def test_franchise_events_injuries(tmp_path):
     for _ in range(8):
         for e in F.sim_week(cfg, st).get("events", []):
             seen.add(e["type"])
+        F.next_week(cfg, st)
     assert seen                                                 # Events sind aufgetreten
     assert "inj" in F.view(st)["roster"][0]
 
@@ -444,11 +452,12 @@ def test_franchise_interactive_game(tmp_path):
         guard += 1
     assert g["over"] and g["drive"] >= F.MAX_DRIVES
     fin = F.finish_game(cfg, st)
-    assert fin["ok"] and fin["view"]["week"] == 1            # Woche fortgeschritten
+    assert fin["ok"] and fin["view"]["week_done"] is True    # Woche ausgewertet
     assert not F.load(cfg).get("active_game")                # Spiel abgeschlossen
     # Selbst-Ergebnis steht in der Tabelle (Bilanz Summe 1 Spiel)
     me = next(t for t in fin["view"]["standings"] if t["user"])
     assert me["w"] + me["l"] == 1
+    assert F.next_week(cfg, st)["view"]["week"] == 1         # erst Klick schreitet fort
 
 
 def test_franchise_game_web(tmp_path):

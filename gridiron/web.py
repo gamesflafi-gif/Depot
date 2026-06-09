@@ -162,7 +162,8 @@ _STYLE2 = """
  .oseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#06140d;min-width:0}
  .o-ok{background:#16c784}.o-ok2{background:#0e9f6a;color:#eafff5}.o-mid{background:#3a4a44;color:#d6efe4}
  .o-warn{background:#e9b949}.o-bad{background:#ef5350;color:#fff}
- .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+ body.noscroll{overflow:hidden}
+ .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overscroll-behavior:contain}
  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
  .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
  .livedot{width:8px;height:8px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
@@ -309,6 +310,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+function lockBody(){document.body.classList.add('noscroll');}
+function unlockBodyIfNone(){if(!document.querySelector('.overlay'))document.body.classList.remove('noscroll');}
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
@@ -598,26 +601,31 @@ function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 2
  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">'+(I[k]||I.team)+'</svg>';}
 function secDash(v){
  let h='';
- // Training dieser Woche
+ // Training dieser Woche (nur solange Woche nicht ausgewertet)
  if(v.phase!=='done'){h+='<div class="card"><div class="sec" style="margin-top:0">Training dieser Woche</div>';
-   if(v.week_trained)h+='<div class="reco win"><span>Training erledigt</span><span class="mut">nächste Woche wieder verfügbar</span></div>';
+   if(v.week_done)h+='<div class="reco"><span class="mut">Woche ausgewertet — Training nächste Woche.</span></div>';
+   else if(v.week_trained)h+='<div class="reco win"><span>Training erledigt</span><span class="mut">nächste Woche wieder verfügbar</span></div>';
    else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
-   if(v.game_bonus>0)h+='<div class="note">🎯 Film-Bonus aktiv fürs nächste Spiel.</div>';
+   if(v.game_bonus>0)h+='<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>';
    h+='</div>';}
  // Spielbetrieb
  h+='<div class="card"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':'Spielbetrieb')+'</div>';
- if(v.phase==='done'){h+='<div class="reco"><span>Saison beendet.</span></div><button onclick="newSeason()">Neue Saison</button> ';}
+ if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div><button onclick="newSeason()">Neue Saison starten</button> ';}
+ else if(v.week_done){
+   h+='<div class="reco win"><span>Woche ausgewertet'+(v.is_bye?' (Bye Week)':'')+'.</span><span class="mut">bereit für die nächste Woche</span></div>'+
+     '<button onclick="nextWeek()">Nächste Woche ▶</button> ';
+   if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Spiel ansehen</button> ';
+ }
  else if(v.is_bye){h+='<div class="reco"><span><b>Bye Week</b> — diese Woche kein Spiel</span><span class="mut">ideal zum Trainieren</span></div>'+
    '<button onclick="simWeek()">Woche abschließen</button> ';}
  else{
-   if(v.phase==='regular'&&v.next)h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
+   if(v.next)h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
      'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';
    if(v.phase==='playoffs'&&v.playoff)h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
      v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';
    if(v.active_game)h+='<button onclick="resumeGame()">Spiel fortsetzen</button> ';
    else h+='<button onclick="startGame()">Selbst spielen</button> <button class="ghost" onclick="simWeek()">Simulieren</button> ';
  }
- if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Letztes Spiel ansehen</button> ';
  h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
@@ -658,7 +666,7 @@ async function setFocus(){const r=await api('/api/fr/focus?group='+encodeURIComp
 async function allocAll(){const r=await api('/api/fr/alloc_all','POST');if(r.view)renderMgr(r.view);}
 function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)===String(id));if(!p)return;
  let o=$('playeroverlay');if(!o){o=document.createElement('div');o.className='overlay';o.id='playeroverlay';
-   o.addEventListener('click',e=>{if(e.target===o)closePlayer();});document.body.appendChild(o);}
+   o.addEventListener('click',e=>{if(e.target===o)closePlayer();});document.body.appendChild(o);}lockBody();
  o.innerHTML='<div class="modal" id="playermodal"></div>';renderPlayer(p);
 }
 function renderPlayer(p){
@@ -703,7 +711,7 @@ async function toggleStarter(){const r=await api('/api/fr/starter?pid='+curPlaye
 let _curPid=null;
 function curPlayer(){return _curPid;}
 function afterPlayer(r){if(r.view){lastView=r.view;renderMgr(r.view);const p=r.view.roster.find(x=>String(x.id)===String(_curPid));if(p)renderPlayer(p);}}
-function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;}
+function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;unlockBodyIfNone();}
 function secTransfer(v){
  const cnt={};v.roster.forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);
  let h='<div class="card"><div class="sec" style="margin-top:0">Transfermarkt — Draft &amp; Free Agents</div>'+
@@ -823,7 +831,7 @@ function openBroadcast(g){
   '<div style="margin-top:10px"><button class="ghost" onclick="skipBroadcast()">Überspringen ▸</button></div>'+
   boxSection(g)+
   '<div class="commentary" id="bc_feed"></div></div>';
- document.body.appendChild(o);
+ document.body.appendChild(o);lockBody();
  o.addEventListener('click',e=>{if(e.target===o)closeBroadcast();});
  bcPlay(g);
 }
@@ -837,14 +845,14 @@ function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const 
  $('bc_hs').textContent=g.hs;$('bc_as').textContent=g['as'];$('bc_q').textContent='Q4';
  if(g.plays.length)$('bc_ball').style.left=bcBallLeft(g.plays[g.plays.length-1].x);
  const feed=$('bc_feed');feed.innerHTML='';g.plays.slice().reverse().forEach(p=>feed.appendChild(cmtRow(p)));}
-function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();}
+function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();unlockBodyIfNone();}
 
 /* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
 let liveG=null;
 async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 function openGame(g){closeGame();liveG=g;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
- o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);renderGame(g);}
+ o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();renderGame(g);}
 function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div class="yl" style="left:'+p+'%"></div>';
  const lab=(p===50?'50':(p<50?p:100-p));t+='<div class="yn" style="left:'+p+'%">'+lab+'</div><div class="yn b" style="left:'+p+'%">'+lab+'</div>';});
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
@@ -892,13 +900,14 @@ function showGameResult(res){closeGame();const o=document.createElement('div');o
   '<div class="reco '+(won?'win':'loss')+'"><span><b>'+esc(res.away)+'</b> '+res['as']+' : '+res.hs+' <b>'+esc(res.home)+'</b></span>'+
   '<span class="mut">'+(won?'Sieg':'Niederlage')+' · Sieger: '+esc(res.winner)+'</span></div>'+
   boxSection({box:res.box})+'</div>';
- document.body.appendChild(o);}
-function closeResult(){const o=$('resultoverlay');if(o)o.remove();}
+ document.body.appendChild(o);lockBody();}
+function closeResult(){const o=$('resultoverlay');if(o)o.remove();unlockBodyIfNone();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
-function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;}
+function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;unlockBodyIfNone();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function nextWeek(){const r=await api('/api/fr/next_week','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);}
 init();
 </script></body></html>"""
 
@@ -1091,6 +1100,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             return err
         res = F.sim_week(cfg, st)
         return {"result": res, "view": F.view(st)}
+
+    @app.post("/api/fr/next_week")
+    def fr_next_week():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.next_week(cfg, st)
 
     @app.post("/api/fr/new_season")
     def fr_new_season():
