@@ -153,6 +153,8 @@ _STYLE2 = """
  #field .pl{filter:drop-shadow(0 1.5px 1.5px rgba(0,0,0,.55))}
  .fig{transform-box:fill-box;transform-origin:center;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5))}
  .fig.pop{animation:pop .4s ease}@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.6)}100%{transform:scale(1)}}
+ .fig.down{animation:tackle .5s ease forwards}@keyframes tackle{0%{transform:rotate(0) scale(1)}55%{transform:rotate(38deg) scale(1.05)}100%{transform:rotate(72deg) scale(.82);opacity:.78}}
+ .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
  .pulse{animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
  .fieldlegend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;align-items:center}
  .fieldlegend i.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
@@ -531,6 +533,8 @@ function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p
 }
 function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;g.setAttribute('transform','translate('+mapX(x)+' '+mapY(y)+')');_ppos[P+id]=[x,y];}
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
+function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
+function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function curPos(P,id){return _ppos[P+id]||null;}
 const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5,DB:9.4,S:8.9};
 function _spd(p){return SPD[p]||8;}
@@ -556,7 +560,7 @@ function playAnim(svg,d,res){
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
  const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/26);
- function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;const M=p=>_spd(p)*dt;
+ function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;const acc=Math.min(1,0.4+el*1.5);const M=p=>_spd(p)*dt*acc;  // Beschleunigung vom Snap weg
   const carrier=(kind==='complete'&&caught)?tgt:(!isPass?tgt:null);
   // QB
   if(isPass&&!sacked){_toward(qb,qb.sy<-3?qb.sy:(qb.sy-2.3),qb.sy-2.3,M('QB')*0.85);qb.x=C;}
@@ -569,8 +573,9 @@ function playAnim(svg,d,res){
      return;}
    if(o===tgt){
      if(isPass){if(!caught)_advance(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}
-     else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));
-       const nd=D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-o.x,q.y-o.y)),9);if(nd<2.2)o.x+=Math.sin(el*18)*0.45;}  // Juke/Spin bei Druck
+     else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
+     if(!isPass||caught){const nd=D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-o.x,q.y-o.y)),9);   // Ballträger weicht bei Druck aus
+       if(nd<2.4){o.x+=Math.sin(el*16+o.i)*0.5;if(nd<1.5&&!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // Juke + Spin-Move
      return;}
    if(o.route){_advance(o,M(o.pos));
      if(o.ri>=o.route.length&&!caught){o.y+=M(o.pos)*0.45;o.x+=(Math.sin((el+o.i)*2.2))*M(o.pos)*0.25;}}  // weiter freilaufen bis zum Wurf
@@ -587,7 +592,8 @@ function playAnim(svg,d,res){
   D.forEach(p=>{let tx,ty,mx=M(p.pos);
    if(kind==='sack'){tx=qb.x;ty=qb.y;}
    else if(carrier){tx=carrier.x;ty=carrier.y;}                          // Ballträger verfolgen (eigenes Tempo)
-   else if(p.role==='rush'){tx=C+(p.x-C)*0.25;ty=qb.y+0.5;mx*=0.72;}     // Rush, von OL gebremst
+   else if(p.role==='rush'){let bl=null,bd=1e9;ols.forEach(o=>{const dd=Math.abs(o.x-p.x);if(dd<bd){bd=dd;bl=o;}});  // Blocking-Duell: nächster O-Liner
+     const bx=bl?bl.x:C,by=bl?bl.y:-2.2;tx=bx+(p.x>=bx?0.9:-0.9)+Math.sin(el*9+p.i)*0.55;ty=by+1.6+Math.sin(el*6.5+p.i)*0.35;mx*=0.5;}  // vom Blocker an der Line gehalten
    else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){tx=r.x+(p.x<r.x?-0.8:0.8);ty=r.y+0.7;}else{tx=p.x;ty=p.y;}}
    else if(p.drop){tx=p.drop[0];ty=p.drop[1];                              // Zone: zur Landmarke, dann auf nächsten Receiver in der Zone reagieren
      let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});
@@ -613,7 +619,8 @@ function playAnim(svg,d,res){
   const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0);
   if(!done)_anim[P]=requestAnimationFrame(frame);
-  else showResult(svg,{kind,yards,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,yards]:catchPt))});
+  else{if(kind==='sack')downFig(P,'o'+qb.i);else if(carrier&&kind!=='incomplete')downFig(P,'o'+carrier.i);  // Tackle: Ballträger geht zu Boden
+    showResult(svg,{kind,yards,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,yards]:catchPt))});}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
