@@ -78,7 +78,29 @@ _STYLE = """
    padding:5px 12px;border-radius:7px;font-size:13px;font-variant-numeric:tabular-nums}
  .mut{color:var(--mut);font-size:13.5px} .foot{color:var(--mut);font-size:12px;text-align:center;margin:34px 0 0;opacity:.85}
  code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:13px;border:1px solid var(--line)}
- @media(max-width:560px){.controls{gap:10px} .wrap{padding:18px 14px 32px} .big{font-size:22px}}
+ @media(max-width:560px){
+  .topin{padding:11px 14px} .brand{font-size:16px;gap:10px} .nav a{margin-left:12px;font-size:12.5px}
+  .wrap{padding:14px 12px 30px} .big{font-size:21px} .card{padding:14px}
+  .controls{gap:10px}
+  /* Tabs & Sub-Navigation: einzeilig, horizontal wischbar */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none} .tab{white-space:nowrap;padding:11px 13px}
+  .subnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .subnav::-webkit-scrollbar{display:none} .subnav .s{flex:0 0 auto;white-space:nowrap;font-size:13px;padding:9px 13px}
+  /* Team-Banner: Pills/Buttons unter den Namen */
+  .teamhdr{flex-wrap:wrap;gap:10px} .teamhdr .crest{width:46px;height:46px;font-size:15px}
+  .teamhdr>div:last-child{margin-left:0 !important;text-align:left !important;width:100%}
+  .kpi{min-width:0} .kpi .v{font-size:20px}
+  .hero h2{font-size:17px} .hero p{font-size:12.5px}
+  /* Spielerkarte: Radar über den Attributen, zentriert */
+  .pcols{flex-direction:column} .radarwrap{align-self:center}
+  .arow .alab{width:80px;font-size:12px}
+  /* Overlays kompakter */
+  .overlay{padding:10px} .modal{padding:14px;border-radius:12px}
+  .tuttip{max-width:none}
+  /* breite Tabellen/Heatmap bleiben wischbar */
+  .tbl td,.tbl th{padding:7px 7px}
+ }
 """
 
 _STYLE2 = """
