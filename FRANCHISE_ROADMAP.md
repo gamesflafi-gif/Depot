@@ -22,7 +22,7 @@ Ziel: Du gehst in dein **Stadion/Gelände** und upgradest dort anklickbar.
 - **2.1 Visueller Hub** ✅ (Stadion/Trainingsgelände/Kicker als anklickbare Gebäude) — ein Gelände-Screen mit anklickbaren Gebäuden
   statt Listen: Stadion, Trainingsplatz, Medizin, Athletik, Scouting-
   Akademie, Jugend/Akademie. Jedes Gebäude zeigt Stufe + Effekt + Upgrade.
-- **2.2 Echte Effekte je Anlage/Stufe**
+- **2.2 Echte Effekte je Anlage/Stufe** ✅
   - Stadion → Wocheneinnahmen
   - Trainingsplatz → mehr Trainings-EXP (ersetzt/ergänzt Equipment)
   - Medizin → kürzere Verletzungen + geringeres Verletzungsrisiko

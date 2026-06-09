@@ -561,6 +561,9 @@ def _migrate(state: dict) -> None:
         u = t.get("units")                               # Kicker-Rating ergänzen (Special Teams)
         if isinstance(u, dict) and "K" not in u:
             u["K"] = rng.randint(58, 74)
+        if t.get("user"):                                 # neue Anlagen für alte Spielstände
+            for fac in ("medical", "athletic", "scouting_fac", "youth"):
+                t.setdefault(fac, 1)
     if "scout_pts" not in state:
         state["scout_pts"] = 6
     if "prospects" not in state:
@@ -623,6 +626,8 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
     user_team = _new_team(nm, _abbr(nm), ucolor, "#0c1a12", 70, rng, user=True)
     user_team["roster"] = _gen_roster(70, rng, hicap=True)   # Start: ~70-OVR-Kader, viel Entwicklungs-Potenzial
     user_team["equipment"] = 1                            # Trainings-Equipment (EXP/Woche)
+    for fac in ("medical", "athletic", "scouting_fac", "youth"):
+        user_team[fac] = 1                                # Anlagen starten auf Stufe 1
     _sync_units(user_team)                                # Units aus dem Kader ableiten
     teams = [user_team]
     # KI-Stärke je Schwierigkeit (Nutzer startet bei 70 und wächst ~8-9 OVR/Saison)
@@ -933,7 +938,7 @@ def next_week(cfg: Config, state: dict) -> dict:
         state["events"] = (state.get("events") or []) + extra
     state["week_done"] = False
     state["week_trained"] = False
-    state["scout_pts"] = state.get("scout_pts", 0) + 3     # Scouting-Punkte fürs College
+    state["scout_pts"] = state.get("scout_pts", 0) + 3 + (state["teams"][0].get("scouting_fac", 1) - 1)  # Scouting-Akademie gibt extra Punkte
     state["teams"][0]["game_bonus"] = 0
     # Entscheidungs-Event nicht jede Woche (~35 %), nur in der regulären Saison
     if (state["phase"] == "regular" and not state.get("pending_event")
@@ -1036,11 +1041,16 @@ def _process_events(state: dict, rng: random.Random) -> list[dict]:
     if not roster:
         return []
     msgs: list[dict] = []
+    heal = 1 + (1 if team.get("medical", 1) >= 4 else 0)   # Medizin: ab Stufe 4 heilt eine Woche schneller
     for p in roster:
         if p.get("inj", 0) > 0:
-            p["inj"] -= 1
+            p["inj"] = max(0, p["inj"] - heal)
             if p["inj"] == 0:
                 msgs.append({"type": "ok", "text": f"{p['name']} ist wieder fit und einsatzbereit."})
+    ath = (team.get("athletic", 1) - 1) * 12               # Athletik: passive Regenerations-EXP/Woche
+    if ath:
+        for p in roster:
+            _gain_exp(p, ath)
     if rng.random() < 0.5:                                # kleine Geld-Neuigkeit (Flavor)
         inc = rng.randint(2, 6); state["budget"] += inc
         flav = rng.choice(["Fan-Andrang im Stadion", "Sponsoren-Bonus", "Merchandise-Verkäufe", "TV-Einnahmen"])
@@ -1132,7 +1142,7 @@ def _apply_eff(state: dict, team: dict, effs: list, rng: random.Random, msgs: li
             healthy = [p for p in roster if p.get("inj", 0) == 0 and p["starter"]] or [p for p in roster if p.get("inj", 0) == 0]
             if healthy:
                 p = rng.choice(healthy)
-                p["inj"] = n
+                p["inj"] = max(1, n - (team.get("medical", 1) - 1))   # Medizin verkürzt Ausfallzeit
                 msgs.append({"type": "bad", "text": f"{p['name']} ({p['pos']}) fällt {n} Woche(n) aus."})
         elif k == "exploss":
             if roster:
@@ -1264,11 +1274,45 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["prospects"] = _gen_prospects(state, rng)       # neuer College-Jahrgang
     state["scout_pts"] = state.get("scout_pts", 0) + 6    # Scouting-Punkte für die neue Klasse
     state["goals"] = _gen_goals(state)                    # neue Saisonziele
+    youth = _youth_talents(state, rng)                    # Jugend-Akademie: eigene Talente pro Saison
     ret = state.pop("_retired", [])
     state["events"] = ([{"type": "bad", "text": f"Karriereende: {n}"} for n in ret]
-                       + [{"type": "ok", "text": "Neue Draft-/Free-Agent-Klasse im Transfermarkt verfügbar."}])
+                       + [{"type": "ok", "text": "Neue Draft-/Free-Agent-Klasse im Transfermarkt verfügbar."}]
+                       + youth)
     save(cfg, state)
     return state
+
+
+def _youth_talents(state: dict, rng: random.Random) -> list[dict]:
+    """Jugend-Akademie: pro Saison eigene Talente (Anzahl/Qualität nach Anlagen-Stufe)."""
+    team = state["teams"][0]
+    lvl = team.get("youth", 1)
+    if lvl <= 1:
+        return []
+    roster = team.get("roster", [])
+    used = {p["name"] for p in roster}
+    n = 2 if lvl >= 5 else 1
+    base = 54 + lvl * 4
+    seq = state.get("pid_seq", 10000)
+    msgs = []
+    for _ in range(n):
+        # Position mit freiem Platz bevorzugen, sonst trotzdem ins Talentlager (Prospects)
+        free = [g for g in ROSTER_SLOTS if sum(1 for x in roster if x["pos"] == g) < ROSTER_SLOTS[g]]
+        pos = rng.choice(free) if free else rng.choice(list(ROSTER_SLOTS))
+        p = _gen_player(seq, pos, base, rng, age=rng.randint(20, 22), used=used, hicap=True)
+        seq += 1
+        if free:
+            p["starter"] = False
+            roster.append(p)
+            msgs.append({"type": "ok", "text": f"Jugend-Akademie: {p['name']} ({pos}) rückt in den Kader auf."})
+        else:
+            p["scout"] = SCOUT_MAX
+            p["_bias"] = 0
+            state.setdefault("prospects", []).append(p)
+            msgs.append({"type": "ok", "text": f"Jugend-Akademie: Talent {p['name']} ({pos}) im Transfermarkt verfügbar."})
+    state["pid_seq"] = seq
+    _sync_units(team)
+    return msgs
 
 
 # --------------------------------------------------------------------------- #
@@ -1355,16 +1399,25 @@ def upgrade_cost(level: int) -> int:
     return max(5, round((level - 50) * 0.6) + 5)
 
 
+_FACS = {"stadium": (18, 14), "equipment": (15, 12), "medical": (16, 12),
+         "athletic": (15, 11), "scouting_fac": (14, 11), "youth": (18, 13)}
+
+
+def _fac_cost(team: dict, key: str) -> int:
+    b, s = _FACS[key]
+    return b + (team.get(key, 1) - 1) * s
+
+
 def upgrade_unit(cfg: Config, state: dict, key: str) -> dict:
-    """Verbessert Einheit (Kader-Aggregat, v.a. KI) oder Anlagen (Stadion/Equipment)."""
+    """Verbessert Einheit (Kader-Aggregat, v.a. KI) oder eine Anlage (Stadion, Trainingsgelände, Medizin, Athletik, Scouting-Akademie, Jugend)."""
     team = state["teams"][0]
     if key in ALL_UNITS:
         store, cap, label = team["units"], 95, UNIT_LABELS[key]
-    elif key in ("stadium", "equipment"):
+    elif key in _FACS:
         lvl = team.get(key, 1)
         if lvl >= 5:
             return {"error": "Bereits auf Maximum (Stufe 5)."}
-        cost = (18 if key == "stadium" else 15) + (lvl - 1) * (14 if key == "stadium" else 12)
+        cost = _fac_cost(team, key)
         if state["budget"] < cost:
             return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
         team[key] = lvl + 1
@@ -1480,6 +1533,16 @@ def view(state: dict) -> dict:
         "equipment": {"level": team.get("equipment", 1),
                       "cost": 15 + (team.get("equipment", 1) - 1) * 12,
                       "exp_week": 10 + 3 * team.get("equipment", 1)},
+        "facilities": {
+            "medical": {"level": team.get("medical", 1), "cost": _fac_cost(team, "medical"),
+                        "effect": f"Verletzungen kürzer (-{team.get('medical', 1) - 1} Wo)" + (" · heilt schneller" if team.get("medical", 1) >= 4 else "")},
+            "athletic": {"level": team.get("athletic", 1), "cost": _fac_cost(team, "athletic"),
+                         "effect": f"+{(team.get('athletic', 1) - 1) * 12} Regenerations-EXP/Woche"},
+            "scouting_fac": {"level": team.get("scouting_fac", 1), "cost": _fac_cost(team, "scouting_fac"),
+                             "effect": f"+{team.get('scouting_fac', 1) - 1} Scouting-Punkte/Woche"},
+            "youth": {"level": team.get("youth", 1), "cost": _fac_cost(team, "youth"),
+                      "effect": ("inaktiv (ab Stufe 2)" if team.get("youth", 1) < 2 else f"{2 if team.get('youth', 1) >= 5 else 1} Talent(e)/Saison, ~{54 + team.get('youth', 1) * 4} OVR")},
+        },
         "training_focus": state.get("training_focus"),
         "focus_options": [{"key": k, "label": POS_LABELS[k]} for k in POS_LABELS],
         "skillpoints": sum(p.get("pts", 0) for p in team.get("roster", [])),
