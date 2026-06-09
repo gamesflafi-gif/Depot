@@ -212,7 +212,7 @@ def test_franchise_web(tmp_path):
     r = client.post("/api/fr/sim_week").json()
     assert r["view"]["week"] == 1 and r["result"]["games"]
 
-    up = client.post("/api/fr/upgrade", params={"unit": "WR"}).json()
+    up = client.post("/api/fr/improve_coach", params={"role": "HC"}).json()
     assert up["result"].get("ok") or up["result"].get("error")
     assert client.post("/api/fr/reset").json()["ok"]
     assert client.get("/api/fr/state").json()["exists"] is False
@@ -277,15 +277,24 @@ def test_simulator_outcomes_and_sampler():
     assert {"complete", "incomplete"} & kinds
 
 
-def test_franchise_upgrades_staff_stadium(tmp_path):
+def test_franchise_coaches_and_facilities(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
-    st["budget"] = 200
-    ov0 = F.overall(st["teams"][0])
-    assert F.upgrade_unit(cfg, st, "OC")["ok"]
-    assert F.upgrade_unit(cfg, st, "DC")["ok"]
-    assert F.overall(st["teams"][0]) >= ov0                     # Coaches heben OVR
+    st["budget"] = 400
+    team = st["teams"][0]
+    # Trainer haben individuelle Stärken
+    assert set(team["coaches"]) == {"HC", "OC", "DC"}
+    assert team["coaches"]["OC"]["traits"] and team["coaches"]["OC"]["name"]
+    # Verbessern hebt den schwächsten Trait
+    r = F.improve_coach(cfg, st, "OC")
+    assert r["ok"] and r["value"] >= 47
+    # Markt: besten OC-Kandidaten anheuern
+    mk = st["coach_market"]["OC"]
+    best = max(range(len(mk)), key=lambda i: F.coach_rating(mk[i]))
+    h = F.hire_coach(cfg, st, "OC", best)
+    assert h["ok"] and team["coaches"]["OC"]["name"] == h["hired"]
+    # Anlagen
     s = F.upgrade_unit(cfg, st, "stadium")
     assert s["ok"] and s["level"] == 2
     assert F.upgrade_unit(cfg, st, "quatsch").get("error")

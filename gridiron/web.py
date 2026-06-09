@@ -184,6 +184,9 @@ _STYLE2 = """
  .arow .acap{position:absolute;top:-2px;bottom:-2px;width:2px;background:#dfe7e3;opacity:.8}
  .arow .aval{width:26px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
  .arow button{padding:4px 11px;border-radius:7px;font-size:15px;line-height:1}
+ .ctraits{margin-top:8px} .ctrait{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13px}
+ .ctrait>span:first-child{width:130px;color:var(--mut)}
+ .ctrait .abar{flex:1} .ctrait .aval{width:26px;text-align:right;font-weight:700}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -662,16 +665,25 @@ function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;}
 function secBuild(v){
  const up=(key,label,sub,level,cost,maxed,plus)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
    '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+plus+' ('+cost+' Mio)</button></div>';
- let h='<div class="grid" style="grid-template-columns:1fr 1fr">';
- h+='<div class="card"><div class="sec" style="margin-top:0">Trainerstab</div>'+
-   v.staff.map(s=>up(s.key,s.label,'',s.level,s.cost,s.level>=95,'+2')).join('')+
-   '<div class="note">OC hebt die Offense, DC die Defense, Head Coach beides.</div></div>';
+ // Trainerstab als Karten mit Stärken/Schwächen + Markt
+ let h='<div class="sec">Trainerstab</div>';
+ v.coaches.forEach(c=>{const mk=v.coach_market[c.role]||[];
+   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+     '<div><b>'+esc(c.label)+'</b> · '+esc(c.name)+' <span class="mut">'+c.rating+' OVR</span></div>'+
+     '<button data-r="'+c.role+'" onclick="improveCoach(this.dataset.r)" '+(v.budget<c.improve_cost?'disabled':'')+'>Verbessern ('+c.improve_cost+' Mio)</button></div>'+
+     '<div class="ctraits">'+c.traits.map(t=>'<div class="ctrait"><span>'+esc(t.label)+'</span><span class="abar"><span class="afill" style="width:'+Math.round(t.val/99*100)+'%"></span></span><span class="aval">'+t.val+'</span></div>').join('')+'</div>';
+   if(mk.length){h+='<div class="note" style="margin-top:8px">Verfügbar:</div>';
+     mk.forEach(cd=>{h+='<div class="reco"><span>'+esc(cd.name)+' <span class="mut">'+cd.rating+' · '+cd.traits.map(t=>t.label[0]+t.val).join(' ')+'</span></span>'+
+       '<button data-r="'+c.role+'" data-i="'+cd.idx+'" onclick="hireCoach(this.dataset.r,this.dataset.i)" '+(v.budget<cd.cost?'disabled':'')+'>Anheuern ('+cd.cost+' Mio)</button></div>';});}
+   h+='</div>';});
  h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen</div>'+
    up('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Wo',v.stadium.level,v.stadium.cost,v.stadium.level>=5,'+1')+
    up('equipment','Trainings-Equipment','+'+v.equipment.exp_week+' EXP/Wo',v.equipment.level,v.equipment.cost,v.equipment.level>=5,'+1')+
-   '<div class="note">Stadion bringt mehr Wocheneinnahmen, Equipment mehr Spieler-EXP pro Woche.</div></div>';
- return h+'</div>';
+   '<div class="note">Stadion bringt mehr Wocheneinnahmen, Equipment mehr Spieler-EXP. Trainer-Stärken heben Ratings und EXP der jeweiligen Gruppe.</div></div>';
+ return h;
 }
+async function improveCoach(role){const r=await api('/api/fr/improve_coach?role='+encodeURIComponent(role),'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function hireCoach(role,idx){const r=await api('/api/fr/hire_coach?role='+encodeURIComponent(role)+'&idx='+idx,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 function renderResult(res,me){
  if(!res||!res.games)return '';
  let h='<div style="margin-top:12px"><div class="sec">Ergebnisse '+(typeof res.week==='number'?'Woche '+res.week:esc(res.week))+'</div>';
@@ -1011,6 +1023,22 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return {"result": F.set_focus(cfg, st, group or None), "view": F.view(st)}
+
+    @app.post("/api/fr/hire_coach")
+    def fr_hire_coach(role: str, idx: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.hire_coach(cfg, st, role, idx), "view": F.view(st)}
+
+    @app.post("/api/fr/improve_coach")
+    def fr_improve_coach(role: str):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.improve_coach(cfg, st, role), "view": F.view(st)}
 
     @app.post("/api/fr/scheme")
     def fr_scheme(off: str = "", deff: str = ""):

@@ -106,6 +106,13 @@ def player_pot(p: dict) -> int:
     return round(sum(p["cap"][k] * w[k] for k in w))
 
 
+def _coach_view(team: dict, role: str) -> dict:
+    c = team.get("coaches", {}).get(role) or _gen_coach(role, 60, random.Random(0))
+    return {"role": role, "label": COACH_ROLES[role], "name": c["name"],
+            "rating": coach_rating(c), "improve_cost": upgrade_cost(coach_rating(c)),
+            "traits": [{"label": t, "val": c["traits"][t]} for t in c["traits"]]}
+
+
 def _player_view(p: dict) -> dict:
     return {"id": p["id"], "name": p["name"], "pos": p["pos"], "age": p["age"],
             "starter": p["starter"], "ovr": player_ovr(p), "pot": player_pot(p),
@@ -249,23 +256,46 @@ def _rating(units: dict, weights: dict) -> int:
     return round(sum(units[u] * w for u, w in weights.items()))
 
 
+# --- Trainer mit individuellen Stärken/Schwächen ---------------------------- #
+COACH_ROLES = {"HC": "Head Coach", "OC": "Offensive Coordinator", "DC": "Defensive Coordinator"}
+COACH_TRAITS = {"HC": ["Entwicklung", "Spielmanagement", "Moral"],
+                "OC": ["Passspiel", "Laufspiel", "Kreativität"],
+                "DC": ["Coverage", "Pass-Rush", "Disziplin"]}
+STAFF_LABELS = COACH_ROLES                                # Rückwärtskompatibel
+
+
+def _gen_coach(role: str, base: int, rng: random.Random) -> dict:
+    traits = {t: max(45, min(92, round(rng.gauss(base, 7)))) for t in COACH_TRAITS[role]}
+    return {"role": role, "name": _name(rng), "traits": traits}
+
+
+def coach_rating(c: dict) -> int:
+    return round(sum(c["traits"].values()) / len(c["traits"]))
+
+
+def _trait(team: dict, role: str, trait: str, dflt: int = 60) -> int:
+    return team.get("coaches", {}).get(role, {}).get("traits", {}).get(trait, dflt)
+
+
+def _coach_rating(team: dict, role: str) -> int:
+    c = team.get("coaches", {}).get(role)
+    return coach_rating(c) if c else 60
+
+
 def offense(team: dict) -> int:
-    s = team.get("staff", {})
     b = _rating(team["units"], OFF_UNITS)
-    return min(99, b + round((s.get("OC", 60) - 60) * 0.30) + round((s.get("HC", 60) - 60) * 0.12))
+    return min(99, b + round((_coach_rating(team, "OC") - 60) * 0.30)
+              + round((_trait(team, "HC", "Spielmanagement") - 60) * 0.10))
 
 
 def defense(team: dict) -> int:
-    s = team.get("staff", {})
     b = _rating(team["units"], DEF_UNITS)
-    return min(99, b + round((s.get("DC", 60) - 60) * 0.30) + round((s.get("HC", 60) - 60) * 0.12))
+    return min(99, b + round((_coach_rating(team, "DC") - 60) * 0.30)
+              + round((_trait(team, "HC", "Spielmanagement") - 60) * 0.10))
 
 
 def overall(team: dict) -> int:
     return round((offense(team) + defense(team)) / 2)
-
-
-STAFF_LABELS = {"HC": "Head Coach", "OC": "Offensive Coordinator", "DC": "Defensive Coordinator"}
 
 
 # --------------------------------------------------------------------------- #
@@ -316,11 +346,10 @@ def _round_robin(n: int) -> list[list[tuple[int, int]]]:
 def _new_team(name: str, abbr: str, color: str, color2: str, base: int,
               rng: random.Random, user: bool = False) -> dict:
     units = {u: max(50, min(95, base + rng.randint(-6, 6))) for u in ALL_UNITS}
-    sb = base if user else base
-    staff = {k: max(50, min(90, sb - 8 + rng.randint(-4, 8))) for k in ("HC", "OC", "DC")}
+    coaches = {r: _gen_coach(r, base - 4, rng) for r in COACH_ROLES}
     return {
         "name": name, "abbr": abbr, "color": color, "color2": color2, "user": user,
-        "units": units, "staff": staff, "stadium": 1,
+        "units": units, "coaches": coaches, "stadium": 1,
         "off_scheme": "Ausgeglichen" if user else rng.choice(list(OFF_SCHEMES)),
         "def_scheme": "Ausgeglichen" if user else rng.choice(list(DEF_SCHEMES)),
         "w": 0, "l": 0, "t": 0, "pf": 0, "pa": 0,
@@ -349,6 +378,7 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
         "teams": teams, "schedule": _round_robin(n_teams),
         "results": [], "log": [], "history": [], "playoff": None,
         "champion": None, "training_focus": None,
+        "coach_market": _gen_market(rng), "events": [],
     }
     save(cfg, state)
     return state
@@ -534,12 +564,20 @@ def _earn(state: dict, games: list[dict]) -> None:
     # Spieler-EXP: Basis-Training (Equipment hebt), Trainings-Fokus, Spiele (Starter), Sieg.
     focus = state.get("training_focus")
     base = 10 + 3 * team.get("equipment", 1)
+    dev = _trait(team, "HC", "Entwicklung")               # Head Coach entwickelt
+    spec = {"QB": ("OC", "Passspiel"), "WR": ("OC", "Passspiel"),
+            "RB": ("OC", "Laufspiel"), "OL": ("OC", "Laufspiel"),
+            "DB": ("DC", "Coverage"), "LB": ("DC", "Coverage"), "DL": ("DC", "Pass-Rush")}
     for p in team.get("roster", []):
         gain = base
         if focus and (p["pos"] == focus or _side(p["pos"]) == focus):
             gain += 12
         if p["starter"]:
             gain += 6 + (4 if won else 0)
+        rt = spec.get(p["pos"])
+        if rt:
+            gain += max(0, (_trait(team, rt[0], rt[1]) - 65) // 8)   # Coordinator-Spezialität
+        gain = round(gain * (1 + (dev - 60) / 200.0))
         _gain_exp(p, gain)
 
 
@@ -629,8 +667,49 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["active_game"] = None
     state["schedule"] = _round_robin(len(state["teams"]))
     state["budget"] += 20                                 # Saisonbudget
+    state["coach_market"] = _gen_market(random.Random())  # neuer Trainermarkt
     save(cfg, state)
     return state
+
+
+# --------------------------------------------------------------------------- #
+# Trainermarkt
+# --------------------------------------------------------------------------- #
+def _gen_market(rng: random.Random) -> dict:
+    return {r: [_gen_coach(r, rng.randint(58, 78), rng) for _ in range(3)] for r in COACH_ROLES}
+
+
+def hire_coach(cfg: Config, state: dict, role: str, idx: int) -> dict:
+    if role not in COACH_ROLES:
+        return {"error": "Unbekannte Trainerrolle."}
+    market = state.get("coach_market", {}).get(role, [])
+    if idx < 0 or idx >= len(market):
+        return {"error": "Kandidat nicht verfügbar."}
+    cand = market[idx]
+    cost = max(6, (coach_rating(cand) - 50) * 2)
+    if state["budget"] < cost:
+        return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
+    state["teams"][0]["coaches"][role] = cand
+    state["budget"] -= cost
+    market[idx] = _gen_coach(role, random.randint(58, 78), random.Random())
+    save(cfg, state)
+    return {"ok": True, "hired": cand["name"], "cost": cost}
+
+
+def improve_coach(cfg: Config, state: dict, role: str) -> dict:
+    if role not in COACH_ROLES:
+        return {"error": "Unbekannte Trainerrolle."}
+    c = state["teams"][0]["coaches"][role]
+    weakest = min(c["traits"], key=lambda t: c["traits"][t])
+    if c["traits"][weakest] >= 92:
+        return {"error": "Trainer ist am Maximum."}
+    cost = upgrade_cost(coach_rating(c))
+    if state["budget"] < cost:
+        return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
+    c["traits"][weakest] = min(92, c["traits"][weakest] + 2)
+    state["budget"] -= cost
+    save(cfg, state)
+    return {"ok": True, "trait": weakest, "value": c["traits"][weakest], "cost": cost}
 
 
 # --------------------------------------------------------------------------- #
@@ -641,13 +720,10 @@ def upgrade_cost(level: int) -> int:
 
 
 def upgrade_unit(cfg: Config, state: dict, key: str) -> dict:
-    """Verbessert Einheit (Kader), Trainerstab (HC/OC/DC) oder Stadion."""
+    """Verbessert Einheit (Kader-Aggregat, v.a. KI) oder Anlagen (Stadion/Equipment)."""
     team = state["teams"][0]
     if key in ALL_UNITS:
         store, cap, label = team["units"], 95, UNIT_LABELS[key]
-    elif key in STAFF_LABELS:
-        team.setdefault("staff", {"HC": 60, "OC": 60, "DC": 60})
-        store, cap, label = team["staff"], 95, STAFF_LABELS[key]
     elif key in ("stadium", "equipment"):
         lvl = team.get(key, 1)
         if lvl >= 5:
@@ -745,8 +821,12 @@ def view(state: dict) -> dict:
         "units": [{"key": u, "label": UNIT_LABELS[u], "level": team["units"][u],
                    "cost": upgrade_cost(team["units"][u]), "side": "Offense" if u in OFF_UNITS else "Defense"}
                   for u in ALL_UNITS],
-        "staff": [{"key": k, "label": STAFF_LABELS[k], "level": team.get("staff", {}).get(k, 60),
-                   "cost": upgrade_cost(team.get("staff", {}).get(k, 60))} for k in ("HC", "OC", "DC")],
+        "coaches": [_coach_view(team, r) for r in COACH_ROLES],
+        "coach_market": {r: [{"idx": i, "name": c["name"], "rating": coach_rating(c),
+                              "cost": max(6, (coach_rating(c) - 50) * 2),
+                              "traits": [{"label": t, "val": c["traits"][t]} for t in c["traits"]]}
+                             for i, c in enumerate(state.get("coach_market", {}).get(r, []))]
+                         for r in COACH_ROLES},
         "stadium": {"level": team.get("stadium", 1),
                     "cost": 18 + (team.get("stadium", 1) - 1) * 14,
                     "income": 6 + 2 * (team.get("stadium", 1) - 1)},
