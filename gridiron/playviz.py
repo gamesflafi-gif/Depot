@@ -91,59 +91,74 @@ def _run_path(concept: str) -> dict:
     return {"path": [[round(x, 2), round(y, 2)] for x, y in paths[concept]], "pull": pull}
 
 
-# Defense: Grundfront + Coverage-spezifische Safeties/Drops.
+# Defense: jede Coverage als 11 Spieler mit Rolle:
+#   role "rush" -> stürmt den QB · "man" + cover=Receiver -> Manndeckung
+#   role "zone" + drop=[x,y] -> Zonen-Drop (deep=True färbt tiefe Safetys).
+def _D(pos, x, y, role, cover=None, drop=None, deep=False) -> dict:
+    d = {"pos": pos, "x": round(x, 2), "y": round(y, 2), "role": role, "deep": deep}
+    if cover:
+        d["cover"] = cover
+    if drop:
+        d["drop"] = [round(drop[0], 2), round(drop[1], 2)]
+    return d
+
+
 def _defense(coverage: str) -> list[dict]:
-    man = COVERAGES[coverage]["man"]
-    blitz = COVERAGES[coverage]["blitz"] >= 0.9
-    dl = [("DE", 21.5, 0.8), ("DT", 25.3, 0.8), ("DT", 28.0, 0.8), ("DE", 31.8, 0.8)]
-    lb = [("LB", 23.5, 4.5), ("LB", 26.65, 4.8), ("LB", 32.0, 4.5)]
-    cbL, cbR = ("CB", 6.0, 6.0), ("CB", 48.0, 6.0)
+    # Grundfront (4 DL stürmen immer)
+    out = [_D("DE", 21.5, 0.8, "rush"), _D("DT", 25.3, 0.8, "rush"),
+           _D("DT", 28.0, 0.8, "rush"), _D("DE", 31.8, 0.8, "rush")]
+    LB = [(23.5, 4.6), (26.65, 4.9), (32.0, 4.6)]        # Will, Mike, Sam
+    CBL, CBR = (6.0, 6.0), (48.0, 6.0)
 
-    cov = {
-        "Cover 0":    {"S": [(24.0, 4.5), (30.0, 4.5)], "cb": 1.8, "blitz": True},
-        "Cover 1":    {"S": [(C, 13.0), (25.0, 5.5)], "cb": 2.5},
-        "Cover 2 Man":{"S": [(16.0, 13.0), (37.0, 13.0)], "cb": 2.2},
-        "Cover 2":    {"S": [(16.0, 13.0), (37.0, 13.0)], "cb": 6.0, "cbdrop": (None, 9)},
-        "Tampa 2":    {"S": [(16.0, 13.5), (37.0, 13.5)], "cb": 6.0, "mlb_deep": True},
-        "Cover 3":    {"S": [(C, 15.0), (31.0, 6.0)], "cb": 6.0, "cb3deep": True},
-        "Cover 4":    {"S": [(19.0, 14.0), (34.0, 14.0)], "cb": 7.0, "cb4deep": True},
-        "Cover 6":    {"S": [(15.0, 13.5), (36.0, 14.0)], "cb": 6.5, "cb6": True},
-    }[coverage]
-
-    out: list[dict] = []
-    for pos, x, y in dl:
-        d = {"pos": pos, "x": x, "y": y, "man": False}
-        if blitz:
-            d["drop"] = [round(C + (x - C) * 0.3, 2), -4.0]   # Pass-Rush
-        out.append(d)
-
-    # Linebacker
-    for i, (pos, x, y) in enumerate(lb):
-        d = {"pos": pos, "x": x, "y": y, "man": man and not blitz}
-        if blitz and i == 1:
-            d["drop"] = [C, -3.0]
-        elif cov.get("mlb_deep") and i == 1:
-            d["drop"] = [C, 14.0]
-        elif not man:
-            d["drop"] = [round(x + (C - x) * 0.2, 2), 8.0]   # Zonen-Drop in die Underneath
-        out.append(d)
-
-    # Corners
-    cb_y = cov["cb"]
-    for (pos, x, _y), deep_x in ((cbL, 8.0), (cbR, 45.0)):
-        d = {"pos": pos, "x": x, "y": cb_y, "man": man}
-        if cov.get("cb3deep") or cov.get("cb4deep"):
-            d["drop"] = [deep_x, 16.0]
-        elif cov.get("cbdrop"):
-            d["drop"] = [x, 9.0]
-        elif cov.get("cb6"):
-            d["drop"] = [deep_x, 15.0] if x > C else [x, 9.0]
-        out.append(d)
-
-    # Safeties
-    for sx, sy in cov["S"]:
-        out.append({"pos": "S", "x": round(sx, 2), "y": round(sy, 2),
-                    "man": False, "deep": sy >= 11})
+    if coverage == "Cover 0":                            # Mann, All-Out-Blitz
+        out += [_D("CB", *CBL, "man", cover="X"), _D("CB", *CBR, "man", cover="Z"),
+                _D("S", 22.0, 8.0, "man", cover="SL"), _D("S", 31.0, 8.0, "man", cover="TE"),
+                _D("LB", *LB[0], "man", cover="RB"),
+                _D("LB", *LB[1], "rush"), _D("LB", *LB[2], "rush")]
+    elif coverage == "Cover 1":                          # Mann mit Free Safety
+        out += [_D("S", C, 13.5, "zone", drop=[C, 15.0], deep=True),
+                _D("CB", *CBL, "man", cover="X"), _D("CB", *CBR, "man", cover="Z"),
+                _D("S", 30.0, 7.0, "man", cover="SL"),
+                _D("LB", *LB[0], "man", cover="TE"), _D("LB", *LB[2], "man", cover="RB"),
+                _D("LB", *LB[1], "zone", drop=[C, 7.0])]
+    elif coverage == "Cover 2 Man":                      # 2 Deep, Mann drunter
+        out += [_D("S", 16.0, 13.0, "zone", drop=[16.0, 15.0], deep=True),
+                _D("S", 37.0, 13.0, "zone", drop=[37.0, 15.0], deep=True),
+                _D("CB", *CBL, "man", cover="X"), _D("CB", *CBR, "man", cover="Z"),
+                _D("LB", *LB[0], "man", cover="RB"), _D("LB", *LB[1], "man", cover="TE"),
+                _D("LB", *LB[2], "man", cover="SL")]
+    elif coverage in ("Cover 2", "Tampa 2"):
+        mlb_deep = coverage == "Tampa 2"
+        out += [_D("S", 15.0, 13.0, "zone", drop=[14.0, 15.5], deep=True),
+                _D("S", 38.0, 13.0, "zone", drop=[39.0, 15.5], deep=True),
+                _D("CB", *CBL, "zone", drop=[7.0, 7.0]), _D("CB", *CBR, "zone", drop=[46.0, 7.0]),
+                _D("LB", *LB[0], "zone", drop=[18.0, 9.0]),
+                _D("LB", *LB[1], "zone", drop=[C, 16.0] if mlb_deep else [C, 9.5], deep=mlb_deep),
+                _D("LB", *LB[2], "zone", drop=[35.0, 9.0])]
+    elif coverage == "Cover 3":
+        out += [_D("CB", *CBL, "zone", drop=[8.0, 16.0], deep=True),
+                _D("CB", *CBR, "zone", drop=[45.0, 16.0], deep=True),
+                _D("S", C, 14.0, "zone", drop=[C, 17.0], deep=True),
+                _D("S", 33.0, 7.0, "zone", drop=[36.0, 9.0]),
+                _D("LB", *LB[0], "zone", drop=[17.0, 9.0]),
+                _D("LB", *LB[1], "zone", drop=[C, 9.0]),
+                _D("LB", *LB[2], "zone", drop=[34.0, 8.0])]
+    elif coverage == "Cover 4":
+        out += [_D("CB", *CBL, "zone", drop=[8.0, 15.0], deep=True),
+                _D("CB", *CBR, "zone", drop=[45.0, 15.0], deep=True),
+                _D("S", 19.0, 13.0, "zone", drop=[19.0, 16.0], deep=True),
+                _D("S", 34.0, 13.0, "zone", drop=[34.0, 16.0], deep=True),
+                _D("LB", *LB[0], "zone", drop=[18.0, 8.0]),
+                _D("LB", *LB[1], "zone", drop=[C, 8.5]),
+                _D("LB", *LB[2], "zone", drop=[35.0, 8.0])]
+    else:  # Cover 6 (Quarter-Quarter-Half)
+        out += [_D("CB", *CBL, "zone", drop=[8.0, 13.0]),
+                _D("CB", *CBR, "zone", drop=[45.0, 16.0], deep=True),
+                _D("S", 15.0, 13.0, "zone", drop=[14.0, 16.0], deep=True),
+                _D("S", 36.0, 13.0, "zone", drop=[37.0, 16.0], deep=True),
+                _D("LB", *LB[0], "zone", drop=[18.0, 8.0]),
+                _D("LB", *LB[1], "zone", drop=[C, 9.0]),
+                _D("LB", *LB[2], "zone", drop=[34.0, 8.0])]
     return out
 
 
