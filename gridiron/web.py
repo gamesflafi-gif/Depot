@@ -1383,6 +1383,9 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
+        # HTML nie cachen -> Handy lädt immer die aktuelle Version (kein „tote Seite" durch alten Cache)
+        if "text/html" in resp.headers.get("content-type", ""):
+            resp.headers["Cache-Control"] = "no-store, must-revalidate"
         return resp
 
     @app.get("/health")
