@@ -591,7 +591,9 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
     pos = 0 if rng.random() < 0.5 else 1
     for drive in range(GAME_DRIVES):
         off, deff = teams[pos], teams[1 - pos]
-        attack_right = (pos == 0)
+        # Heim (pos 0) verteidigt die rechte Endzone und greift nach LINKS an;
+        # Gast (pos 1) greift nach RECHTS an. Jeder startet an der eigenen 25.
+        attack_right = (pos == 1)
         absx = 25.0 if attack_right else 75.0
         ytz, down, dist = 75.0, 1, 10
         q = min(4, drive // (GAME_DRIVES // 4) + 1)
@@ -1280,7 +1282,7 @@ def start_game(cfg: Config, state: dict) -> dict:
         "hi": hi, "ai": ai, "user_is_home": hi == 0,
         "score": [0, 0], "pos": pos, "drive": 0, "q": 1,
         "down": 1, "dist": 10, "ytz": 75.0,
-        "absx": 25.0 if pos == 0 else 75.0,
+        "absx": 75.0 if pos == 0 else 25.0,   # Heim startet rechts (eigene 25) und greift nach links an
         "log": [], "over": False, "box": {},
     }
     state["active_game"] = g
@@ -1316,7 +1318,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     o = play_outcome(concept, coverage,
                      {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
     yards = max(-12, min(o["yards"], int(g["ytz"])))
-    attack_right = (g["pos"] == 0)
+    attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
     # Box-Score (Nutzer-Team)
     urost = teams[0].get("roster")
@@ -1365,7 +1367,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         g["drive"] += 1
         g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
         g["down"], g["dist"], g["ytz"] = 1, 10, 75.0
-        g["absx"] = 25.0 if g["pos"] == 0 else 75.0
+        g["absx"] = 75.0 if g["pos"] == 0 else 25.0
         if g["drive"] >= MAX_DRIVES:
             g["over"] = True
 
