@@ -181,6 +181,9 @@ _STYLE2 = """
  .fig.cel8{animation:cel8 .55s ease-in-out infinite}@keyframes cel8{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(25deg) scale(1.2)}}
  .fig.cel9{animation:cel9 .4s ease-in-out infinite}@keyframes cel9{0%,100%{transform:translate(-5px,0)}25%{transform:translate(0,-5px)}50%{transform:translate(5px,0)}75%{transform:translate(0,-5px)}}
  .fig.cel10{animation:cel10 .6s ease-in-out infinite}@keyframes cel10{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-9px) rotate(8deg)}60%{transform:translateY(2px) rotate(-6deg)}}
+ .conf{transform-origin:center;animation-name:confall;animation-iteration-count:infinite;animation-timing-function:linear}
+ @keyframes confall{0%{transform:translateY(-30px) rotate(0)}100%{transform:translateY(400px) rotate(560deg)}}
+ .tdword{animation:tdword .55s ease}@keyframes tdword{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
  .pulse{animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
  .fieldlegend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;align-items:center}
  .fieldlegend i.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
@@ -590,6 +593,37 @@ function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelecto
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','spin');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
+/* Kino-Jubel: Spiel pausiert, Endzonen-Kamera zeigt den tanzenden Spieler groß im Feldbereich */
+function tdCelebration(svg,color,onDone){const P=svg.id;if(_anim[P]){cancelAnimationFrame(_anim[P]);_anim[P]=null;}
+ const cel=Math.floor(Math.random()*10)+1;
+ let s='<defs>'+
+  '<linearGradient id="csky_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a1622"/><stop offset="1" stop-color="#0f3b25"/></linearGradient>'+
+  '<linearGradient id="ctf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a6b40"/><stop offset="1" stop-color="#0c3f25"/></linearGradient></defs>'+
+  '<rect x="0" y="0" width="533" height="360" fill="url(#csky_'+P+')"/>'+
+  '<rect x="0" y="150" width="533" height="210" fill="url(#ctf_'+P+')"/>';                       // Rasen
+ // Ränge/Publikum oben
+ for(let r=0;r<3;r++)for(let i=0;i<41;i++){const cx=8+i*13,cy=18+r*13;s+='<circle cx="'+cx+'" cy="'+cy+'" r="2.4" fill="'+((i+r)%5===0?color:'#26313f')+'" opacity="0.8"/>';}
+ // Spotlights
+ s+='<polygon points="0,0 533,150 0,150" fill="#ffffff" opacity="0.04"/><polygon points="533,0 0,150 533,150" fill="#ffffff" opacity="0.04"/>';
+ // Endzone vorne (Kamera steht in der Endzone)
+ s+='<rect x="0" y="300" width="533" height="60" fill="'+color+'" opacity="0.30"/>'+
+    '<line x1="0" y1="300" x2="533" y2="300" stroke="#ffffff" stroke-width="3" opacity="0.85"/>'+
+    '<text x="266" y="338" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff" opacity="0.45" letter-spacing="7">END ZONE</text>';
+ // TOUCHDOWN-Schrift (ohne Emoji)
+ s+='<text class="tdword" x="266" y="92" text-anchor="middle" font-size="40" font-weight="800" fill="#ffffff" stroke="#06140d" stroke-width="1" letter-spacing="3" style="transform-box:fill-box;transform-origin:center">TOUCHDOWN</text>';
+ // großer tanzender Spieler, zentral im Feldbereich
+ s+='<g transform="translate(266 232) scale(6)"><g class="fig cel'+cel+'">'+
+    '<rect x="-2.1" y="3.5" width="4.2" height="6" rx="1.4" fill="'+color+'" stroke="#06140d" stroke-width="0.9"/>'+      // Rumpf/Beine
+    '<ellipse cx="0" cy="1.5" rx="6.6" ry="4.7" fill="'+color+'" stroke="#06140d" stroke-width="1"/>'+                    // Schultern
+    '<circle cx="0" cy="-4.4" r="3.5" fill="'+color+'" stroke="#06140d" stroke-width="1"/>'+                             // Helm
+    '<line x1="-2.1" y1="-5.8" x2="2.1" y2="-5.8" stroke="#06140d" stroke-width="0.8"/>'+                                // Facemask
+    '</g></g>';
+ // Konfetti
+ for(let i=0;i<18;i++){const cx=12+i*29,dur=(1.4+(i%5)*0.28).toFixed(2),del=((i*0.21)%1.8).toFixed(2),col=[color,'#ffd34d','#ffffff','#5fa8ff'][i%4];
+   s+='<rect class="conf" x="'+cx+'" y="-12" width="5" height="9" rx="1" fill="'+col+'" style="animation-duration:'+dur+'s;animation-delay:'+del+'s"/>';}
+ svg.innerHTML=s;
+ setTimeout(()=>{if(onDone)onDone();},2800);   // nach dem Tanz weiter (Extra-Punkt/FG)
+}
 function curPos(P,id){return _ppos[P+id]||null;}
 const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5,DB:9.4,S:8.9};
 function _spd(p){return SPD[p]||8;}
@@ -686,18 +720,23 @@ function playAnim(svg,d,res,onDone){
   const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0);
   if(!done)_anim[P]=requestAnimationFrame(frame);
+  else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
+    celebrate(P,'o'+carrier.i);
+    showResult(svg,{kind,yards,td,pt:[carrier.x,carrier.y]});
+    if(res.celColor)setTimeout(()=>tdCelebration(svg,res.celColor,onDone),750);          // Schwenk auf den tanzenden Spieler
+    else if(onDone)setTimeout(onDone,2200);
+  }
   else{
-    if(td&&carrier)celebrate(P,'o'+carrier.i);                                          // TD: durchgelaufen -> Jubel statt Tackle
-    else if(kind==='sack')downFig(P,'o'+qb.i);
+    if(kind==='sack')downFig(P,'o'+qb.i);
     else if(carrier&&kind!=='incomplete')downFig(P,'o'+carrier.i);                      // Tackle: Ballträger geht zu Boden
     showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
-    if(onDone)setTimeout(onDone,td?2000:1100);}                                          // beim TD länger für den Jubel
+    if(onDone)setTimeout(onDone,1100);}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
 function showResult(svg,res){
  const td=res.td;
- const label=td?'TOUCHDOWN! 🎉':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
+ const label=td?'TOUCHDOWN!':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
  const col=td?'#19e08f':(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
  const pt=res.pt||[26,5],px=mapX(pt[0]),py=mapY(pt[1]),w=td?108:72,x=Math.min(Math.max(px,54),480),y=Math.max(py-16,16);
  const g=el('g',{});
@@ -1140,7 +1179,8 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
- playAnim(svg,d,{kind:play.kind,yards:play.yards,td:play.td},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
+ const cc=liveG?gameCols(liveG,play.user_off).off:'#16c784';
+ playAnim(svg,d,{kind:play.kind,yards:play.yards,td:play.td,celColor:cc},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
  g.appendChild(el('rect',{x:x-72,y:y-19,width:144,height:34,rx:8,fill:'#0a0f0d',stroke:made?'#19e08f':'#ef5350','stroke-width':2}));
