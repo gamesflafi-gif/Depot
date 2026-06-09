@@ -212,7 +212,7 @@ def test_franchise_web(tmp_path):
     r = client.post("/api/fr/sim_week").json()
     assert r["view"]["week"] == 1 and r["result"]["games"]
 
-    up = client.post("/api/fr/upgrade", params={"unit": "WR"}).json()
+    up = client.post("/api/fr/improve_coach", params={"role": "HC"}).json()
     assert up["result"].get("ok") or up["result"].get("error")
     assert client.post("/api/fr/reset").json()["ok"]
     assert client.get("/api/fr/state").json()["exists"] is False
@@ -277,15 +277,55 @@ def test_simulator_outcomes_and_sampler():
     assert {"complete", "incomplete"} & kinds
 
 
-def test_franchise_upgrades_staff_stadium(tmp_path):
+def test_franchise_box_scores(tmp_path):
+    """Simuliertes Nutzer-Spiel erzeugt Box-Scores und vergibt Leistungs-EXP."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=21)
+    g = F.sim_week(cfg, st)["user_game"]
+    assert g["box"] and len(g["box"]) >= 4
+    assert any(s["pass_yds"] or s["rush_yds"] or s["rec_yds"] for s in g["box"])   # Offense
+    assert any(s["tkl"] or s["sack"] or s["intc"] for s in g["box"])               # Defense
+    assert any(p["exp"] > 0 or p["pts"] > 0 for p in st["teams"][0]["roster"])     # Leistungs-EXP
+
+
+def test_franchise_events_injuries(tmp_path):
+    """Verletzungen senken das Rating; Wochen erzeugen Events."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=11)
+    team = st["teams"][0]
+    ov0 = F.overall(team)
+    q = next(p for p in team["roster"] if p["pos"] == "QB" and p["starter"])
+    q["inj"] = 2
+    F._sync_units(team)
+    assert F.overall(team) <= ov0                               # verletzter Starter schwächt
+    seen = set()
+    for _ in range(8):
+        for e in F.sim_week(cfg, st).get("events", []):
+            seen.add(e["type"])
+    assert seen                                                 # Events sind aufgetreten
+    assert "inj" in F.view(st)["roster"][0]
+
+
+def test_franchise_coaches_and_facilities(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
-    st["budget"] = 200
-    ov0 = F.overall(st["teams"][0])
-    assert F.upgrade_unit(cfg, st, "OC")["ok"]
-    assert F.upgrade_unit(cfg, st, "DC")["ok"]
-    assert F.overall(st["teams"][0]) >= ov0                     # Coaches heben OVR
+    st["budget"] = 400
+    team = st["teams"][0]
+    # Trainer haben individuelle Stärken
+    assert set(team["coaches"]) == {"HC", "OC", "DC"}
+    assert team["coaches"]["OC"]["traits"] and team["coaches"]["OC"]["name"]
+    # Verbessern hebt den schwächsten Trait
+    r = F.improve_coach(cfg, st, "OC")
+    assert r["ok"] and r["value"] >= 47
+    # Markt: besten OC-Kandidaten anheuern
+    mk = st["coach_market"]["OC"]
+    best = max(range(len(mk)), key=lambda i: F.coach_rating(mk[i]))
+    h = F.hire_coach(cfg, st, "OC", best)
+    assert h["ok"] and team["coaches"]["OC"]["name"] == h["hired"]
+    # Anlagen
     s = F.upgrade_unit(cfg, st, "stadium")
     assert s["ok"] and s["level"] == 2
     assert F.upgrade_unit(cfg, st, "quatsch").get("error")
