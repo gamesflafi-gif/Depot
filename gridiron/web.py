@@ -803,7 +803,8 @@ function renderGame(g,play){
  if(g.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(g.away)+' '+g['as']+' : '+g.hs+' '+esc(g.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
  else{h+='<div class="posbanner '+(g.user_offense?'off':'def')+'">'+(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:')+'</div>'+
-   '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>';}
+   '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
+   '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()">Drive simulieren</button> <button class="ghost" onclick="simRest()">Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);
@@ -813,6 +814,9 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  if(d.error)return; renderField(svg,d,10); playAnim(svg,d,{mean_yards:play.yards});}
 async function gamePlay(choice){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
+async function simDrive(){const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
+ if(r.result){if(r.view)renderMgr(r.view);showGameResult(r.result);}else renderGame(r.game);}
+async function simRest(){const r=await api('/api/fr/game/sim_rest','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 function showGameResult(res){closeGame();const o=document.createElement('div');o.className='overlay';o.id='resultoverlay';
  o.addEventListener('click',e=>{if(e.target===o)closeResult();});
  o.innerHTML='<div class="modal"><div class="modalhead"><h3>Endstand</h3><button class="ghost" onclick="closeResult()">Schließen</button></div>'+
@@ -1144,6 +1148,22 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return F.finish_game(cfg, st)
+
+    @app.post("/api/fr/game/sim_drive")
+    def fr_game_sim_drive():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.game_sim_drive(cfg, st)
+
+    @app.post("/api/fr/game/sim_rest")
+    def fr_game_sim_rest():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.game_sim_rest(cfg, st)
 
     @app.post("/api/fr/game/abort")
     def fr_game_abort():

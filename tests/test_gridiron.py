@@ -277,6 +277,19 @@ def test_simulator_outcomes_and_sampler():
     assert {"complete", "incomplete"} & kinds
 
 
+def test_franchise_game_sim_options(tmp_path):
+    """Interaktives Spiel: Drive simulieren bzw. Rest bis Ende simulieren."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=51)
+    F.start_game(cfg, st)
+    r = F.game_sim_drive(cfg, st)
+    assert ("game" in r) or ("result" in r)                # weiter ODER schon vorbei
+    fin = F.game_sim_rest(cfg, st)
+    assert fin["ok"] and fin["result"]["hs"] != fin["result"]["as"]
+    assert fin["view"]["week"] == 1 and not F.load(cfg).get("active_game")
+
+
 def test_franchise_box_scores(tmp_path):
     """Simuliertes Nutzer-Spiel erzeugt Box-Scores und vergibt Leistungs-EXP."""
     from gridiron import franchise as F
