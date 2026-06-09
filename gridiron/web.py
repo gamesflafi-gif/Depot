@@ -518,60 +518,82 @@ function moveP(P,id,x,y){const c=$(P+'_pl_'+id);if(!c)return;c.setAttribute('cx'
  const t=$(P+'_tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+2.8);}
  const r=$(P+'_rg_'+id);if(r){r.setAttribute('cx',mapX(x));r.setAttribute('cy',mapY(y));}}
 function curPos(P,id){const c=$(P+'_pl_'+id);return c?[parseFloat(c.getAttribute('cx'))/10,26-(parseFloat(c.getAttribute('cy'))-10)/10]:null;}
+const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5,DB:9.4,S:8.9};
+function _spd(p){return SPD[p]||8;}
+function _toward(o,tx,ty,mx){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx,dy);if(d<=mx||d<1e-6){o.x=tx;o.y=ty;}else{o.x+=dx/d*mx;o.y+=dy/d*mx;}}
+function _advance(o,mx){if(!o.route)return;let b=mx;while(b>0&&o.ri<o.route.length){const wp=o.route[o.ri],dx=wp[0]-o.x,dy=wp[1]-o.y,d=Math.hypot(dx,dy);if(d<=b){o.x=wp[0];o.y=wp[1];o.ri++;b-=d;}else{o.x+=dx/d*b;o.y+=dy/d*b;b=0;}}}
 function playAnim(svg,d,res){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
- res=res||{};
- const kind=res.kind||(d.kind==='run'?'run':'complete');
+ res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
  const yards=(res.yards!=null?res.yards:(res.mean_yards!=null?res.mean_yards:0));
- const T=2400,t0=performance.now(),ease=t=>1-Math.pow(1-t,2);
- const qbi=d.offense.findIndex(o=>o.pos==='QB'),qb=d.offense[qbi];
- const tgtI=d.offense.findIndex(o=>o.target||o.carry),tgt=tgtI>=0?d.offense[tgtI]:null;
- const route=(tgt&&tgt.route&&tgt.route.length>1)?tgt.route:null;
- const catchPt=route?route[route.length-1]:(d.ball_target||[qb.x,qb.y]);
- const airY=catchPt[1],ball=$(P+'_pball'),isPass=(kind!=='run'),throwAt=0.5,arrive=0.74;
- let intPt=catchPt;
- if(kind==='int'){let bd=1e9;d.defense.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intPt=[p.x,p.y];}});}
- let lastT=catchPt;
- function frame(now){const t=Math.min(1,(now-t0)/T);
-  const qy=qb.y-1.4*Math.min(1,t*2.4);
-  const sp={};
-  d.offense.forEach((o,i)=>{if(i===tgtI)return;if(o.route&&o.route.length>1){const pp=posAlong(o.route,ease(Math.min(1,t/0.5)));moveP(P,'o'+i,pp[0],pp[1]);if(o.pos)sp[o.pos]=pp;}else if(o.pos)sp[o.pos]=[o.x,o.y];});
-  // Ziel-/Ballträger getrennt: Route bis zum Fang/Übergabe, dann Lauf nach Catch
-  let tpos=null;
-  if(tgt){
-   if(kind==='run'){const last=route?route[route.length-1]:[tgt.x,tgt.y];
-     tpos=(t<0.6&&route)?posAlong(route,ease(t/0.6)):[last[0],last[1]+(yards-last[1])*Math.min(1,route?(t-0.6)/0.4:t)];}
-   else{tpos=route?posAlong(route,ease(Math.min(1,t/arrive))):catchPt.slice();
-     if(kind==='complete'&&t>arrive){const cf=(t-arrive)/(1-arrive);tpos=[catchPt[0],airY+(Math.max(yards,airY)-airY)*cf];}}
-   moveP(P,'o'+tgtI,tpos[0],tpos[1]);if(tgt.pos)sp[tgt.pos]=tpos;lastT=tpos;
-  }
-  moveP(P,'o'+qbi,qb.x,isPass?qy:qb.y);if(isPass)sp['QB']=[qb.x,qy];
-  // Ballträger nach Fang/Handoff -> Verteidigung verfolgt (Schwarm/Tackle)
-  const carrying=tpos&&((kind==='run'&&t>0.45)||(kind==='complete'&&t>arrive));
-  d.defense.forEach((p,i)=>{const id='d_'+i,cur=curPos(P,id)||[p.x,p.y];let tx,ty,k;
-   if(carrying){const dd=Math.hypot(tpos[0]-cur[0],tpos[1]-cur[1]);
-     const kk=Math.min(0.32,Math.max(0.07,0.10+(12-dd)/55));
-     moveP(P,id,cur[0]+(tpos[0]-cur[0])*kk,cur[1]+(tpos[1]-cur[1])*kk);return;}
-   if(p.role==='rush'){tx=qb.x+(p.x-qb.x)*0.12;ty=(isPass?qy:qb.y)+0.8;k=0.09;}
-   else if(p.role==='man'&&sp[p.cover]){const r=sp[p.cover];tx=r[0]+(p.x<r[0]?-0.7:0.7);ty=r[1]+0.8;k=0.20;}
-   else if(p.drop){tx=p.drop[0];ty=p.drop[1];let best=null,bd=99;for(const key in sp){if(key==='QB')continue;const r=sp[key];const dd=Math.hypot(r[0]-tx,r[1]-ty);if(dd<bd){bd=dd;best=r;}}if(best&&bd<11){tx+=(best[0]-tx)*0.32;ty+=(best[1]-ty)*0.16;}k=0.10;}
-   else{tx=p.x;ty=p.y;k=0.1;}
-   moveP(P,id,cur[0]+(tx-cur[0])*k,cur[1]+(ty-cur[1])*k);
+ const isPass=(kind!=='run'),ball=$(P+'_pball'),C=26.65;
+ const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry}));
+ const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop}));
+ const qb=O.find(o=>o.pos==='QB'),tgt=O.find(o=>o.target||o.carry),ols=O.filter(o=>o.pos==='OL');
+ // Completion: Route auf die tatsächliche Fangtiefe kürzen (Fang dort, dann YAC bis Yards)
+ if(kind==='complete'&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1],cy=Math.min(rY,Math.max(1,yards));
+   const out=[r[0]];for(let k=1;k<r.length;k++){const a=r[k-1],b=r[k];if(b[1]<=cy+0.01){out.push(b);}else{const f=(cy-a[1])/((b[1]-a[1])||1);out.push([a[0]+(b[0]-a[0])*f,cy]);break;}}
+   tgt.route=out;}
+ const catchPt=(tgt&&tgt.route)?tgt.route[tgt.route.length-1]:(d.ball_target||[qb.x,qb.y]);
+ const gain=[catchPt[0],Math.max(catchPt[1],yards)];
+ const runLast=(!isPass&&tgt&&tgt.route)?tgt.route[tgt.route.length-1]:null;
+ const runEnd=runLast?[runLast[0],Math.max(runLast[1],yards)]:null;
+ let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
+ const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0;
+ const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/26);
+ function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;const M=p=>_spd(p)*dt;
+  const carrier=(kind==='complete'&&caught)?tgt:(!isPass?tgt:null);
+  // QB
+  if(isPass&&!sacked){_toward(qb,qb.sy<-3?qb.sy:(qb.sy-2.3),qb.sy-2.3,M('QB')*0.85);qb.x=C;}
+  else if(!isPass){_toward(qb,C-0.6,-3.6,M('QB')*0.7);}
+  // Offense
+  O.forEach(o=>{if(o.pos==='QB')return;
+   if(o.pos==='OL'){const idx=ols.indexOf(o),off=idx-(ols.length-1)/2;
+     if(isPass){_toward(o,C+off*1.7,-2.2,M('OL'));}                       // Pocket vor dem QB
+     else{const gx=runEnd?runEnd[0]:C;_toward(o,o.sy>-1?o.x+(gx-o.x)*0.18:o.x,Math.min(3.5,o.y+2.6),M('OL'));}  // Block nach vorn, Loch öffnen
+     return;}
+   if(o===tgt){
+     if(isPass){if(!caught)_advance(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}
+     else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
+     return;}
+   if(o.route)_advance(o,M(o.pos));                                       // andere Receiver laufen Routen
   });
-  // Ball je nach Ausgang
-  if(ball){
-   if(kind==='sack'){ball.setAttribute('opacity',0);const sf=Math.min(1,Math.max(0,(t-0.4)/0.45));moveP(P,'o'+qbi,qb.x,qy+(yards-qy)*sf);}
-   else if(isPass){
-    if(t>=throwAt&&t<=arrive){const tt=(t-throwAt)/(arrive-throwAt),dest=(kind==='int')?intPt:catchPt;ball.setAttribute('opacity',1);
-      ball.setAttribute('cx',mapX(qb.x+(dest[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qy+(dest[1]-qy)*tt-Math.sin(tt*Math.PI)*1.4));}
-    else if(t>arrive){
-      if(kind==='complete'&&tpos){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(tpos[0]));ball.setAttribute('cy',mapY(tpos[1]));}
-      else if(kind==='int'){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(intPt[0]));ball.setAttribute('cy',mapY(intPt[1]));}
-      else{ball.setAttribute('opacity',Math.max(0,1-(t-arrive)/0.18));ball.setAttribute('cx',mapX(catchPt[0]));ball.setAttribute('cy',mapY(catchPt[1]));}
-    } else ball.setAttribute('opacity',0);
-   } else if(tpos){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(tpos[0]));ball.setAttribute('cy',mapY(tpos[1]));}
+  // Ball / Wurf
+  if(isPass&&kind!=='sack'){
+   const tgtDone=tgt&&tgt.ri>=(tgt.route?tgt.route.length:1);
+   if(!thrown&&(tgtDone||el>1.7)){thrown=true;tAt=now;bp=[qb.x,qb.y];}
+   if(thrown&&!arrived){const dest=intD?[intD.x,intD.y]:catchPt;const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],26*dt);bp=[o2.x,o2.y];
+     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.5){arrived=true;arrTime=el;if(kind==='complete')caught=true;}}
+   else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[intD.x,intD.y];}
   }
-  if(t<1)_anim[P]=requestAnimationFrame(frame);else showResult(svg,{kind,yards,pt:(kind==='sack'?[qb.x,yards]:lastT)});
+  // Defense (geschwindigkeitsbasiert)
+  D.forEach(p=>{let tx,ty,mx=M(p.pos);
+   if(kind==='sack'){tx=qb.x;ty=qb.y;}
+   else if(carrier){tx=carrier.x;ty=carrier.y;}                          // Ballträger verfolgen (eigenes Tempo)
+   else if(p.role==='rush'){tx=C+(p.x-C)*0.25;ty=qb.y+0.5;mx*=0.72;}     // Rush, von OL gebremst
+   else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){tx=r.x+(p.x<r.x?-0.8:0.8);ty=r.y+0.7;}else{tx=p.x;ty=p.y;}}
+   else if(p.drop){tx=p.drop[0];ty=p.drop[1];}else{tx=p.x;ty=p.y;}
+   _toward(p,tx,ty,mx);
+  });
+  // Sack: QB wird zurückgedrängt sobald Rusher nah
+  if(kind==='sack'){if(D.some(p=>p.role==='rush'&&Math.hypot(p.x-qb.x,p.y-qb.y)<1.4)||el>1.3){sacked=true;qb.y=Math.max(qb.y-M('QB'),yards);}}
+  // schreiben
+  O.forEach(o=>moveP(P,'o'+o.i,o.x,o.y));
+  D.forEach(p=>moveP(P,'d_'+p.i,p.x,p.y));
+  if(ball){
+   if(!isPass){if(carrier){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(carrier.x));ball.setAttribute('cy',mapY(carrier.y));}else ball.setAttribute('opacity',0);}
+   else if(kind==='sack'){ball.setAttribute('opacity',0);}
+   else if(thrown){const fp=arrived?1:Math.min(1,(now-tAt)/1000/flightDur);const arc=Math.sin(fp*Math.PI)*14;
+     ball.setAttribute('cx',mapX(bp[0]));ball.setAttribute('cy',mapY(bp[1])-arc);
+     ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
+   else ball.setAttribute('opacity',0);
+  }
+  // Ende: erst wenn der Raumgewinn erreicht ist (Verteidiger treffen dort ein = Tackle), Pass aufgelöst, Sack oder Timeout
+  const atGain=carrier&&((kind==='complete'&&Math.hypot(carrier.x-gain[0],carrier.y-gain[1])<0.6)||(!isPass&&runEnd&&Math.hypot(carrier.x-runEnd[0],carrier.y-runEnd[1])<0.6));
+  const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
+    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0);
+  if(!done)_anim[P]=requestAnimationFrame(frame);
+  else showResult(svg,{kind,yards,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,yards]:catchPt))});
  }
  _anim[P]=requestAnimationFrame(frame);
 }
