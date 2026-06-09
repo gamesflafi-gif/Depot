@@ -179,9 +179,18 @@ function tab(s){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle(
 
 async function init(){
  const d=await (await fetch('/api/teams')).json();
+ if(!d.teams.length){
+  $('team').innerHTML='<option>— keine Daten —</option>';
+  $('season').innerHTML='<option value="">—</option>';
+  $('rep').innerHTML='<div class="card">Noch <b>keine Daten</b> im Lake. <b>Play-Simulator</b> und '+
+   '<b>🏈 Manager</b> (Tabs oben) funktionieren sofort — probier sie aus!<br>'+
+   '<span class="mut">Für Scouting Daten laden: <code>python -m gridiron.cli ingest</code> '+
+   '(im Sample-Modus passiert das beim Serverstart automatisch).</span></div>';
+  return;
+ }
  $('team').innerHTML=d.teams.map(t=>'<option>'+esc(t)+'</option>').join('');
  $('season').innerHTML='<option value="">alle</option>'+d.seasons.map(s=>'<option>'+s+'</option>').join('');
- if(d.teams.length){loadScout();}
+ loadScout();
 }
 async function loadScout(){
  const team=$('team').value, season=$('season').value;
