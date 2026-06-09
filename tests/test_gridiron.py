@@ -319,9 +319,14 @@ def test_kicker_fg_and_extra_point(tmp_path):
     F.start_game(cfg, st)
     g = st["active_game"]
     g["pos"] = 0 if g["user_is_home"] else 1              # Nutzer am Ball
-    # Field-Goal-Option taucht im Bereich auf
+    # Field-Goal-Option taucht im Bereich auf (Optionen pro Snap neu)
     g["ytz"], g["down"] = 47, 4
-    assert any(o["key"] == "__FG__" for o in F._game_view(st)["options"])
+    F._new_decision_options(st)
+    opts = F._game_view(st)["options"]
+    assert any(o["key"] == "__FG__" for o in opts)
+    # 4 zufällige Offense-Plays mit mindestens 1 Lauf und 1 Pass
+    plays = [o for o in opts if o["type"] in ("Pass", "Lauf")]
+    assert len(plays) == 4 and any(o["type"] == "Lauf" for o in plays) and any(o["type"] == "Pass" for o in plays)
     r = F.game_play(cfg, st, "__FG__")
     assert r["play"]["kind"] == "fg" and r["game"]["awaiting"] != "pat"
 
@@ -342,6 +347,35 @@ def test_kicker_fg_and_extra_point(tmp_path):
     r2 = F.game_play(cfg, st, "__XP__")
     assert r2["game"]["awaiting"] != "pat"               # nach PAT geht es normal weiter
     assert r2["game"]["hs"] + r2["game"]["as"] >= before
+
+
+def test_random_playcalls_and_philly(tmp_path):
+    """Eigene Plays: 4 zufällige Offense-Calls, 4 Coverages; Philly Special genau 1×."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=9)
+    F.do_training(cfg, st, "team")
+    F.start_game(cfg, st)
+    g = st["active_game"]
+
+    # Defense: 4 zufällige Coverages
+    g["pos"] = 1 if g["user_is_home"] else 0             # Gegner am Ball -> Nutzer verteidigt
+    F._new_decision_options(st)
+    dopts = F._game_view(st)["options"]
+    assert len(dopts) == 4 and all(o["type"] == "Coverage" for o in dopts)
+
+    # Philly Special wird genau einmal angeboten
+    g["pos"] = 0 if g["user_is_home"] else 1             # Nutzer am Ball
+    g["ytz"], g["philly_at"], g["off_snaps"], g["philly_used"] = 75, 1, 0, False
+    F._new_decision_options(st)
+    assert any(o["key"] == "__PHILLY__" for o in st["active_game"]["opts"])
+    r = F.game_play(cfg, st, "__PHILLY__")
+    assert "Philly" in r["play"]["desc"] and st["active_game"]["philly_used"]
+    # danach nie wieder
+    g = st["active_game"]; g["pos"] = 0 if g["user_is_home"] else 1
+    g["ytz"], g["philly_at"], g["off_snaps"] = 75, 1, 0
+    F._new_decision_options(st)
+    assert not any(o["key"] == "__PHILLY__" for o in st["active_game"]["opts"])
 
 
 def test_franchise_detailed_game(tmp_path):
