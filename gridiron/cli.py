@@ -103,6 +103,17 @@ def cmd_predict(cfg, args) -> None:
 def cmd_serve(cfg, args) -> None:
     import uvicorn
     from gridiron.web import create_app
+    # Demo-Komfort: bei leerem Daten-Lake im Sample-Modus automatisch laden,
+    # damit das Scouting nie mit leeren Auswahlfeldern startet.
+    with GridironStore(cfg) as store:
+        empty = store.count_plays() == 0
+    if empty and cfg.source_mode == "sample":
+        print("Leerer Daten-Lake erkannt – lade Demo-Daten (sample) …")
+        from gridiron.ingest import ingest
+        ingest(cfg)
+    elif empty:
+        print("Hinweis: Daten-Lake ist leer. Scouting braucht 'ingest' "
+              "(echte Daten). Simulator & Manager laufen auch ohne Daten.")
     print(f"Starte Gridiron-Web auf http://{args.host}:{args.port}  (Strg+C beendet)")
     uvicorn.run(create_app(cfg), host=args.host, port=args.port)
 
