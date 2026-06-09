@@ -1587,22 +1587,22 @@ def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
     pos = g.pop("pat")["pos"]
     if choice == "__2PT__":
         edge = 0.10 * (offense(off) - defense(deff))
-        if random.random() < max(0.30, min(0.66, 0.46 + edge * 0.04)):
+        good = random.random() < max(0.30, min(0.66, 0.46 + edge * 0.04))
+        label = "2-Punkte-Conversion gut! (+2)" if good else "2-Punkte-Conversion gescheitert"
+        if good:
             g["score"][pos] += 2
-            label = "2-Punkte-Conversion gut! (+2)"
-        else:
-            label = "2-Punkte-Conversion gescheitert"
+        kind, fg_dist = "pat", 0                          # 2PT: keine Kick-Animation
     else:                                                 # Extra-Punkt-Kick
-        if random.random() < xp_make_prob(kicker(off)):
+        good = random.random() < xp_make_prob(kicker(off))
+        label = "Extra-Punkt gut (+1)" if good else "Extra-Punkt daneben"
+        if good:
             g["score"][pos] += 1
-            label = "Extra-Punkt gut (+1)"
-        else:
-            label = "Extra-Punkt daneben"
+        kind, fg_dist = "fg", 18                          # Kick-Animation (Extra-Punkt)
     _pat_log(g, off, label, user_off)
     _switch_possession(g)
     save(cfg, state)
-    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": True, "kind": "pat",
-                                 "concept": None, "coverage": None, "user_off": user_off},
+    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": True, "good": good, "kind": kind,
+                                 "fg_dist": fg_dist, "concept": None, "coverage": None, "user_off": user_off},
             "game": _game_view(state)}
 
 
@@ -1622,8 +1622,8 @@ def _attempt_fg(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) ->
     _pat_log(g, off, label, user_off)
     _switch_possession(g)
     save(cfg, state)
-    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": scored, "kind": "fg",
-                                 "concept": None, "coverage": None, "user_off": user_off},
+    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": scored, "good": scored, "kind": "fg",
+                                 "fg_dist": dist, "concept": None, "coverage": None, "user_off": user_off},
             "game": _game_view(state)}
 
 
