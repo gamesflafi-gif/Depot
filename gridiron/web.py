@@ -18,6 +18,8 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
+_BUILD = "v12-gameflow"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
    --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
@@ -404,7 +406,7 @@ _PAGE = """<!doctype html><html lang="de"><head>
  <div id="mgr_out" class="mut">Lade …</div>
  </div>
 
- <div class="foot">Simulation = echte Liga-Basisraten × kalibrierte Football-Matchup-Logik. Wahrscheinlichkeiten, keine Garantie.</div>
+ <div class="foot">Simulation = echte Liga-Basisraten × kalibrierte Football-Matchup-Logik. Wahrscheinlichkeiten, keine Garantie. · Build """ + _BUILD + """</div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
@@ -1453,6 +1455,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         resp.headers["X-Content-Type-Options"] = "nosniff"
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
+        resp.headers["X-Gridiron-Build"] = _BUILD
         # HTML nie cachen -> Handy lädt immer die aktuelle Version (kein „tote Seite" durch alten Cache)
         if "text/html" in resp.headers.get("content-type", ""):
             resp.headers["Cache-Control"] = "no-store, must-revalidate"
