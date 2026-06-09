@@ -28,8 +28,27 @@ _AI_NAMES = ["Hawks", "Bisons", "Storm", "Vipers", "Titans", "Comets", "Wolves",
              "Sharks", "Raptors", "Outlaws", "Sentinels", "Blizzard"]
 _AI_CONCEPTS = list(PASS_CONCEPTS) + list(RUN_CONCEPTS)
 _AI_COVERS = list(COVERAGES)
+# KI-Teams mit Identität: Name, Kürzel, Primär-/Sekundärfarbe.
+TEAM_CATALOG = [
+    ("Hawks", "HAW", "#2f81f7", "#0b2545"), ("Bisons", "BIS", "#b4530a", "#3a1d0a"),
+    ("Storm", "STM", "#6a4ec2", "#241a45"), ("Vipers", "VIP", "#1f9e5a", "#0c2e1c"),
+    ("Titans", "TTN", "#2b6cb0", "#10233a"), ("Comets", "CMT", "#d2a106", "#3a2f06"),
+    ("Wolves", "WLV", "#7c8896", "#1c2127"), ("Sharks", "SHK", "#0ea5b7", "#062b30"),
+    ("Raptors", "RAP", "#c1121f", "#3a0a0e"), ("Outlaws", "OUT", "#9aa02b", "#2b2d0a"),
+    ("Sentinels", "SEN", "#3d5afe", "#101a45"), ("Blizzard", "BLZ", "#4aa3df", "#0c2738"),
+]
+# Auswählbare Farben fürs eigene Team.
+USER_COLORS = ["#16c784", "#e5484d", "#3d5afe", "#f5a524", "#9750dd",
+               "#0ea5b7", "#e0457b", "#d29922"]
 _NEUTRAL = {"down": 1, "ydstogo": 10, "yardline_100": 60, "personnel": "11"}
 _EPA_CACHE: dict[tuple, float] = {}
+
+
+def _abbr(name: str) -> str:
+    p = name.split()
+    if len(p) >= 2:
+        return (p[0][0] + p[1][:2]).upper()
+    return name[:3].upper()
 
 
 def _epa(concept: str, coverage: str) -> float:
@@ -100,10 +119,12 @@ def _round_robin(n: int) -> list[list[tuple[int, int]]]:
     return weeks
 
 
-def _new_team(name: str, base: int, rng: random.Random, user: bool = False) -> dict:
+def _new_team(name: str, abbr: str, color: str, color2: str, base: int,
+              rng: random.Random, user: bool = False) -> dict:
     units = {u: max(50, min(95, base + rng.randint(-6, 6))) for u in ALL_UNITS}
     return {
-        "name": name, "user": user, "units": units,
+        "name": name, "abbr": abbr, "color": color, "color2": color2, "user": user,
+        "units": units,
         "concept": "Inside Zone" if user else rng.choice(_AI_CONCEPTS),
         "coverage": "Cover 3" if user else rng.choice(_AI_COVERS),
         "w": 0, "l": 0, "t": 0, "pf": 0, "pa": 0,
@@ -111,14 +132,16 @@ def _new_team(name: str, base: int, rng: random.Random, user: bool = False) -> d
 
 
 def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
-                  difficulty: str = "normal", seed: int | None = None) -> dict:
+                  difficulty: str = "normal", color: str | None = None,
+                  seed: int | None = None) -> dict:
     n_teams = max(4, n_teams - (n_teams % 2))             # gerade, >=4
     rng = random.Random(seed)
     user_base = {"leicht": 76, "normal": 70, "schwer": 66}.get(difficulty, 70)
-    teams = [_new_team(team_name.strip()[:24] or "Mein Team", user_base, rng, user=True)]
-    names = rng.sample(_AI_NAMES, n_teams - 1)
-    for nm in names:
-        teams.append(_new_team(nm, rng.randint(64, 80), rng))
+    nm = team_name.strip()[:24] or "Mein Team"
+    ucolor = color if color in USER_COLORS else USER_COLORS[0]
+    teams = [_new_team(nm, _abbr(nm), ucolor, "#0c1a12", user_base, rng, user=True)]
+    for cname, cabbr, c1, c2 in rng.sample(TEAM_CATALOG, n_teams - 1):
+        teams.append(_new_team(cname, cabbr, c1, c2, rng.randint(64, 80), rng))
     state = {
         "team_name": teams[0]["name"], "season": 1, "week": 0,
         "phase": "regular", "budget": 60, "difficulty": difficulty,
@@ -212,7 +235,9 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
         else:
             sa += 3
     return {"home": home["name"], "away": away["name"], "hs": sh, "as": sa,
-            "winner": home["name"] if sh > sa else away["name"], "plays": plays}
+            "winner": home["name"] if sh > sa else away["name"], "plays": plays,
+            "habbr": home.get("abbr", "HOM"), "aabbr": away.get("abbr", "AWY"),
+            "hcolor": home.get("color", "#16c784"), "acolor": away.get("color", "#ef5350")}
 
 
 def _pl(q: int, team: str, desc: str, absx: float, score: list[int], scored: bool) -> dict:
@@ -293,7 +318,8 @@ def _earn(state: dict, games: list[dict]) -> None:
 
 
 def standings(state: dict) -> list[dict]:
-    rows = [{"name": t["name"], "user": t["user"], "w": t["w"], "l": t["l"],
+    rows = [{"name": t["name"], "abbr": t.get("abbr", "?"), "color": t.get("color", "#16c784"),
+             "user": t["user"], "w": t["w"], "l": t["l"],
              "pf": t["pf"], "pa": t["pa"], "diff": t["pf"] - t["pa"],
              "ovr": overall(t)} for t in state["teams"]]
     rows.sort(key=lambda r: (r["w"], r["diff"], r["pf"]), reverse=True)
@@ -404,8 +430,10 @@ def _next_opponent(state: dict) -> dict | None:
         for hi, ai in state["schedule"][state["week"]]:
             if hi == user_i or ai == user_i:
                 opp = state["teams"][ai if hi == user_i else hi]
-                return {"name": opp["name"], "home": hi == user_i, "ovr": overall(opp),
-                        "off": offense(opp), "def": defense(opp), "coverage": opp["coverage"]}
+                return {"name": opp["name"], "abbr": opp.get("abbr", "?"),
+                        "color": opp.get("color", "#ef5350"), "home": hi == user_i,
+                        "ovr": overall(opp), "off": offense(opp), "def": defense(opp),
+                        "coverage": opp["coverage"]}
     return None
 
 
@@ -414,6 +442,7 @@ def view(state: dict) -> dict:
     last = state["results"][-1] if state["results"] else None
     return {
         "team_name": state["team_name"], "season": state["season"],
+        "abbr": team.get("abbr", "?"), "color": team.get("color", "#16c784"),
         "week": state["week"], "phase": state["phase"], "budget": state["budget"],
         "difficulty": state["difficulty"], "champion": state["champion"],
         "record": {"w": team["w"], "l": team["l"]},

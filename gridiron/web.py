@@ -103,32 +103,57 @@ _STYLE2 = """
  .reco.champ{border-color:#5a4f20;background:#23200f}
  .tag{display:inline-block;background:var(--warn);color:#1a1400;font-weight:800;font-size:11px;
    padding:3px 9px;border-radius:6px;letter-spacing:.04em}
- .fieldwrap{margin:12px 0 8px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
- #field{display:block;width:100%;height:auto;background:#0c2a18}
+ /* Section-Header */
+ .hero{display:flex;align-items:center;gap:13px;margin:2px 0 18px}
+ .hero .hi{width:40px;height:40px;border-radius:11px;background:var(--accsoft);border:1px solid var(--line);
+   display:flex;align-items:center;justify-content:center;flex:none}
+ .hero .hi svg{width:22px;height:22px;stroke:var(--acc);fill:none;stroke-width:2}
+ .hero h2{margin:0;font-size:19px;letter-spacing:-.01em} .hero p{margin:2px 0 0;color:var(--mut);font-size:13.5px}
+ /* Play-Art Feld */
+ .fieldwrap{margin:12px 0 10px;border-radius:12px;overflow:hidden;border:1px solid #06140d;box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
+ #field{display:block;width:100%;height:auto}
+ #field .pl{filter:drop-shadow(0 1.5px 1.5px rgba(0,0,0,.55))}
+ .pulse{animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
  .fieldlegend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;align-items:center}
  .fieldlegend i.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
  .dot.off{background:#16c784} .dot.tgt{background:#ffd34d} .dot.def{background:#ef5350} .dot.saf{background:#e09b3d}
- /* Broadcast (Manager) */
- .bcast{background:linear-gradient(180deg,#0c2a18,#0a2114);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
- .scoreboard{display:flex;align-items:center;justify-content:space-between;background:#0a0f0d;border:1px solid var(--line);
-   border-radius:10px;padding:10px 16px;font-variant-numeric:tabular-nums}
- .sb-team{font-weight:700;font-size:15px} .sb-score{font-size:30px;font-weight:800;letter-spacing:.02em}
- .sb-mid{text-align:center;color:var(--mut);font-size:12px}
- .fieldbar{position:relative;height:30px;margin:14px 2px;border-radius:6px;
-   background:repeating-linear-gradient(90deg,#11432a 0 9.7px,#0e3b25 9.7px 10px)}
- .endz{position:absolute;top:0;bottom:0;width:10%;background:#0a2d1c;display:flex;align-items:center;justify-content:center;
-   font-size:9px;color:#3f7a5c;font-weight:700}
- .endz.l{left:0;border-right:1px solid #1c5a3a} .endz.r{right:0;border-left:1px solid #1c5a3a}
- .ball{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
-   background:#ffd34d;box-shadow:0 0 8px rgba(255,211,77,.6);transition:left .6s ease}
- .firstline{position:absolute;top:-3px;bottom:-3px;width:2px;background:#ffd34d;opacity:.55}
- .commentary{max-height:230px;overflow-y:auto;margin-top:10px}
- .cmt{padding:7px 11px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:9px}
- .cmt .q{color:var(--mut);min-width:54px;font-variant-numeric:tabular-nums} .cmt.score{background:var(--accsoft)}
- .cmt.score .t{color:#4be3a0;font-weight:600}
- .overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
- .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
- .modal h3{margin:0 0 4px;font-size:17px} .modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+ /* Manager Team-Identität */
+ .teamhdr{display:flex;align-items:center;gap:14px}
+ .crest{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+   font-weight:800;font-size:17px;color:#fff;flex:none;box-shadow:inset 0 -3px 8px rgba(0,0,0,.3);letter-spacing:.02em}
+ .cdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+ .swatch{width:30px;height:30px;border-radius:8px;cursor:pointer;border:2px solid transparent}
+ .swatch.on{border-color:#fff;box-shadow:0 0 0 2px var(--acc)}
+ /* TV-Broadcast */
+ .tvscore{display:grid;grid-template-columns:1fr auto auto auto 1fr;align-items:center;gap:12px;
+   background:#0a0f0d;border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+ .tvteam{display:flex;align-items:center;gap:10px}.tvteam.r{justify-content:flex-end}
+ .tvteam .ab{font-weight:800;font-size:13px;color:#fff;background:var(--tc);padding:6px 10px;border-radius:7px;letter-spacing:.05em}
+ .tvteam .nm{font-weight:700;font-size:15px}
+ .tvpts{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;min-width:50px;text-align:center}
+ .tvmid{text-align:center;min-width:60px}.tvmid .qn{font-weight:800;font-size:16px}.tvmid .sub{color:var(--mut);font-size:11px}
+ .tvfield{display:flex;height:78px;margin:14px 0 4px;border-radius:10px;overflow:hidden;border:1px solid #06140d}
+ .tvfield .ez{width:30px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:11px;
+   writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:.1em;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+ .turf{position:relative;flex:1;background:linear-gradient(180deg,#11502f,#0d3f25);overflow:hidden}
+ .turf .yl{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.16)}
+ .turf .yn{position:absolute;top:6px;transform:translateX(-50%);color:rgba(255,255,255,.45);font-size:10px;font-weight:800}
+ .turf .yn.b{bottom:6px;top:auto}
+ .ball{position:absolute;top:50%;width:15px;height:15px;margin:-8px 0 0 -8px;border-radius:50%;
+   background:radial-gradient(circle at 35% 30%,#ffe486,#e0a813);border:1.5px solid #5e4500;
+   box-shadow:0 0 12px rgba(255,211,77,.75);transition:left .17s linear;z-index:2}
+ .commentary{max-height:230px;overflow-y:auto;margin-top:10px;border:1px solid var(--line);border-radius:9px}
+ .cmt{padding:8px 11px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:10px;align-items:center}
+ .cmt:last-child{border-bottom:0}.cmt .q{color:var(--mut);min-width:26px;font-size:11px;font-variant-numeric:tabular-nums}
+ .cmt.big{background:var(--accsoft)}
+ .pbadge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;min-width:30px;text-align:center;flex:none}
+ .pb-td{background:#16c784;color:#04140c}.pb-fg{background:#5fa8ff;color:#04121f}
+ .pb-fd{background:#2c3a34;color:#d6efe4}.pb-to{background:#ef5350;color:#240606}.pb-pl{background:#1a221e;color:var(--mut)}
+ .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+ .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
+ .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
+ .livedot{width:8px;height:8px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
+ .modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -148,7 +173,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 
  <!-- ============ SCOUTING ============ -->
  <div class="sect on" id="s-scout">
- <div class="lead">Wähle ein Team — Tendenzen, „Tells" und Live-Pass/Lauf-Vorhersage.</div>
+ <div class="hero"><div class="hi"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div>
+  <div><h2>Scouting</h2><p>Gegner-Tendenzen, „Tells" und die Live-Pass/Lauf-Vorhersage.</p></div></div>
  <div class="controls">
   <div><label>Team</label><select id="team"></select></div>
   <div><label>Saison</label><select id="season"></select></div>
@@ -172,7 +198,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 
  <!-- ============ SIMULATOR ============ -->
  <div class="sect" id="s-sim">
- <div class="lead">Spiel ein <b>Konzept</b> gegen eine <b>Coverage</b> durch — tausende Simulationen liefern die Ertragsverteilung.</div>
+ <div class="hero"><div class="hi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></div>
+  <div><h2>Play-Simulator</h2><p>Konzept gegen Coverage durchspielen — animiert auf dem Feld, mit voller Ertragsverteilung.</p></div></div>
  <div class="card">
   <div class="controls">
    <div><label>Konzept (Offense)</label><select id="sim_c" style="min-width:190px"></select></div>
@@ -205,7 +232,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 
  <!-- ============ MATRIX ============ -->
  <div class="sect" id="s-matrix">
- <div class="lead">Erwartetes <b>EPA</b> für jedes Konzept × jede Coverage. Grün = Vorteil Offense, Rot = Vorteil Defense.</div>
+ <div class="hero"><div class="hi"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"/></svg></div>
+  <div><h2>Matchup-Matrix</h2><p>Erwartetes EPA für jedes Konzept × jede Coverage. Grün = Offense, Rot = Defense.</p></div></div>
  <div class="card">
   <div class="controls">
    <div><label>Down</label><select id="m_d"><option selected>1</option><option>2</option><option>3</option><option>4</option></select></div>
@@ -220,7 +248,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 
  <!-- ============ MANAGER / FRANCHISE ============ -->
  <div class="sect" id="s-mgr">
- <div class="lead">Baue dein Team, spiele die Liga-Saison und gewinne den Titel. Verbessere mit deinem Budget die Einheiten und wähle dein Playbook.</div>
+ <div class="hero"><div class="hi"><svg viewBox="0 0 24 24"><path d="M6 3h12v4a6 6 0 0 1-12 0zM4 5h2M18 5h2M9 13h6v3H9zM8 21h8M12 16v5"/></svg></div>
+  <div><h2>Franchise-Manager</h2><p>Eigenes Team aufbauen, Liga-Saison spielen, Spiele live ansehen und den Titel holen.</p></div></div>
  <div id="mgr_out" class="mut">Lade …</div>
  </div>
 
@@ -358,35 +387,39 @@ async function drawPlay(concept,coverage,res){
  renderField(d); playAnim();
 }
 function renderField(d){
- const svg=$('field'); svg.innerHTML='';
- const ytg=parseInt($('sim_y').value)||10;
- // Rasen + Yard-Linien
- for(let fy=-5;fy<=25;fy+=5){const y=mapY(fy);
-  svg.appendChild(el('line',{x1:0,y1:y,x2:533,y2:y,stroke:'#1c5a3a','stroke-width':fy===0?0:1,opacity:.5}));
-  // Hash-Marks
-  [23.58,29.72].forEach(hx=>svg.appendChild(el('line',{x1:mapX(hx)-3,y1:y,x2:mapX(hx)+3,y2:y,stroke:'#2e7d52','stroke-width':1})));
- }
- svg.appendChild(el('line',{x1:0,y1:mapY(0),x2:533,y2:mapY(0),stroke:'#5fa8ff','stroke-width':2,opacity:.85}));
- if(ytg<=25)svg.appendChild(el('line',{x1:0,y1:mapY(ytg),x2:533,y2:mapY(ytg),stroke:'#ffd34d','stroke-width':2,opacity:.7,'stroke-dasharray':'6 5'}));
- // Routen (blass)
- d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='M';o.route.forEach((pt,i)=>{p+=(i?' L':' ')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1);});
-  svg.appendChild(el('path',{d:p,fill:'none',stroke:o.target?'#ffd34d':(o.carry?'#ffd34d':'#16c784'),'stroke-width':o.target||o.carry?2:1.3,opacity:.35,'stroke-dasharray':'4 4'}));}});
- // Spieler (Defense zuerst, dann Offense oben)
+ const svg=$('field'); const ytg=parseInt($('sim_y').value)||10;
+ let s='<defs>'+
+  '<linearGradient id="turf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#125433"/><stop offset="1" stop-color="#0b3a22"/></linearGradient>'+
+  '<marker id="ah" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
+  '<marker id="aht" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
+ s+='<rect x="0" y="0" width="533" height="360" fill="url(#turf)"/>';
+ for(let i=0;i<8;i++)if(i%2)s+='<rect x="0" y="'+(i*45)+'" width="533" height="45" fill="#ffffff" opacity="0.025"/>';
+ for(let fy=-5;fy<=25;fy+=5){const y=mapY(fy).toFixed(1);
+  s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="'+(fy===0?0:1)+'" opacity="0.22"/>';
+  [23.58,29.72].forEach(hx=>{s+='<line x1="'+(mapX(hx)-3).toFixed(1)+'" y1="'+y+'" x2="'+(mapX(hx)+3).toFixed(1)+'" y2="'+y+'" stroke="#cdeede" stroke-width="1" opacity="0.32"/>';});
+  if(fy>0&&fy%10===0){s+='<text x="13" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4">'+fy+'</text>'+
+    '<text x="520" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4" text-anchor="end">'+fy+'</text>';}}
+ s+='<line x1="0" y1="'+mapY(0)+'" x2="533" y2="'+mapY(0)+'" stroke="#5fa8ff" stroke-width="2.5" opacity="0.9"/>';
+ if(ytg<=24)s+='<line x1="0" y1="'+mapY(ytg)+'" x2="533" y2="'+mapY(ytg)+'" stroke="#ffd34d" stroke-width="2" opacity="0.7" stroke-dasharray="7 5"/>';
+ d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
+  const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht':'ah')+')"/>';}});
+ svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,p.deep?'#e09b3d':'#ef5350','d_'+i));
- d.offense.forEach((o,i)=>addPlayer(svg,o,o.target?'#ffd34d':(o.pos==='OL'?'#0f9e68':'#16c784'),'o'+i,o));
- // Ball
+ d.offense.forEach((o,i)=>addPlayer(svg,o,o.target?'#ffd34d':(o.pos==='OL'?'#0c8f5d':'#16c784'),'o'+i,o));
  const qb=d.offense.find(o=>o.pos==='QB');
- svg.appendChild(el('circle',{id:'pball',cx:mapX(qb.x),cy:mapY(qb.y),r:3.5,fill:'#fff',opacity:0}));
+ svg.appendChild(el('circle',{id:'pball',cx:mapX(qb.x),cy:mapY(qb.y),r:3.8,fill:'#fff',opacity:0}));
 }
 function addPlayer(svg,p,color,id,o){
- const g=el('g',{}); g.setAttribute('data-id',id);
- const c=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:7,fill:color,stroke:'#06140d','stroke-width':1.4});
- c.setAttribute('data-px',p.x); c.setAttribute('data-py',p.y); c.id='pl_'+id;
+ const g=el('g',{});
+ if(o&&o.target){const ring=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:11.5,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.85,'class':'pulse'});ring.id='rg_'+id;g.appendChild(ring);}
+ const c=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:7.5,fill:color,stroke:'#06140d','stroke-width':1.5,'class':'pl'});c.id='pl_'+id;
  g.appendChild(c);
- const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:mapX(p.x),y:mapY(p.y)+3,'text-anchor':'middle','font-size':7.5,fill:'#03130c','font-weight':700});t.textContent=lbl;t.id='tx_'+id;g.appendChild(t);}
+ const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:mapX(p.x),y:mapY(p.y)+2.8,'text-anchor':'middle','font-size':7.5,fill:'#03130c','font-weight':800});t.textContent=lbl;t.id='tx_'+id;g.appendChild(t);}
  svg.appendChild(g);
 }
-function moveP(id,x,y){const c=$('pl_'+id);if(!c)return;c.setAttribute('cx',mapX(x));c.setAttribute('cy',mapY(y));const t=$('tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+3);}}
+function moveP(id,x,y){const c=$('pl_'+id);if(!c)return;c.setAttribute('cx',mapX(x));c.setAttribute('cy',mapY(y));
+ const t=$('tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+2.8);}
+ const r=$('rg_'+id);if(r){r.setAttribute('cx',mapX(x));r.setAttribute('cy',mapY(y));}}
 function playAnim(){
  if(!lastDiag)return; cancelAnimationFrame(animReq);
  const d=lastDiag,T=2100,t0=performance.now();
@@ -445,24 +478,31 @@ async function loadMgr(){
  if(!s.exists){renderNewTeam();return;}
  renderMgr(s.view);
 }
+let ntColor=null;
 function renderNewTeam(){
+ ntColor=mgrMeta.colors[0];
  $('mgr_out').innerHTML='<div class="card"><div class="sec" style="margin-top:0">Neue Franchise gründen</div>'+
   '<div class="controls"><div><label>Teamname</label><input id="nt_name" value="Mein Team" style="width:200px"></div>'+
   '<div><label>Liga-Größe</label><select id="nt_n"><option>6</option><option selected>8</option><option>10</option><option>12</option></select></div>'+
   '<div><label>Schwierigkeit</label><select id="nt_diff">'+mgrMeta.difficulties.map(d=>'<option'+(d==='normal'?' selected':'')+'>'+d+'</option>').join('')+'</select></div>'+
-  '<button onclick="newTeam()">Franchise starten</button></div>'+
+  '</div>'+
+  '<div style="margin-top:12px"><label>Teamfarbe</label><div id="nt_colors" style="display:flex;gap:9px;flex-wrap:wrap">'+
+   mgrMeta.colors.map((c,i)=>'<div class="swatch'+(i===0?' on':'')+'" data-c="'+c+'" style="background:'+c+'" onclick="pickColor(this)"></div>').join('')+'</div></div>'+
+  '<div style="margin-top:14px"><button onclick="newTeam()">Franchise starten</button></div>'+
   '<div class="note">Du startest mit einem Budget, baust dein Team auf und spielst um den Titel.</div></div>';
 }
+function pickColor(e){ntColor=e.dataset.c;document.querySelectorAll('#nt_colors .swatch').forEach(s=>s.classList.toggle('on',s===e));}
 async function newTeam(){
- const qs='team='+encodeURIComponent($('nt_name').value)+'&teams='+$('nt_n').value+'&difficulty='+$('nt_diff').value;
+ const qs='team='+encodeURIComponent($('nt_name').value)+'&teams='+$('nt_n').value+'&difficulty='+$('nt_diff').value+'&color='+encodeURIComponent(ntColor||'');
  renderMgr(await api('/api/fr/new?'+qs,'POST'));
 }
 function pill(t){return '<span class="pill">'+esc(t)+'</span>';}
 function renderMgr(v){
  const phaseLabel={regular:'Reguläre Saison',playoffs:(v.playoff?v.playoff.round:'Playoffs'),done:'Saison beendet'}[v.phase];
- let h='<div class="card"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;align-items:center">'+
-   '<div class="big">'+esc(v.team_name)+' <span class="mut" style="font-size:14px">Saison '+v.season+' · '+esc(phaseLabel)+'</span></div>'+
-   '<div>'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+'</div></div>'+
+ let h='<div class="card"><div class="teamhdr">'+
+   '<div class="crest" style="background:'+esc(v.color||'#16c784')+'">'+esc(v.abbr||'')+'</div>'+
+   '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
+   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+'</div></div>'+
    '<div class="grid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
    kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>';
  if(v.champion)h+='<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>';
@@ -470,8 +510,8 @@ function renderMgr(v){
 
  // Nächstes Spiel / Aktionen
  h+='<div class="card"><div class="sec" style="margin-top:0">Spielbetrieb</div>';
- if(v.phase==='regular'&&v.next){h+='<div class="reco"><span>Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+
-   '</b> <span class="mut">OVR '+v.next.ovr+' · spielt '+esc(v.next.coverage)+'</span></span></div>';}
+ if(v.phase==='regular'&&v.next){h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
+   'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · '+esc(v.next.coverage)+'</span></span></div>';}
  if(v.phase==='playoffs'&&v.playoff){h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
    v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';}
  if(v.phase!=='done')h+='<button onclick="simWeek()">Woche simulieren</button> ';
@@ -498,7 +538,7 @@ function renderMgr(v){
  // Tabelle
  h+='<div class="card scroll"><div class="sec" style="margin-top:0">Tabelle</div><table class="tbl"><tr>'+
    '<th class="cn">#</th><th class="cn">Team</th><th>S</th><th>N</th><th>Diff</th><th>OVR</th></tr>';
- v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn">'+esc(t.name)+
+ v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn"><span class="cdot" style="background:'+esc(t.color||'#16c784')+'"></span>'+esc(t.name)+
    '</td><td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.ovr+'</td></tr>';});
  h+='</table></div>';
  $('mgr_out').innerHTML=h;
@@ -518,45 +558,51 @@ async function newSeason(){renderMgr(await api('/api/fr/new_season','POST'));}
 async function resetFr(){if(confirm('Franchise wirklich löschen?')){await api('/api/fr/reset','POST');loadMgr();}}
 async function watchLast(){const r=await api('/api/fr/last_game');if(r.game)openBroadcast(r.game);}
 
-/* ---------- Spiel-Übertragung ---------- */
+/* ---------- Spiel-Übertragung (TV) ---------- */
 let bcTimer=null,bcGame=null;
+const AC=g=>g.acolor||'#ef5350', HC=g=>g.hcolor||'#16c784', AB=g=>g.aabbr||g.away.slice(0,3).toUpperCase(), HB=g=>g.habbr||g.home.slice(0,3).toUpperCase();
+function pbadge(desc){let c='pb-pl',t='PLAY';
+ if(/TOUCHDOWN/.test(desc)){c='pb-td';t='TD';}else if(/Field Goal gut/.test(desc)){c='pb-fg';t='FG';}
+ else if(/First Down/.test(desc)){c='pb-fd';t='1ST';}else if(/Interception|Fumble/.test(desc)){c='pb-to';t='TO';}
+ return '<span class="pbadge '+c+'">'+t+'</span>';}
+function cmtRow(p){const big=/TOUCHDOWN|Field Goal gut|Interception|Fumble/.test(p.desc);
+ const c=document.createElement('div');c.className='cmt'+(big?' big':'');
+ c.innerHTML='<span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span>';return c;}
+function bcBallLeft(x){return Math.max(1,Math.min(99,x))+'%';}
 function openBroadcast(g){
  closeBroadcast(); bcGame=g;
+ let turf='';[10,20,30,40,50,60,70,80,90].forEach(p=>{turf+='<div class="yl" style="left:'+p+'%"></div>';
+  const lab=(p===50?'50':(p<50?p:100-p));turf+='<div class="yn" style="left:'+p+'%">'+lab+'</div><div class="yn b" style="left:'+p+'%">'+lab+'</div>';});
  const o=document.createElement('div');o.className='overlay';o.id='overlay';
- o.innerHTML='<div class="modal"><div class="modalhead"><h3>Spiel-Übertragung</h3>'+
-  '<button class="ghost" onclick="closeBroadcast()">Schließen</button></div>'+
-  '<div class="bcast"><div class="scoreboard">'+
-   '<div><div class="sb-team">'+esc(g.away)+'</div><div class="sb-score" id="bc_as">0</div></div>'+
-   '<div class="sb-mid"><div id="bc_q">Q1</div><div>Endstand '+g['as']+'–'+g.hs+'</div></div>'+
-   '<div style="text-align:right"><div class="sb-team">'+esc(g.home)+'</div><div class="sb-score" id="bc_hs">0</div></div>'+
+ o.innerHTML='<div class="modal">'+
+  '<div class="modalhead"><h3><span class="livedot"></span> LIVE · Spiel-Übertragung</h3>'+
+   '<button class="ghost" onclick="closeBroadcast()">Schließen</button></div>'+
+  '<div class="tvscore">'+
+   '<div class="tvteam" style="--tc:'+esc(AC(g))+'"><span class="ab">'+esc(AB(g))+'</span><span class="nm">'+esc(g.away)+'</span></div>'+
+   '<div class="tvpts" id="bc_as">0</div>'+
+   '<div class="tvmid"><div class="qn" id="bc_q">Q1</div><div class="sub">Endstand '+g['as']+'–'+g.hs+'</div></div>'+
+   '<div class="tvpts" id="bc_hs">0</div>'+
+   '<div class="tvteam r" style="--tc:'+esc(HC(g))+'"><span class="nm">'+esc(g.home)+'</span><span class="ab">'+esc(HB(g))+'</span></div>'+
   '</div>'+
-  '<div class="fieldbar"><div class="endz l">'+esc(g.away.slice(0,3).toUpperCase())+'</div>'+
-   '<div class="endz r">'+esc(g.home.slice(0,3).toUpperCase())+'</div>'+
-   '<div class="ball" id="bc_ball" style="left:50%"></div></div>'+
-  '</div>'+
-  '<div><button id="bc_skip" class="ghost" onclick="skipBroadcast()">Überspringen</button></div>'+
+  '<div class="tvfield"><div class="ez" style="background:'+esc(AC(g))+'">'+esc(AB(g))+'</div>'+
+   '<div class="turf" id="bc_turf">'+turf+'<div class="ball" id="bc_ball" style="left:50%"></div></div>'+
+   '<div class="ez" style="background:'+esc(HC(g))+'">'+esc(HB(g))+'</div></div>'+
+  '<div style="margin-top:10px"><button class="ghost" onclick="skipBroadcast()">Überspringen ▸</button></div>'+
   '<div class="commentary" id="bc_feed"></div></div>';
  document.body.appendChild(o);
  o.addEventListener('click',e=>{if(e.target===o)closeBroadcast();});
  bcPlay(g);
 }
-function bcBallLeft(x){return (10+x*0.8)+'%';}
-function bcPlay(g){
- let i=0; const feed=$('bc_feed');
- bcTimer=setInterval(()=>{
-  if(i>=g.plays.length){clearInterval(bcTimer);bcTimer=null;return;}
-  const p=g.plays[i++];
-  $('bc_ball').style.left=bcBallLeft(p.x);
-  $('bc_hs').textContent=p.hs; $('bc_as').textContent=p.as; $('bc_q').textContent='Q'+p.q;
-  const c=document.createElement('div');c.className='cmt'+(p.score?' score':'');
-  c.innerHTML='<span class="q">Q'+p.q+'</span><span class="t">'+esc(p.desc)+'</span>';
-  feed.insertBefore(c,feed.firstChild);
- },180);
-}
+function bcPlay(g){let i=0;const feed=$('bc_feed');
+ bcTimer=setInterval(()=>{if(i>=g.plays.length){clearInterval(bcTimer);bcTimer=null;return;}
+  const p=g.plays[i++];$('bc_ball').style.left=bcBallLeft(p.x);
+  $('bc_hs').textContent=p.hs;$('bc_as').textContent=p['as'];$('bc_q').textContent='Q'+p.q;
+  feed.insertBefore(cmtRow(p),feed.firstChild);
+ },170);}
 function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const g=bcGame;if(!g)return;
- $('bc_hs').textContent=g.hs;$('bc_as').textContent=g['as'];$('bc_ball').style.left=bcBallLeft(g.plays.length?g.plays[g.plays.length-1].x:50);
- const feed=$('bc_feed');feed.innerHTML='';g.plays.slice().reverse().forEach(p=>{const c=document.createElement('div');
-  c.className='cmt'+(p.score?' score':'');c.innerHTML='<span class="q">Q'+p.q+'</span><span class="t">'+esc(p.desc)+'</span>';feed.appendChild(c);});}
+ $('bc_hs').textContent=g.hs;$('bc_as').textContent=g['as'];$('bc_q').textContent='Q4';
+ if(g.plays.length)$('bc_ball').style.left=bcBallLeft(g.plays[g.plays.length-1].x);
+ const feed=$('bc_feed');feed.innerHTML='';g.plays.slice().reverse().forEach(p=>feed.appendChild(cmtRow(p)));}
 function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setPb(){const r=await api('/api/fr/playbook?concept='+encodeURIComponent($('pb_c').value)+'&coverage='+encodeURIComponent($('pb_cov').value),'POST');if(r.view)renderMgr(r.view);}
@@ -736,12 +782,12 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         from gridiron import franchise as F
         from gridiron.simulator import list_concepts, list_coverages
         return {"concepts": list_concepts(), "coverages": list_coverages(),
-                "difficulties": ["leicht", "normal", "schwer"]}
+                "difficulties": ["leicht", "normal", "schwer"], "colors": F.USER_COLORS}
 
     @app.post("/api/fr/new")
-    def fr_new(team: str, teams: int = 8, difficulty: str = "normal"):
+    def fr_new(team: str, teams: int = 8, difficulty: str = "normal", color: str = ""):
         from gridiron import franchise as F
-        st = F.new_franchise(cfg, team, n_teams=teams, difficulty=difficulty)
+        st = F.new_franchise(cfg, team, n_teams=teams, difficulty=difficulty, color=color or None)
         return F.view(st)
 
     @app.post("/api/fr/sim_week")
