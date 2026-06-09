@@ -46,6 +46,50 @@ _NEUTRAL = {"down": 1, "ydstogo": 10, "yardline_100": 60, "personnel": "11"}
 _EPA_CACHE: dict[tuple, float] = {}
 
 
+# Kader: Anzahl Spieler je Positionsgruppe (nur das Nutzer-Team führt echte Spieler).
+ROSTER_SLOTS = {"QB": 2, "RB": 2, "WR": 3, "OL": 4, "DL": 4, "LB": 3, "DB": 3}
+_FIRST = ["Marcus", "Tyler", "Jalen", "Deon", "Chris", "Andre", "Malik", "Cody",
+          "Jordan", "Xavier", "Trey", "Devin", "Isaiah", "Brandon", "Kyle", "Drew",
+          "Cam", "Aaron", "Josh", "Mason", "Elias", "Noah", "Leon", "Finn"]
+_LAST = ["Brooks", "Carter", "Hayes", "Reed", "Coleman", "Foster", "Greer", "Mason",
+         "Wells", "Pierce", "Dalton", "Boyd", "Frye", "Nash", "Sutton", "Vance",
+         "Lang", "Webb", "Kraft", "Bauer", "Stein", "Wolff", "Roth", "Frank"]
+
+
+def _name(rng: random.Random) -> str:
+    return f"{rng.choice(_FIRST)} {rng.choice(_LAST)}"
+
+
+def _gen_roster(base: int, rng: random.Random) -> list[dict]:
+    roster, pid = [], 0
+    for grp, cnt in ROSTER_SLOTS.items():
+        for i in range(cnt):
+            ovr = max(48, min(94, base + rng.randint(-7, 6) + (4 if i == 0 else 0)))
+            age = rng.randint(21, 33)
+            pot = min(99, max(ovr, ovr + rng.randint(0, 13) - max(0, age - 25)))
+            roster.append({"id": pid, "name": _name(rng), "pos": grp, "ovr": ovr,
+                           "age": age, "pot": pot, "starter": i == 0})
+            pid += 1
+    return roster
+
+
+def _units_from_roster(roster: list[dict]) -> dict:
+    by: dict[str, list[int]] = {}
+    for p in roster:
+        by.setdefault(p["pos"], []).append(p["ovr"])
+    return {g: round(sum(v) / len(v)) for g, v in by.items()}
+
+
+def _sync_units(team: dict) -> None:
+    if team.get("roster"):
+        team["units"] = _units_from_roster(team["roster"])
+
+
+def train_cost(player: dict, equipment: int) -> int:
+    c = max(2, (player["ovr"] - 58) // 3 + 3) + (2 if player["age"] > 30 else 0)
+    return max(1, c - (equipment - 1))
+
+
 def _abbr(name: str) -> str:
     p = name.split()
     if len(p) >= 2:
@@ -178,7 +222,12 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
     user_base = {"leicht": 76, "normal": 70, "schwer": 66}.get(difficulty, 70)
     nm = team_name.strip()[:24] or "Mein Team"
     ucolor = color if color in USER_COLORS else USER_COLORS[0]
-    teams = [_new_team(nm, _abbr(nm), ucolor, "#0c1a12", user_base, rng, user=True)]
+    user_team = _new_team(nm, _abbr(nm), ucolor, "#0c1a12", user_base, rng, user=True)
+    user_team["roster"] = _gen_roster(user_base, rng)     # nur Nutzer-Team hat echte Spieler
+    user_team["tp"] = 12                                   # Trainingspunkte
+    user_team["equipment"] = 1                             # Trainings-Equipment
+    _sync_units(user_team)
+    teams = [user_team]
     for cname, cabbr, c1, c2 in rng.sample(TEAM_CATALOG, n_teams - 1):
         teams.append(_new_team(cname, cabbr, c1, c2, rng.randint(64, 80), rng))
     state = {
@@ -368,6 +417,7 @@ def _earn(state: dict, games: list[dict]) -> None:
     if g:
         income += 10 if g["winner"] == user else 3
     state["budget"] += income
+    team["tp"] = team.get("tp", 0) + 4 + 2 * team.get("equipment", 1)   # Trainingspunkte
 
 
 def standings(state: dict) -> list[dict]:
@@ -429,6 +479,14 @@ def new_season(cfg: Config, state: dict) -> dict:
                 t["off_scheme"] = rng.choice(list(OFF_SCHEMES))
             if rng.random() < 0.4:
                 t["def_scheme"] = rng.choice(list(DEF_SCHEMES))
+        elif t.get("roster"):                            # Nutzer-Kader altert & entwickelt sich
+            for p in t["roster"]:
+                p["age"] += 1
+                if p["age"] >= 30 and rng.random() < 0.45:
+                    p["ovr"] = max(45, p["ovr"] - rng.randint(1, 2))   # Veteranen-Abbau
+                elif p["ovr"] < p["pot"] and rng.random() < 0.5:
+                    p["ovr"] += 1                                       # junge Entwicklung
+            _sync_units(t)
     state["season"] += 1
     state["week"] = 0
     state["phase"] = "regular"
@@ -458,18 +516,17 @@ def upgrade_unit(cfg: Config, state: dict, key: str) -> dict:
     elif key in STAFF_LABELS:
         team.setdefault("staff", {"HC": 60, "OC": 60, "DC": 60})
         store, cap, label = team["staff"], 95, STAFF_LABELS[key]
-    elif key == "stadium":
-        lvl = team.get("stadium", 1)
+    elif key in ("stadium", "equipment"):
+        lvl = team.get(key, 1)
         if lvl >= 5:
-            return {"error": "Stadion ist bereits auf Maximum (Stufe 5)."}
-        cost = 18 + (lvl - 1) * 14
+            return {"error": "Bereits auf Maximum (Stufe 5)."}
+        cost = (18 if key == "stadium" else 15) + (lvl - 1) * (14 if key == "stadium" else 12)
         if state["budget"] < cost:
             return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
-        team["stadium"] = lvl + 1
+        team[key] = lvl + 1
         state["budget"] -= cost
         save(cfg, state)
-        return {"ok": True, "unit": "stadium", "level": team["stadium"], "cost": cost,
-                "budget": state["budget"]}
+        return {"ok": True, "unit": key, "level": team[key], "cost": cost, "budget": state["budget"]}
     else:
         return {"error": "Unbekannte Verbesserung."}
     lvl = store[key]
@@ -482,6 +539,34 @@ def upgrade_unit(cfg: Config, state: dict, key: str) -> dict:
     state["budget"] -= cost
     save(cfg, state)
     return {"ok": True, "unit": key, "level": store[key], "cost": cost, "budget": state["budget"]}
+
+
+def train_player(cfg: Config, state: dict, pid: int) -> dict:
+    """Trainiert einen Spieler (+1 OVR) gegen Trainingspunkte."""
+    team = state["teams"][0]
+    p = next((x for x in team.get("roster", []) if x["id"] == pid), None)
+    if not p:
+        return {"error": "Spieler nicht gefunden."}
+    if p["ovr"] >= p["pot"]:
+        return {"error": f"{p['name']} hat sein Potenzial ({p['pot']}) erreicht."}
+    cost = train_cost(p, team.get("equipment", 1))
+    if team.get("tp", 0) < cost:
+        return {"error": f"Zu wenig Trainingspunkte (brauchst {cost}, hast {team.get('tp', 0)})."}
+    p["ovr"] += 1
+    team["tp"] -= cost
+    _sync_units(team)
+    save(cfg, state)
+    return {"ok": True, "player": p["name"], "ovr": p["ovr"], "tp": team["tp"], "cost": cost}
+
+
+def train_unit(cfg: Config, state: dict, group: str) -> dict:
+    """Gruppen-Training: trainiert den schwächsten steigerbaren Spieler einer Gruppe."""
+    team = state["teams"][0]
+    cands = [p for p in team.get("roster", []) if p["pos"] == group and p["ovr"] < p["pot"]]
+    if not cands:
+        return {"error": "Keine steigerbaren Spieler in dieser Gruppe."}
+    target = min(cands, key=lambda p: p["ovr"])
+    return train_player(cfg, state, target["id"])
 
 
 def set_scheme(cfg: Config, state: dict, off_scheme: str | None, def_scheme: str | None) -> dict:
@@ -533,6 +618,16 @@ def view(state: dict) -> dict:
         "stadium": {"level": team.get("stadium", 1),
                     "cost": 18 + (team.get("stadium", 1) - 1) * 14,
                     "income": 6 + 2 * (team.get("stadium", 1) - 1)},
+        "equipment": {"level": team.get("equipment", 1),
+                      "cost": 15 + (team.get("equipment", 1) - 1) * 12,
+                      "tp_week": 4 + 2 * team.get("equipment", 1)},
+        "tp": team.get("tp", 0),
+        "roster": [{"id": p["id"], "name": p["name"], "pos": p["pos"], "ovr": p["ovr"],
+                    "age": p["age"], "pot": p["pot"], "starter": p["starter"],
+                    "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
+                    "cost": train_cost(p, team.get("equipment", 1)),
+                    "maxed": p["ovr"] >= p["pot"]}
+                   for p in team.get("roster", [])],
         "active_game": bool(state.get("active_game")),
         "scheme": {"off": team.get("off_scheme", "Ausgeglichen"),
                    "def": team.get("def_scheme", "Ausgeglichen")},

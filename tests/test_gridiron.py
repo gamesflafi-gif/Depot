@@ -291,6 +291,27 @@ def test_franchise_upgrades_staff_stadium(tmp_path):
     assert F.upgrade_unit(cfg, st, "quatsch").get("error")
 
 
+def test_franchise_roster_training(tmp_path):
+    """Kader mit Spielern, Training hebt OVR, Units bleiben konsistent."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=7)
+    team = st["teams"][0]
+    assert len(team["roster"]) == sum(F.ROSTER_SLOTS.values())
+    assert team["units"] == F._units_from_roster(team["roster"])   # synchron
+    team["tp"] = 99
+    p = next(x for x in team["roster"] if x["ovr"] < x["pot"])
+    before = p["ovr"]
+    res = F.train_player(cfg, st, p["id"])
+    assert res["ok"] and p["ovr"] == before + 1
+    assert team["units"] == F._units_from_roster(team["roster"])   # nach Training synchron
+    # Equipment + Stadion sind Budget-Verbesserungen
+    st["budget"] = 200
+    assert F.upgrade_unit(cfg, st, "equipment")["ok"]
+    v = F.view(st)
+    assert v["roster"] and v["tp"] and v["equipment"]["level"] == 2
+
+
 def test_franchise_interactive_game(tmp_path):
     """Selbst spielen: Plays callen bis Spielende, Ergebnis wird gewertet."""
     import random
