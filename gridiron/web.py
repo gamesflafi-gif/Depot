@@ -458,7 +458,7 @@ async function drawPlay(concept,coverage,res){
  $('sim_fieldcard').style.display='block';
  $('field_title').textContent=concept+' vs '+coverage.replace(/ —.*/,'');
  renderField($('field'),d,parseInt($('sim_y').value)||10);
- playAnim($('field'),d,{mean_yards:res?res.mean_yards:null});
+ playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0});
 }
 function renderField(svg,d,ytg){
  const P=svg.id;
@@ -497,35 +497,64 @@ function moveP(P,id,x,y){const c=$(P+'_pl_'+id);if(!c)return;c.setAttribute('cx'
 function curPos(P,id){const c=$(P+'_pl_'+id);return c?[parseFloat(c.getAttribute('cx'))/10,26-(parseFloat(c.getAttribute('cy'))-10)/10]:null;}
 function playAnim(svg,d,res){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
- const T=2200,t0=performance.now();
+ res=res||{};
+ const kind=res.kind||(d.kind==='run'?'run':'complete');
+ const yards=(res.yards!=null?res.yards:(res.mean_yards!=null?res.mean_yards:0));
+ const T=2400,t0=performance.now(),ease=t=>1-Math.pow(1-t,2);
  const qbi=d.offense.findIndex(o=>o.pos==='QB'),qb=d.offense[qbi];
- const tgt=d.ball_target,isPass=d.kind==='pass',throwAt=.55,ball=$(P+'_pball');
- const ease=t=>1-Math.pow(1-t,2);
- function frame(now){const t=Math.min(1,(now-t0)/T),te=ease(t);
+ const tgtI=d.offense.findIndex(o=>o.target||o.carry),tgt=tgtI>=0?d.offense[tgtI]:null;
+ const route=(tgt&&tgt.route&&tgt.route.length>1)?tgt.route:null;
+ const catchPt=route?route[route.length-1]:(d.ball_target||[qb.x,qb.y]);
+ const airY=catchPt[1],ball=$(P+'_pball'),isPass=(kind!=='run'),throwAt=0.5,arrive=0.74;
+ let intPt=catchPt;
+ if(kind==='int'){let bd=1e9;d.defense.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intPt=[p.x,p.y];}});}
+ let lastT=catchPt;
+ function frame(now){const t=Math.min(1,(now-t0)/T);
+  const qy=qb.y-1.4*Math.min(1,t*2.4);
   const sp={};
-  d.offense.forEach((o,i)=>{if(o.route&&o.route.length>1){const pp=posAlong(o.route,te);moveP(P,'o'+i,pp[0],pp[1]);if(o.pos)sp[o.pos]=pp;}else if(o.pos)sp[o.pos]=[o.x,o.y];});
-  const qy=qb.y-1.4*Math.min(1,t*2.2); moveP(P,'o'+qbi,qb.x,qy); sp['QB']=[qb.x,qy];
+  d.offense.forEach((o,i)=>{if(i===tgtI)return;if(o.route&&o.route.length>1){const pp=posAlong(o.route,ease(Math.min(1,t/0.5)));moveP(P,'o'+i,pp[0],pp[1]);if(o.pos)sp[o.pos]=pp;}else if(o.pos)sp[o.pos]=[o.x,o.y];});
+  // Ziel-/Ballträger getrennt: Route bis zum Fang/Übergabe, dann Lauf nach Catch
+  let tpos=null;
+  if(tgt){
+   if(kind==='run'){const last=route?route[route.length-1]:[tgt.x,tgt.y];
+     tpos=(t<0.6&&route)?posAlong(route,ease(t/0.6)):[last[0],last[1]+(yards-last[1])*Math.min(1,route?(t-0.6)/0.4:t)];}
+   else{tpos=route?posAlong(route,ease(Math.min(1,t/arrive))):catchPt.slice();
+     if(kind==='complete'&&t>arrive){const cf=(t-arrive)/(1-arrive);tpos=[catchPt[0],airY+(Math.max(yards,airY)-airY)*cf];}}
+   moveP(P,'o'+tgtI,tpos[0],tpos[1]);if(tgt.pos)sp[tgt.pos]=tpos;lastT=tpos;
+  }
+  moveP(P,'o'+qbi,qb.x,isPass?qy:qb.y);if(isPass)sp['QB']=[qb.x,qy];
   d.defense.forEach((p,i)=>{const id='d_'+i,cur=curPos(P,id)||[p.x,p.y];let tx,ty,k;
-   if(p.role==='rush'){tx=qb.x+(p.x-qb.x)*0.12;ty=qy+0.8;k=0.09;}
+   if(p.role==='rush'){tx=qb.x+(p.x-qb.x)*0.12;ty=(isPass?qy:qb.y)+0.8;k=0.09;}
    else if(p.role==='man'&&sp[p.cover]){const r=sp[p.cover];tx=r[0]+(p.x<r[0]?-0.7:0.7);ty=r[1]+0.8;k=0.20;}
-   else if(p.drop){tx=p.drop[0];ty=p.drop[1];
-     let best=null,bd=99;for(const key in sp){if(key==='QB')continue;const r=sp[key];const dd=Math.hypot(r[0]-tx,r[1]-ty);if(dd<bd){bd=dd;best=r;}}
-     if(best&&bd<11){tx+=(best[0]-tx)*0.32;ty+=(best[1]-ty)*0.16;} k=0.10;}
-   else {tx=p.x;ty=p.y;k=0.1;}
+   else if(p.drop){tx=p.drop[0];ty=p.drop[1];let best=null,bd=99;for(const key in sp){if(key==='QB')continue;const r=sp[key];const dd=Math.hypot(r[0]-tx,r[1]-ty);if(dd<bd){bd=dd;best=r;}}if(best&&bd<11){tx+=(best[0]-tx)*0.32;ty+=(best[1]-ty)*0.16;}k=0.10;}
+   else{tx=p.x;ty=p.y;k=0.1;}
    moveP(P,id,cur[0]+(tx-cur[0])*k,cur[1]+(ty-cur[1])*k);
   });
-  if(isPass&&ball&&t>=throwAt){const tt=(t-throwAt)/(1-throwAt);ball.setAttribute('opacity',1);
-    ball.setAttribute('cx',mapX(qb.x+(tgt[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qy+(tgt[1]-qy)*tt-Math.sin(tt*Math.PI)*1.3));}
-  if(t<1)_anim[P]=requestAnimationFrame(frame); else showResult(svg,d,res);
+  // Ball je nach Ausgang
+  if(ball){
+   if(kind==='sack'){ball.setAttribute('opacity',0);const sf=Math.min(1,Math.max(0,(t-0.4)/0.45));moveP(P,'o'+qbi,qb.x,qy+(yards-qy)*sf);}
+   else if(isPass){
+    if(t>=throwAt&&t<=arrive){const tt=(t-throwAt)/(arrive-throwAt),dest=(kind==='int')?intPt:catchPt;ball.setAttribute('opacity',1);
+      ball.setAttribute('cx',mapX(qb.x+(dest[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qy+(dest[1]-qy)*tt-Math.sin(tt*Math.PI)*1.4));}
+    else if(t>arrive){
+      if(kind==='complete'&&tpos){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(tpos[0]));ball.setAttribute('cy',mapY(tpos[1]));}
+      else if(kind==='int'){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(intPt[0]));ball.setAttribute('cy',mapY(intPt[1]));}
+      else{ball.setAttribute('opacity',Math.max(0,1-(t-arrive)/0.18));ball.setAttribute('cx',mapX(catchPt[0]));ball.setAttribute('cy',mapY(catchPt[1]));}
+    } else ball.setAttribute('opacity',0);
+   } else if(tpos){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(tpos[0]));ball.setAttribute('cy',mapY(tpos[1]));}
+  }
+  if(t<1)_anim[P]=requestAnimationFrame(frame);else showResult(svg,{kind,yards,pt:(kind==='sack'?[qb.x,yards]:lastT)});
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-function showResult(svg,d,res){if(!res||res.mean_yards==null||!d.ball_target)return;const tgt=d.ball_target;
- const g=el('g',{}); const x=Math.min(Math.max(mapX(tgt[0]),40),493),y=Math.max(mapY(tgt[1])-14,16);
- g.appendChild(el('rect',{x:x-26,y:y-13,width:52,height:20,rx:5,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':1.2}));
- const t=el('text',{x:x,y:y+1,'text-anchor':'middle','font-size':11,fill:'#ffd34d','font-weight':800});
- t.textContent=(res.mean_yards>=0?'+':'')+Number(res.mean_yards).toFixed(1)+' Yds'; g.appendChild(t); svg.appendChild(g);}
-function replayPlay(){renderField($('field'),lastDiag,parseInt($('sim_y').value)||10);playAnim($('field'),lastDiag,{mean_yards:lastRes?lastRes.mean_yards:null});}
+function showResult(svg,res){
+ const label=res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
+ const col=(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
+ const pt=res.pt||[26,5],x=Math.min(Math.max(mapX(pt[0]),50),484),y=Math.max(mapY(pt[1])-16,16);
+ const g=el('g',{});g.appendChild(el('rect',{x:x-36,y:y-13,width:72,height:21,rx:6,fill:'#0a0f0d',stroke:col,'stroke-width':1.3}));
+ const tx=el('text',{x:x,y:y+2,'text-anchor':'middle','font-size':11,fill:col,'font-weight':800});tx.textContent=label;g.appendChild(tx);svg.appendChild(g);
+}
+function replayPlay(){renderField($('field'),lastDiag,parseInt($('sim_y').value)||10);playAnim($('field'),lastDiag,{kind:(lastDiag&&lastDiag.kind==='run')?'run':'complete',yards:lastRes?lastRes.mean_yards:0});}
 async function loadBest(cov){
  const r=await (await fetch('/api/sim/best?coverage='+encodeURIComponent(cov)+'&'+simSit('sim_'))).json();
  $('sim_best').innerHTML=r.items.map(x=>'<div class="reco"><span><b>'+esc(x.concept)+'</b> <span class="mut">'+
@@ -900,7 +929,7 @@ async function showFormation(g){const svg=$('gfield');if(!svg)return;
  if(!d.error)renderField(svg,d,g.dist||10);}
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
- if(d.error)return; renderField(svg,d,10); playAnim(svg,d,{mean_yards:play.yards});}
+ if(d.error)return; renderField(svg,d,10); playAnim(svg,d,{kind:play.kind,yards:play.yards});}
 async function gamePlay(choice){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 async function simDrive(){const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
