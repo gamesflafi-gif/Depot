@@ -98,7 +98,8 @@ _STYLE2 = """
  .tbl td.cn,.tbl th.cn{text-align:left} .tbl tr.me td{background:var(--accsoft)}
  .scroll{overflow-x:auto} .note{color:var(--mut);font-size:13px;margin-top:8px}
  .reco{padding:11px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;margin:7px 0;font-size:14px;
-   display:flex;justify-content:space-between;align-items:center;gap:10px}
+   display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+ .reco>span:first-child{min-width:0}
  .reco b{font-weight:700} .reco.win{border-color:#1c5a40} .reco.loss{border-color:#5a2a20}
  .reco.champ{border-color:#5a4f20;background:#23200f}
  .tag{display:inline-block;background:var(--warn);color:#1a1400;font-weight:800;font-size:11px;
@@ -604,7 +605,8 @@ function secKader(v){
    '<div class="grid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('EXP / Woche','+'+v.equipment.exp_week)+kpi('Kadergröße',v.roster.length)+'</div>'+
    '<div class="controls" style="margin-top:12px"><div><label>Trainings-Fokus (Woche)</label>'+
    '<select id="foc"><option value="">kein Fokus</option>'+v.focus_options.map(o=>'<option value="'+o.key+'"'+(o.key===foc?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select></div>'+
-   '<button onclick="setFocus()">Fokus setzen</button></div>'+
+   '<button onclick="setFocus()">Fokus setzen</button>'+
+   (v.skillpoints>0?' <button class="ghost" onclick="allocAll()">Alle Punkte auto-verteilen ('+v.skillpoints+')</button>':'')+'</div>'+
    '<div class="note">Spieler sammeln jede Woche EXP (Training, Fokus-Gruppe extra, Starter + Siege mehr). Je 100 EXP = 1 Skillpunkt. Klick einen Spieler an, um Punkte zu verteilen.</div></div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
@@ -621,6 +623,7 @@ function secKader(v){
  return h;
 }
 async function setFocus(){const r=await api('/api/fr/focus?group='+encodeURIComponent($('foc').value),'POST');if(r.view)renderMgr(r.view);}
+async function allocAll(){const r=await api('/api/fr/alloc_all','POST');if(r.view)renderMgr(r.view);}
 function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)===String(id));if(!p)return;
  let o=$('playeroverlay');if(!o){o=document.createElement('div');o.className='overlay';o.id='playeroverlay';
    o.addEventListener('click',e=>{if(e.target===o)closePlayer();});document.body.appendChild(o);}
@@ -1046,6 +1049,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return {"result": F.alloc_auto(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/alloc_all")
+    def fr_alloc_all():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.alloc_auto_all(cfg, st), "view": F.view(st)}
 
     @app.post("/api/fr/starter")
     def fr_starter(pid: int):
