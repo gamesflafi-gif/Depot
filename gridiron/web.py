@@ -206,8 +206,13 @@ _STYLE2 = """
    border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--fg);cursor:pointer;font:inherit;transition:border-color .12s,transform .04s}
  .traincard:hover{border-color:var(--acc)} .traincard:active{transform:translateY(1px)}
  .traincard .ti{color:var(--acc)} .traincard b{font-size:14px} .traincard .td{font-size:11.5px;color:var(--mut);font-weight:400}
- .tutdots{display:flex;gap:6px;justify-content:center;margin:14px 0 2px}
- .tutdot{width:8px;height:8px;border-radius:50%;background:var(--line)} .tutdot.on{background:var(--acc)}
+ #tutspot{position:fixed;inset:0;z-index:60}
+ .tuthole{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.74);border:2px solid var(--acc);transition:all .22s ease;pointer-events:none}
+ .tuttip{position:fixed;left:50%;transform:translateX(-50%);max-width:380px;width:calc(100% - 28px);
+   background:var(--panel);border:1px solid var(--acc);border-radius:13px;padding:16px 18px;box-shadow:0 10px 34px rgba(0,0,0,.55)}
+ .tuttip h4{margin:3px 0 6px;font-size:16px} .tuttip p{margin:0;color:var(--mut);line-height:1.55;font-size:14px}
+ .tutnum{font-size:11px;color:var(--acc);font-weight:800;letter-spacing:.04em}
+ .tutbtns{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:8px}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -612,8 +617,13 @@ function secDash(v){
    else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
    if(v.game_bonus>0)h+='<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>';
    h+='</div>';}
+ // Saison-Ziele
+ if(v.goals&&v.goals.length){h+='<div class="card" id="goalcard"><div class="sec" style="margin-top:0">Saison-Ziele</div>';
+   v.goals.forEach(g=>{const prog=g.key==='wins'?' ('+g.progress+'/'+g.target+')':'';
+     h+='<div class="reco'+(g.done?' win':'')+'"><span>'+(g.done?'✓ ':'')+esc(g.label)+prog+'</span><span class="mut">'+(g.done?'erfüllt':'+'+g.reward+' Mio')+'</span></div>';});
+   h+='</div>';}
  // Spielbetrieb
- h+='<div class="card"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':'Spielbetrieb')+'</div>';
+ h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':'Spielbetrieb')+'</div>';
  if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div><button onclick="newSeason()">Neue Saison starten</button> ';}
  else if(v.week_done){
    h+='<div class="reco win"><span>Woche ausgewertet'+(v.is_bye?' (Bye Week)':'')+'.</span><span class="mut">bereit für die nächste Woche</span></div>'+
@@ -914,28 +924,35 @@ async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.r
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function nextWeek(){const r=await api('/api/fr/next_week','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);}
-/* ---------- Tutorial ---------- */
+/* ---------- Interaktives Tutorial (führt durch die Oberfläche) ---------- */
 const TUT=[
- ['Willkommen!','Du übernimmst deine eigene Football-Franchise. Ziel: das Team über die Saisons entwickeln und den Titel holen. Diese kurze Einführung zeigt dir den Ablauf.'],
- ['Der Wochen-Ablauf','Jede Woche: 1) ein Training wählen, 2) das Spiel selbst spielen oder simulieren, 3) mit „Nächste Woche" weiter. Die Woche endet erst, wenn du klickst.'],
- ['Kader & Training','Spieler sammeln EXP (Training + Spielleistung). Je 100 EXP = 1 Skillpunkt — den verteilst du in der Spielerkarte auf Attribute. Starter setzt du im Kader.'],
- ['Verbesserungen','Mit Budget verbesserst du den Trainerstab (hebt Ratings/EXP), das Stadion (mehr Einnahmen) und das Trainings-Equipment (mehr EXP).'],
- ['Transfermarkt','Verpflichte neue Spieler oder entlasse welche. Nach jeder Saison treten Veteranen ab und eine neue Draft-Klasse erscheint.'],
- ['Statistik & Spiel','Im Statistik-Bereich siehst du Saison- und Karrierewerte. Im Spiel kannst du jeden Spielzug selbst callen — oder Drives/das ganze Spiel simulieren. Viel Erfolg!'],
+ {tab:'dash',sel:'.tbanner',title:'Deine Franchise',text:'Hier oben siehst du dein Team, Bilanz, Budget, Skillpunkte und die Saisonwoche.'},
+ {tab:'dash',sel:'.subnav',title:'Bereiche',text:'Über diese Reiter steuerst du alles: Dashboard, Kader & Training, Statistik, Transfermarkt und Verbesserungen.'},
+ {tab:'dash',sel:'#goalcard',title:'Saison-Ziele',text:'Das Front-Office gibt dir Ziele vor. Erfüllst du sie, gibt es Budget-Belohnungen.'},
+ {tab:'dash',sel:'.traingrid',title:'1× Training pro Woche',text:'Wähle eine Trainingskarte — z. B. Teamtraining, Einzeltraining oder eine Film-Session für einen Spielbonus.'},
+ {tab:'dash',sel:'#gamecard',title:'Spiel & Woche',text:'Spiel selbst spielen oder simulieren. Erst danach schaltest du mit „Nächste Woche" weiter — die Woche endet nie von allein.'},
+ {tab:'kader',sel:'.prow',title:'Spieler entwickeln',text:'Klicke einen Spieler an, um seine Attribute mit Skillpunkten zu steigern und ihn als Starter zu setzen.'},
+ {tab:'transfer',sel:'.card',title:'Transfermarkt',text:'Verpflichte neue Spieler (Rookies mit Potenzial) oder entlasse welche. Jede Saison: Ruhestand + neue Draft-Klasse.'},
+ {tab:'stats',sel:'.card',title:'Statistik',text:'Saison- und Karrierewerte sowie Bestenlisten deines Teams.'},
+ {tab:'build',sel:'.card',title:'Verbesserungen',text:'Investiere Budget in Trainerstab, Stadion (mehr Geld) und Equipment (mehr EXP). Viel Erfolg!'},
 ];
 let _tutStep=0;
-function openTutorial(s){_tutStep=s||0;let o=$('tutoverlay');if(!o){o=document.createElement('div');o.className='overlay';o.id='tutoverlay';document.body.appendChild(o);lockBody();}renderTut();}
-function renderTut(){const t=TUT[_tutStep];const last=_tutStep===TUT.length-1;
- $('tutoverlay').innerHTML='<div class="modal" style="max-width:520px"><div class="modalhead"><h3>'+esc(t[0])+'</h3>'+
-  '<span class="mut">'+(_tutStep+1)+' / '+TUT.length+'</span></div>'+
-  '<p style="line-height:1.6;color:var(--fg)">'+esc(t[1])+'</p>'+
-  '<div class="tutdots">'+TUT.map((x,i)=>'<span class="tutdot'+(i===_tutStep?' on':'')+'"></span>').join('')+'</div>'+
-  '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
-  '<button class="ghost" onclick="closeTutorial()">Überspringen</button>'+
-  '<span>'+(_tutStep>0?'<button class="ghost" onclick="openTutorial('+(_tutStep-1)+')">Zurück</button> ':'')+
-  '<button onclick="'+(last?'closeTutorial()':'openTutorial('+(_tutStep+1)+')')+'">'+(last?'Los geht\\'s':'Weiter')+'</button></span></div></div>';
+function openTutorial(s){_tutStep=s||0;tutShow();}
+function tutShow(){const step=TUT[_tutStep];if(step.tab&&step.tab!==mgrTab)mgrGo(step.tab);
+ requestAnimationFrame(()=>requestAnimationFrame(()=>tutPlace()));}
+function tutPlace(){const step=TUT[_tutStep],i=_tutStep,last=i===TUT.length-1;
+ let host=$('tutspot');if(!host){host=document.createElement('div');host.id='tutspot';document.body.appendChild(host);lockBody();}
+ const el=step.sel?document.querySelector(step.sel):null;let hole='',top=window.innerHeight/2-90;
+ if(el){el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();
+   hole='<div class="tuthole" style="top:'+(r.top-6)+'px;left:'+(r.left-6)+'px;width:'+(r.width+12)+'px;height:'+(r.height+12)+'px"></div>';
+   top=r.bottom+14; if(top>window.innerHeight-200)top=Math.max(14,r.top-200);}
+ host.innerHTML=hole+'<div class="tuttip" style="top:'+top+'px"><div class="tutnum">Schritt '+(i+1)+' / '+TUT.length+'</div>'+
+   '<h4>'+esc(step.title)+'</h4><p>'+esc(step.text)+'</p>'+
+   '<div class="tutbtns"><button class="ghost" onclick="closeTutorial()">Überspringen</button><span>'+
+   (i>0?'<button class="ghost" onclick="openTutorial('+(i-1)+')">Zurück</button> ':'')+
+   '<button onclick="'+(last?'closeTutorial()':'openTutorial('+(i+1)+')')+'">'+(last?'Fertig':'Weiter')+'</button></span></div></div>';
 }
-async function closeTutorial(){const o=$('tutoverlay');if(o)o.remove();unlockBodyIfNone();await api('/api/fr/tutorial_done','POST');if(lastView)lastView.tutorial_seen=true;}
+async function closeTutorial(){const o=$('tutspot');if(o)o.remove();unlockBodyIfNone();await api('/api/fr/tutorial_done','POST');if(lastView)lastView.tutorial_seen=true;}
 init();
 </script></body></html>"""
 

@@ -282,6 +282,25 @@ def test_simulator_outcomes_and_sampler():
     assert {"complete", "incomplete"} & kinds
 
 
+def test_franchise_season_goals(tmp_path):
+    """Saison-Ziele werden gesetzt, erfüllt und mit Budget belohnt."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=9)
+    assert st["goals"] and any(g["key"] == "wins" for g in st["goals"])
+    v = F.view(st)
+    assert v["goals"][0]["done"] is False and "reward" in v["goals"][0]
+    # Saison durchspielen -> mindestens das Sieg- oder Playoff-Ziel sollte fallen
+    guard = 0
+    while st["phase"] != "done" and guard < 80:
+        F.next_week(cfg, st) if st.get("week_done") else F.sim_week(cfg, st)
+        guard += 1
+    assert any(g["done"] for g in st["goals"])
+    # neue Saison -> Ziele neu (nicht erfüllt)
+    F.new_season(cfg, st)
+    assert all(not g["done"] for g in st["goals"])
+
+
 def test_franchise_weekly_training(tmp_path):
     """1× Training pro Woche, Bye-Week, Film-Bonus, Reset bei Wochenwechsel."""
     from gridiron import franchise as F
