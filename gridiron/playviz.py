@@ -59,6 +59,41 @@ def _route(name: str, start: tuple[float, float]) -> list[list[float]]:
     return [[round(x, 2), round(y, 2)] for x, y in R[name]]
 
 
+# Routen, die Manndeckung gut schlagen (Tempo-/Trennungs-Routen).
+_MAN_BEATERS = {"slant", "drag", "cross", "post", "corner", "go", "seam",
+                "wheel", "out", "sail", "dig", "snag"}
+
+
+def _open_receiver(skill_routes: dict, defense: list[dict], primary: str) -> str:
+    """Wählt den Receiver mit der größten Separation gegen die gegebene Coverage.
+
+    So wirft der QB nicht stur auf die primäre Route, sondern auf den, der gegen
+    die jeweilige Deckung frei wird – Manndeckung wird von Tempo-Routen geschlagen,
+    Zonendeckung von Receivern in den Lücken zwischen den Drops.
+    """
+    best, best_score = primary, -1e9
+    for k, (rname, r) in skill_routes.items():
+        if rname == "block":
+            continue
+        cx, cy = r[-1]                       # Fangpunkt
+        sep = 8.0                            # ungedeckt = großzügige Trennung
+        for d in defense:
+            if d.get("role") == "rush":
+                continue
+            cov = d.get("cover")
+            if cov:                          # Manndeckung
+                if cov == k:
+                    base = 1.2 + (2.8 if rname in _MAN_BEATERS else 0.0)
+                    sep = min(sep, base)
+            elif d.get("drop"):              # Zonendeckung -> Abstand zur Landmarke
+                dx, dy = cx - d["drop"][0], cy - d["drop"][1]
+                sep = min(sep, (dx * dx + dy * dy) ** 0.5)
+        score = sep + (0.6 if k == primary else 0.0)   # leichter Bonus auf die Erstoption
+        if score > best_score:
+            best, best_score = k, score
+    return best
+
+
 # Konzept -> {Receiver: Routenname}, target = primäre Anspielstation.
 _PASS_ROUTES = {
     "Four Verts": ({"X": "go", "Z": "go", "SL": "seam", "TE": "seam", "RB": "checkdown"}, "SL"),
@@ -174,12 +209,15 @@ def diagram(concept: str, coverage: str) -> dict:
         offense.append({"pos": "OL", "x": POS[k][0], "y": POS[k][1], "route": None})
     offense.append({"pos": "QB", "x": POS["QB"][0], "y": POS["QB"][1], "route": None})
 
+    defense = _defense(coverage)
     ball_target = None
     if is_pass:
-        routes, target = _PASS_ROUTES[concept]
+        routes, primary = _PASS_ROUTES[concept]
+        skill_routes = {k: (routes.get(k, "block"), _route(routes.get(k, "block"), POS[k]))
+                        for k in SKILL}
+        target = _open_receiver(skill_routes, defense, primary)   # offene Anspielstation
         for k in SKILL:
-            rname = routes.get(k, "block")
-            r = _route(rname, POS[k])
+            rname, r = skill_routes[k]
             is_target = (k == target)
             offense.append({"pos": k, "x": POS[k][0], "y": POS[k][1],
                             "route": r, "rname": rname, "target": is_target})
@@ -201,6 +239,6 @@ def diagram(concept: str, coverage: str) -> dict:
     return {
         "concept": concept, "coverage": coverage, "kind": kind,
         "coverage_label": COVERAGES[coverage]["label"],
-        "offense": offense, "defense": _defense(coverage),
+        "offense": offense, "defense": defense,
         "ball_target": ball_target, "width": W,
     }

@@ -249,6 +249,23 @@ def test_playviz_diagram():
         diagram("Nope", "Cover 3")
 
 
+def test_diagram_open_receiver_varies_by_coverage():
+    """QB wirft auf die offene Route – die Anspielstation hängt von der Coverage ab."""
+    from gridiron.playviz import diagram
+
+    def target_route(concept, cov):
+        d = diagram(concept, cov)
+        return next(o["rname"] for o in d["offense"] if o.get("target"))
+
+    # Smash: gegen Mann der Corner-Beater, gegen Zone die Hitch (klassischer Hi-Lo-Read)
+    assert target_route("Smash", "Cover 0") == "corner"
+    assert target_route("Smash", "Cover 3") == "hitch"
+    # über alle Coverages hinweg fällt die Wahl nicht immer auf dieselbe Route
+    from gridiron.simulator import COVERAGES
+    picks = {target_route("Four Verts", cov) for cov in COVERAGES}
+    assert len(picks) >= 2
+
+
 def test_franchise_detailed_game(tmp_path):
     """Nutzer-Spiel liefert ein vollständiges Play-by-Play für die Übertragung."""
     from gridiron import franchise as F
