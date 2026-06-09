@@ -52,6 +52,17 @@ python -m gridiron.cli serve --host 0.0.0.0 --port 8000
 - **Druck-Report** (`/report`): aufgeräumte, druck-/PDF-fertige Variante für die
   Coaching-Mappe (Browser → Drucken/„Als PDF speichern").
 
+## Play-Simulator (Konzept × Coverage)
+Eigener Plattform-Bereich: spiel ein **Offense-Konzept** (Four Verts, Mesh,
+Smash, Screens, Inside/Outside Zone, Power …) gegen eine **Defensiv-Coverage**
+(Cover 0–6, Tampa 2, Cover 2-Man) in einer konkreten Situation durch. Tausende
+Monte-Carlo-Simulationen → Ertragsverteilung, Erfolgs-, Big-Play-, TD-,
+Turnover-, Sack-Wahrscheinlichkeit und erwartetes EPA.
+- **Berater**: „Beste Antwort auf Cover 3" und „Was stoppt dieses Konzept?".
+- **Matchup-Matrix**: Heatmap jedes Konzept × jede Coverage (erwartetes EPA).
+- Engine = echte Liga-Basisraten × kalibrierte Football-Matchup-Logik
+  (`gridiron/simulator.py`), transparent und nachvollziehbar.
+
 ## Datenquelle
 - **nflverse** Play-by-Play (Parquet je Saison) — frei, vollständig ab 1999.
   Enthält Down, Distanz, Feldposition, Play-Typ, EPA, Win-Probability,
