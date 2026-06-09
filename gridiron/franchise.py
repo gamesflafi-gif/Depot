@@ -454,8 +454,34 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
         "coach_market": _gen_market(rng), "events": [], "pid_seq": 10000,
     }
     state["market_players"] = _draft_class(state, rng)
+    state["goals"] = _gen_goals(state)
     save(cfg, state)
     return state
+
+
+def _gen_goals(state: dict) -> list[dict]:
+    games = sum(1 for w in state["schedule"] if w)        # Spiele (ohne Bye)
+    target = max(1, round(games * 0.55))
+    return [
+        {"key": "wins", "label": f"Mindestens {target} Siege", "target": target,
+         "reward": 15, "done": False},
+        {"key": "playoffs", "label": "Die Playoffs erreichen", "reward": 25, "done": False},
+    ]
+
+
+def _check_goals(state: dict) -> list[dict]:
+    team = state["teams"][0]
+    msgs = []
+    for g in state.get("goals", []):
+        if g.get("done"):
+            continue
+        ok = (g["key"] == "wins" and team["w"] >= g["target"]) or \
+             (g["key"] == "playoffs" and state["phase"] in ("playoffs", "done"))
+        if ok:
+            g["done"] = True
+            state["budget"] += g["reward"]
+            msgs.append({"type": "money", "text": f"Saisonziel erreicht: {g['label']} (+{g['reward']} Mio)."})
+    return msgs
 
 
 # --------------------------------------------------------------------------- #
@@ -687,6 +713,7 @@ def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
         user_game = out.pop("_user_game", None)
 
     out["events"] = _process_events(state, rng)
+    out["events"] += _check_goals(state)
     if user_game:
         state["last_user_game"] = user_game
         out["user_game"] = user_game
@@ -707,6 +734,9 @@ def next_week(cfg: Config, state: dict) -> dict:
             _start_playoffs(state)
     else:
         _advance_playoff(state)
+    extra = _check_goals(state)                           # Playoff-Ziel ggf. erfüllt
+    if extra:
+        state["events"] = (state.get("events") or []) + extra
     state["week_done"] = False
     state["week_trained"] = False
     state["teams"][0]["game_bonus"] = 0
@@ -956,6 +986,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["budget"] += 20                                 # Saisonbudget
     state["coach_market"] = _gen_market(rng)              # neuer Trainermarkt
     state["market_players"] = _draft_class(state, rng)    # neue Draft-/FA-Klasse
+    state["goals"] = _gen_goals(state)                    # neue Saisonziele
     ret = state.pop("_retired", [])
     state["events"] = ([{"type": "bad", "text": f"Karriereende: {n}"} for n in ret]
                        + [{"type": "ok", "text": "Neue Draft-/Free-Agent-Klasse im Transfermarkt verfügbar."}])
@@ -1181,6 +1212,9 @@ def view(state: dict) -> dict:
         "active_game": bool(state.get("active_game")),
         "week_done": bool(state.get("week_done")),
         "tutorial_seen": bool(state.get("tutorial_seen")),
+        "goals": [{"label": g["label"], "reward": g["reward"], "done": g["done"], "key": g["key"],
+                   "target": g.get("target"), "progress": team["w"] if g["key"] == "wins" else None}
+                  for g in state.get("goals", [])],
         "week_trained": bool(state.get("week_trained")),
         "trainings": TRAININGS,
         "game_bonus": team.get("game_bonus", 0),
