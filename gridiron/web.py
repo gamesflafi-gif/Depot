@@ -200,6 +200,11 @@ _STYLE2 = """
  .ctraits{margin-top:8px} .ctrait{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13px}
  .ctrait>span:first-child{width:130px;color:var(--mut)}
  .ctrait .abar{flex:1} .ctrait .aval{width:26px;text-align:right;font-weight:700}
+ .traingrid{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+ .traincard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:13px;
+   border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--fg);cursor:pointer;font:inherit;transition:border-color .12s,transform .04s}
+ .traincard:hover{border-color:var(--acc)} .traincard:active{transform:translateY(1px)}
+ .traincard .ti{color:var(--acc)} .traincard b{font-size:14px} .traincard .td{font-size:11.5px;color:var(--mut);font-weight:400}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -586,16 +591,32 @@ function renderMgr(v){
  h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
 }
+function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+ off:'<path d="M12 19V5M6 11l6-6 6 6"/>',def:'<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
+ star:'<path d="M12 3l2.6 5.6L21 9.3l-4.5 4.2L17.6 21 12 17.8 6.4 21l1.1-7.5L3 9.3l6.4-.7z"/>',
+ heal:'<path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z"/>',film:'<path d="M5 5h14v14H5zM5 9h14M9 5v14"/>'};
+ return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">'+(I[k]||I.team)+'</svg>';}
 function secDash(v){
- let h='<div class="card"><div class="sec" style="margin-top:0">Spielbetrieb</div>';
- if(v.phase==='regular'&&v.next){h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
-   'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';}
- if(v.phase==='playoffs'&&v.playoff){h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
-   v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';}
- if(v.active_game)h+='<button onclick="resumeGame()">Spiel fortsetzen</button> ';
- else if(v.phase!=='done'){h+='<button onclick="startGame()">Selbst spielen</button> '+
-   '<button class="ghost" onclick="simWeek()">Simulieren</button> ';}
- else h+='<button onclick="newSeason()">Neue Saison</button> ';
+ let h='';
+ // Training dieser Woche
+ if(v.phase!=='done'){h+='<div class="card"><div class="sec" style="margin-top:0">Training dieser Woche</div>';
+   if(v.week_trained)h+='<div class="reco win"><span>Training erledigt</span><span class="mut">nächste Woche wieder verfügbar</span></div>';
+   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
+   if(v.game_bonus>0)h+='<div class="note">🎯 Film-Bonus aktiv fürs nächste Spiel.</div>';
+   h+='</div>';}
+ // Spielbetrieb
+ h+='<div class="card"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':'Spielbetrieb')+'</div>';
+ if(v.phase==='done'){h+='<div class="reco"><span>Saison beendet.</span></div><button onclick="newSeason()">Neue Saison</button> ';}
+ else if(v.is_bye){h+='<div class="reco"><span><b>Bye Week</b> — diese Woche kein Spiel</span><span class="mut">ideal zum Trainieren</span></div>'+
+   '<button onclick="simWeek()">Woche abschließen</button> ';}
+ else{
+   if(v.phase==='regular'&&v.next)h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
+     'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';
+   if(v.phase==='playoffs'&&v.playoff)h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
+     v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';
+   if(v.active_game)h+='<button onclick="resumeGame()">Spiel fortsetzen</button> ';
+   else h+='<button onclick="startGame()">Selbst spielen</button> <button class="ghost" onclick="simWeek()">Simulieren</button> ';
+ }
  if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Letztes Spiel ansehen</button> ';
  h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
@@ -615,14 +636,10 @@ function secDash(v){
  return h+'</table></div>';
 }
 function secKader(v){
- const foc=v.training_focus||'';
- let h='<div class="card"><div class="sec" style="margin-top:0">Trainingszentrum</div>'+
-   '<div class="grid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('EXP / Woche','+'+v.equipment.exp_week)+kpi('Kadergröße',v.roster.length)+'</div>'+
-   '<div class="controls" style="margin-top:12px"><div><label>Trainings-Fokus (Woche)</label>'+
-   '<select id="foc"><option value="">kein Fokus</option>'+v.focus_options.map(o=>'<option value="'+o.key+'"'+(o.key===foc?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select></div>'+
-   '<button onclick="setFocus()">Fokus setzen</button>'+
-   (v.skillpoints>0?' <button class="ghost" onclick="allocAll()">Alle Punkte auto-verteilen ('+v.skillpoints+')</button>':'')+'</div>'+
-   '<div class="note">Spieler sammeln jede Woche EXP (Training, Fokus-Gruppe extra, Starter + Siege mehr). Je 100 EXP = 1 Skillpunkt. Klick einen Spieler an, um Punkte zu verteilen.</div></div>';
+ let h='<div class="card"><div class="sec" style="margin-top:0">Kader-Übersicht</div>'+
+   '<div class="grid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('Kadergröße',v.roster.length)+kpi('Overall',v.ratings.ovr)+'</div>'+
+   (v.skillpoints>0?'<div style="margin-top:12px"><button onclick="allocAll()">Alle Skillpunkte auto-verteilen ('+v.skillpoints+')</button></div>':'')+
+   '<div class="note">EXP kommt aus dem Wochen-Training (Dashboard) und aus Spiel-Leistung. Je 100 EXP = 1 Skillpunkt. Klick einen Spieler an, um Punkte auf Attribute zu verteilen.</div></div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos);if(!ps.length)return;
@@ -881,6 +898,7 @@ async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht ver
 function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
+async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 init();
 </script></body></html>"""
 
@@ -1130,6 +1148,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return {"result": F.set_focus(cfg, st, group or None), "view": F.view(st)}
+
+    @app.post("/api/fr/train_week")
+    def fr_train_week(kind: str):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.do_training(cfg, st, kind), "view": F.view(st)}
 
     @app.post("/api/fr/sign")
     def fr_sign(pid: int):

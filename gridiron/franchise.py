@@ -406,6 +406,14 @@ def _round_robin(n: int) -> list[list[tuple[int, int]]]:
     return weeks
 
 
+def _season_schedule(n: int, rng: random.Random) -> list:
+    """Round-Robin + eine liga-weite Bye-Week (spielfreie Woche) in der Mitte."""
+    weeks = _round_robin(n)
+    if len(weeks) >= 4:
+        weeks.insert(rng.randint(2, len(weeks) - 2), [])   # [] = Bye Week
+    return weeks
+
+
 def _new_team(name: str, abbr: str, color: str, color2: str, base: int,
               rng: random.Random, user: bool = False) -> dict:
     units = {u: max(50, min(95, base + rng.randint(-6, 6))) for u in ALL_UNITS}
@@ -435,12 +443,13 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
     ai_lo, ai_hi = {"leicht": (58, 68), "normal": (62, 74), "schwer": (68, 80)}.get(difficulty, (62, 74))
     for cname, cabbr, c1, c2 in rng.sample(TEAM_CATALOG, n_teams - 1):
         teams.append(_new_team(cname, cabbr, c1, c2, rng.randint(ai_lo, ai_hi), rng))
+    teams[0]["game_bonus"] = 0
     state = {
         "team_name": teams[0]["name"], "season": 1, "week": 0,
         "phase": "regular", "budget": 60, "difficulty": difficulty,
-        "teams": teams, "schedule": _round_robin(n_teams),
+        "teams": teams, "schedule": _season_schedule(n_teams, rng),
         "results": [], "log": [], "history": [], "playoff": None,
-        "champion": None, "training_focus": None,
+        "champion": None, "training_focus": None, "week_trained": False,
         "coach_market": _gen_market(rng), "events": [], "pid_seq": 10000,
     }
     state["market_players"] = _draft_class(state, rng)
@@ -561,7 +570,7 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
         q = min(4, drive // (GAME_DRIVES // 4) + 1)
         oc_pool = OFF_SCHEMES.get(off.get("off_scheme", "Ausgeglichen"), list(PASS_CONCEPTS))
         dc_pool = DEF_SCHEMES.get(deff.get("def_scheme", "Ausgeglichen"), list(COVERAGES))
-        edge = 0.10 * (offense(off) - defense(deff))     # Stärke-Bias auf die Yards
+        edge = 0.10 * (offense(off) - defense(deff)) + 0.5 * off.get("game_bonus", 0)  # +Film-Bonus
         for _ in range(14):
             concept, coverage = rng.choice(oc_pool), rng.choice(dc_pool)
             o = play_outcome(concept, coverage, {"yardline_100": ytz, "down": down, "ydstogo": dist}, _RNG)
@@ -683,6 +692,8 @@ def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
     if user_game:
         state["last_user_game"] = user_game
         out["user_game"] = user_game
+    state["week_trained"] = False                         # neue Woche: Training wieder möglich
+    state["teams"][0]["game_bonus"] = 0                   # Film-Bonus verbraucht
     save(cfg, state)
     return out
 
@@ -701,24 +712,71 @@ def _earn(state: dict, games: list[dict]) -> None:
     if g:
         income += 10 if won else 3
     state["budget"] += income
-    # Spieler-EXP: Basis-Training (Equipment hebt), Trainings-Fokus, Spiele (Starter), Sieg.
-    focus = state.get("training_focus")
-    base = 10 + 3 * team.get("equipment", 1)
-    dev = _trait(team, "HC", "Entwicklung")               # Head Coach entwickelt
-    spec = {"QB": ("OC", "Passspiel"), "WR": ("OC", "Passspiel"),
-            "RB": ("OC", "Laufspiel"), "OL": ("OC", "Laufspiel"),
-            "DB": ("DC", "Coverage"), "LB": ("DC", "Coverage"), "DL": ("DC", "Pass-Rush")}
-    for p in team.get("roster", []):
-        gain = base
-        if focus and (p["pos"] == focus or _side(p["pos"]) == focus):
-            gain += 12
-        if p["starter"]:
-            gain += 6 + (4 if won else 0)
-        rt = spec.get(p["pos"])
-        if rt:
-            gain += max(0, (_trait(team, rt[0], rt[1]) - 65) // 8)   # Coordinator-Spezialität
-        gain = round(gain * (1 + (dev - 60) / 200.0))
-        _gain_exp(p, gain)
+
+
+def _exp_mult(team: dict) -> float:
+    """Trainingsausbeute: Head-Coach-Entwicklung + Equipment heben die EXP."""
+    dev = _trait(team, "HC", "Entwicklung")
+    return (1 + (dev - 60) / 200.0) * (1 + 0.12 * (team.get("equipment", 1) - 1))
+
+
+# Wöchentliche Trainings-Optionen (visuell wählbar, 1× pro Woche).
+TRAININGS = [
+    {"key": "team", "label": "Teamtraining", "icon": "team",
+     "desc": "Alle Spieler sammeln EXP."},
+    {"key": "offense", "label": "Offense-Drills", "icon": "off",
+     "desc": "Offense-Gruppe bekommt deutlich EXP."},
+    {"key": "defense", "label": "Defense-Drills", "icon": "def",
+     "desc": "Defense-Gruppe bekommt deutlich EXP."},
+    {"key": "single", "label": "Einzeltraining", "icon": "star",
+     "desc": "Größter Talent-Schub für deinen besten Entwicklungs-Spieler."},
+    {"key": "regen", "label": "Regeneration", "icon": "heal",
+     "desc": "Verletzte erholen sich eine Woche schneller."},
+    {"key": "film", "label": "Film-Session", "icon": "film",
+     "desc": "Taktik-Vorteil fürs nächste Spiel."},
+]
+
+
+def do_training(cfg: Config, state: dict, kind: str) -> dict:
+    """Einmal pro Woche: gewähltes Training anwenden."""
+    if state.get("week_trained"):
+        return {"error": "Diese Woche wurde bereits trainiert."}
+    team = state["teams"][0]
+    roster = team.get("roster", [])
+    m = _exp_mult(team)
+    msg = ""
+    if kind == "team":
+        for p in roster:
+            _gain_exp(p, round(16 * m))
+        msg = "Teamtraining: alle Spieler haben EXP gesammelt."
+    elif kind in ("offense", "defense"):
+        side = "Offense" if kind == "offense" else "Defense"
+        for p in roster:
+            if _side(p["pos"]) == side:
+                _gain_exp(p, round(34 * m))
+        msg = f"{side}-Drills: Gruppe hat ordentlich EXP gesammelt."
+    elif kind == "single":
+        cand = [p for p in roster if player_ovr(p) < player_pot(p)]
+        if not cand:
+            return {"error": "Alle Spieler sind am Potenzial — kein Einzeltraining nötig."}
+        target = min(cand, key=lambda p: (p["age"], -(player_pot(p) - player_ovr(p))))
+        _gain_exp(target, round(70 * m))
+        msg = f"Einzeltraining: {target['name']} ({target['pos']}) macht einen großen Schritt."
+    elif kind == "regen":
+        healed = 0
+        for p in roster:
+            if p.get("inj", 0) > 0:
+                p["inj"] = max(0, p["inj"] - 1); healed += 1
+        msg = (f"Regeneration: {healed} verletzte Spieler erholen sich schneller."
+               if healed else "Regeneration: keine Verletzten — Team frisch erholt.")
+    elif kind == "film":
+        team["game_bonus"] = 3
+        msg = "Film-Session: Taktik-Vorteil fürs nächste Spiel (+)."
+    else:
+        return {"error": "Unbekanntes Training."}
+    state["week_trained"] = True
+    save(cfg, state)
+    return {"ok": True, "text": msg}
 
 
 def _side(pos: str) -> str:
@@ -737,10 +795,20 @@ def _process_events(state: dict, rng: random.Random) -> list[dict]:
             p["inj"] -= 1
             if p["inj"] == 0:
                 msgs.append({"type": "ok", "text": f"{p['name']} ist wieder fit und einsatzbereit."})
-    if rng.random() < 0.6:
-        ev = rng.choices(["injury", "breakout", "camp", "mentor", "slump"],
-                         weights=[28, 20, 18, 18, 16])[0]
-        if ev == "injury":
+    # Genau ein Wochen-Event (überwiegend kleine Fan-/Geld-Events).
+    if True:
+        ev = rng.choices(["fans", "sponsor", "merch", "injury", "breakout", "mentor", "slump"],
+                         weights=[24, 18, 14, 16, 12, 9, 7])[0]
+        if ev == "fans":
+            inc = rng.randint(2, 5); state["budget"] += inc
+            msgs.append({"type": "money", "text": f"Fan-Andrang im Stadion: +{inc} Mio Einnahmen."})
+        elif ev == "sponsor":
+            inc = rng.randint(3, 7); state["budget"] += inc
+            msgs.append({"type": "money", "text": f"Sponsoren-Bonus: +{inc} Mio."})
+        elif ev == "merch":
+            inc = rng.randint(1, 4); state["budget"] += inc
+            msgs.append({"type": "money", "text": f"Merchandise-Verkäufe: +{inc} Mio."})
+        elif ev == "injury":
             healthy = [p for p in roster if p.get("inj", 0) == 0 and p["starter"]] or \
                       [p for p in roster if p.get("inj", 0) == 0]
             if healthy:
@@ -753,10 +821,6 @@ def _process_events(state: dict, rng: random.Random) -> list[dict]:
                 p = rng.choice(young)
                 p["pts"] += 1
                 msgs.append({"type": "ok", "text": f"Breakout: {p['name']} macht einen Sprung (+1 Skillpunkt)."})
-        elif ev == "camp":
-            for p in roster:
-                _gain_exp(p, 15)
-            msgs.append({"type": "ok", "text": "Trainingslager: das ganze Team sammelt EXP."})
         elif ev == "mentor":
             young = sorted(roster, key=lambda p: p["age"])[:1]
             if young:
@@ -862,7 +926,9 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["results"] = []
     state["last_user_game"] = None
     state["active_game"] = None
-    state["schedule"] = _round_robin(len(state["teams"]))
+    state["week_trained"] = False
+    state["teams"][0]["game_bonus"] = 0
+    state["schedule"] = _season_schedule(len(state["teams"]), rng)
     state["budget"] += 20                                 # Saisonbudget
     state["coach_market"] = _gen_market(rng)              # neuer Trainermarkt
     state["market_players"] = _draft_class(state, rng)    # neue Draft-/FA-Klasse
@@ -1089,6 +1155,11 @@ def view(state: dict) -> dict:
             team.get("roster", []),
             key=lambda p: (list(ROSTER_SLOTS).index(p["pos"]), not p["starter"], -player_ovr(p)))],
         "active_game": bool(state.get("active_game")),
+        "week_trained": bool(state.get("week_trained")),
+        "trainings": TRAININGS,
+        "game_bonus": team.get("game_bonus", 0),
+        "is_bye": state["phase"] == "regular" and state["week"] < len(state["schedule"])
+        and _user_pair(state) is None,
         "events": state.get("events", []),
         "slots": ROSTER_SLOTS,
         "market_players": [{"id": p["id"], "name": p["name"], "pos": p["pos"],
