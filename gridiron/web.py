@@ -206,6 +206,19 @@ _STYLE2 = """
  .swatch{width:30px;height:30px;border-radius:8px;cursor:pointer;border:2px solid transparent}
  .swatch.on{border-color:#fff;box-shadow:0 0 0 2px var(--acc)}
  /* TV-Broadcast */
+ /* Vorspiel-Intro: Teams, Münzwurf, Kickoff */
+ .introwrap{min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:26px 6px;text-align:center;position:relative;animation:fade .3s ease}
+ .introskip{position:absolute;top:6px;right:6px;padding:5px 10px;font-size:12px}
+ .vsrow{display:flex;align-items:stretch;gap:12px;width:100%;justify-content:center}
+ .vsteam{flex:1;max-width:210px;display:flex;flex-direction:column;align-items:center;gap:9px;background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:16px 10px}
+ .vsteam .tn{font-weight:800;font-size:15px} .vsmid{display:flex;align-items:center;font-weight:800;font-size:24px;color:var(--mut)}
+ .caps{display:flex;gap:7px;justify-content:center;flex-wrap:wrap} .capw{display:flex;flex-direction:column;align-items:center;gap:3px}
+ .capn{font-size:10px;color:var(--mut);font-weight:700;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .coin{width:92px;height:92px;border-radius:50%;background:linear-gradient(135deg,#f6d985,#c79a32);display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 8px 22px rgba(0,0,0,.45);animation:coinflip 1.05s ease-in-out 2}
+ @keyframes coinflip{0%{transform:rotateY(0) scale(.9)}50%{transform:rotateY(900deg) scale(1.1)}100%{transform:rotateY(1800deg) scale(1)}}
+ .introbig{font-size:22px;font-weight:800} .introsub{color:var(--mut);font-size:14px}
+ .kostrip{position:relative;width:100%;max-width:460px;height:30px;border-radius:8px;background:linear-gradient(90deg,#0e4a2d,#1d7a48);border:1px solid #06140d;overflow:hidden}
+ .koball{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;border:2px solid #fff;transition:left 1s cubic-bezier(.2,.7,.3,1)}
  .tvscore{display:grid;grid-template-columns:1fr auto auto auto 1fr;align-items:center;gap:12px;
    background:#0a0f0d;border:1px solid var(--line);border-radius:11px;padding:14px 16px}
  .tvteam{display:flex;align-items:center;gap:10px}.tvteam.r{justify-content:flex-end}
@@ -266,6 +279,7 @@ _STYLE2 = """
  .ovrnum{font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
  .prow{display:flex;align-items:center;gap:12px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;margin:6px 0;cursor:pointer;transition:border-color .12s}
  .prow:hover{border-color:var(--acc)} .prow .ovrnum{min-width:30px;text-align:center}
+ .pfa{flex:none;line-height:0} .ptr{border-radius:8px;display:block}
  .prow .pname{flex:1;font-weight:600} .ptbadge{background:var(--acc);color:#04140c;font-weight:800;font-size:12px;padding:3px 9px;border-radius:7px}
  .pcols{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:12px}
  .radarwrap{flex:none} .attrs{flex:1;min-width:240px}
@@ -494,6 +508,27 @@ function kpi(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class=
 function segCol(cls){return {ok:'#16c784',ok2:'#0e9f6a',mid:'#3a4a44',warn:'#e9b949',bad:'#ef5350'}[cls]||'#3a4a44';}
 function posBadge(p){return '<span class="posb p-'+p+'">'+p+'</span>';}
 function teamLogo(abbr,color,cls){return '<span class="tlogo'+(cls?' '+cls:'')+'" style="--lc:'+esc(color||'#16c784')+'">'+esc(((abbr||'?')+'').slice(0,3))+'</span>';}
+function _hash(s){s=''+s;let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function portrait(p,sz,teamColor){sz=sz||38;const h=_hash((p.id!=null?p.id:0)+'_'+(p.name||''));
+ const skin=['#f2cba5','#e3b183','#cd9b67','#a96f44','#7a4a28','#5a3620'][h%6];
+ const hairC=['#15110d','#2e1d12','#5b3a1e','#0b0b0b','#3a3a3a','#b9933f'][(h>>4)%6];
+ const bg=teamColor?'#16201c':['#22304d','#27343d','#2c2547','#1f3b30'][(h>>7)%4];
+ const jersey=teamColor||'#3a4750';const style=(h>>10)%4,beard=((h>>13)%4===0);
+ let s='<svg class="ptr" viewBox="0 0 40 42" width="'+sz+'" height="'+Math.round(sz*1.05)+'" preserveAspectRatio="xMidYMid meet">';
+ s+='<rect x="0" y="0" width="40" height="42" rx="9" fill="'+bg+'"/>';
+ s+='<path d="M5 42 Q20 30 35 42 Z" fill="'+jersey+'"/><ellipse cx="20" cy="37" rx="8.5" ry="6" fill="'+jersey+'"/>';
+ s+='<rect x="16" y="26" width="8" height="8" fill="'+skin+'"/>';
+ s+='<circle cx="11" cy="19" r="1.8" fill="'+skin+'"/><circle cx="29" cy="19" r="1.8" fill="'+skin+'"/>';
+ s+='<ellipse cx="20" cy="19" rx="9" ry="10.5" fill="'+skin+'"/>';
+ if(beard)s+='<path d="M12 20 Q20 33 28 20 Q26 28 20 29 Q14 28 12 20 Z" fill="'+hairC+'" opacity="0.9"/>';
+ if(style===0)s+='<path d="M10.5 14 Q20 3 29.5 14 L29.5 11 Q20 5 10.5 11 Z" fill="'+hairC+'"/>';
+ else if(style===1)s+='<ellipse cx="20" cy="10.5" rx="11" ry="8.5" fill="'+hairC+'"/>';
+ else if(style===3){s+='<path d="M10.5 13 Q20 4 29.5 13 L29.5 11 Q20 5 10.5 11 Z" fill="'+hairC+'"/><rect x="9.5" y="11.5" width="21" height="3" rx="1.5" fill="#e7e7e7"/>';}
+ else s+='<path d="M12 12.5 Q20 7 28 12.5" stroke="'+hairC+'" stroke-width="2.4" fill="none"/>';
+ s+='<rect x="14.3" y="16" width="4" height="1.1" rx="0.5" fill="'+hairC+'"/><rect x="21.7" y="16" width="4" height="1.1" rx="0.5" fill="'+hairC+'"/>';
+ s+='<circle cx="16.5" cy="19" r="1.3" fill="#1a1a1a"/><circle cx="23.5" cy="19" r="1.3" fill="#1a1a1a"/>';
+ s+='<path d="M19 20 l-1 3 h2 Z" fill="rgba(0,0,0,.16)"/><path d="M17 24.5 Q20 26.5 23 24.5" stroke="#7a3b2e" stroke-width="1" fill="none"/>';
+ return s+'</svg>';}
 function ovrTier(o){return o>=88?'elite':o>=80?'good':o>=72?'ok':o>=62?'avg':'low';}
 function ovrBadge(o){return '<span class="ovrb ovr-'+ovrTier(o)+'">'+o+'</span>';}
 function devBadge(dev,label){if(!dev||dev==='normal')return '';const c=dev==='superstar'?'#ffd34d':'#5fa8ff';
@@ -691,8 +726,8 @@ function playAnim(svg,d,res,onDone){
    if(o===tgt){
      if(isPass){if(!caught)_advance(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}
      else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
-     if(!isPass||caught){const nd=D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-o.x,q.y-o.y)),9);   // Ballträger weicht bei Druck aus
-       if(nd<2.4){o.x+=Math.sin(el*16+o.i)*0.5;if(nd<1.5&&!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // Juke + Spin-Move
+     if(!isPass||caught){const nd=D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-o.x,q.y-o.y)),9);   // läuft die optimale Linie (durchs Loch, dann gerade zum TD)
+       if(nd<1.7&&el>(o._jukeT||-9)+0.7){o._jukeT=el;o.x+=(o.x<=C?1.3:-1.3);if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // nur bei nahem Gegner ein Ausweichschritt + Spin
      return;}
    if(o.route){_advance(o,M(o.pos));
      if(o.ri>=o.route.length&&!caught){o.y+=M(o.pos)*0.45;o.x+=(Math.sin((el+o.i)*2.2))*M(o.pos)*0.25;}}  // weiter freilaufen bis zum Wurf
@@ -932,7 +967,7 @@ function secKader(v){
      h+='<div style="margin:12px 0 4px">'+posBadge(pos)+' <span class="mut" style="font-weight:700">'+pos+'</span></div>';
      ps.forEach(p=>{const bar=Math.round(p.ovr/Math.max(p.pot,1)*100);
        h+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
-        ovrBadge(p.ovr)+
+        '<span class="pfa">'+portrait(p,38,v.color)+'</span>'+ovrBadge(p.ovr)+
         '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#16c784;color:#04140c">START</span>':'')+(p.inj>0?' <span class="tag" style="background:#3a1d1d;color:#ff8a8a">VERLETZT '+p.inj+'W</span>':'')+
         '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+(p.season&&p.season.games?' · '+p.season.games+' Sp.':'')+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
         (p.pts>0?'<span class="ptbadge">'+p.pts+' P</span>':'<span class="mut" style="font-size:12px">'+p.exp+'/100</span>')+'</div>';});
@@ -948,7 +983,8 @@ function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)=
  o.innerHTML='<div class="modal" id="playermodal"></div>';renderPlayer(p);
 }
 function renderPlayer(p){
- let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+devBadge(p.dev,p.dev_label)+
+ const tc=(lastView&&lastView.color)||'#16c784';
+ let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:10px"><span class="pfa">'+portrait(p,46,tc)+'</span>'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+devBadge(p.dev,p.dev_label)+
    '<span class="mut" style="font-weight:600;font-size:13px">'+(p.starter?'Starter':'Bank')+(p.inj>0?' · verletzt '+p.inj+'W':'')+'</span></h3>'+
    '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
    '<div class="kgrid">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
@@ -1172,7 +1208,37 @@ async function endGameByClock(){const r=await api('/api/fr/game/end','POST');if(
 async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 function openGame(g){closeGame();liveG=g;gameQ=1;gameClock=60;playClock=15;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
- o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();renderGame(g);if(!g.over)startClock();}
+ o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();
+ const go=()=>{if(!liveG)return;renderGame(liveG);if(!liveG.over)startClock();};
+ if(g.log&&g.log.length===0){gameIntro(g,go);}else go();}   // frisches Spiel: Intro -> Münzwurf -> Kickoff
+function gameIntro(g,done){let fin=false;const end=()=>{if(fin)return;fin=true;clearTimeout(window._introT);done();};
+ window.introSkip=end;const M=$('gamemodal');if(!M){end();return;}
+ const uName=(lastView&&lastView.team_name)||(g.user_is_home?g.home:g.away);
+ const uColor=(lastView&&lastView.color)||'#16c784',uAbbr=(lastView&&lastView.abbr)||(g.user_is_home?g.habbr:g.aabbr);
+ const oName=g.user_is_home?g.away:g.home,oColor=g.user_is_home?g.acolor:g.hcolor,oAbbr=g.user_is_home?g.aabbr:g.habbr;
+ const short=n=>{const t=(''+n).split(' ');return t.length>1?t[0][0]+'. '+t[t.length-1]:n;};
+ const uCaps=(lastView&&lastView.roster?lastView.roster.slice().sort((a,b)=>b.ovr-a.ovr).slice(0,3):[]);
+ const oCaps=[0,1,2].map(i=>({id:'o'+oAbbr+i,name:oAbbr+' '+(10+i*11)}));
+ const capCol=(arr,col,real)=>'<div class="caps">'+arr.map(p=>'<div class="capw"><span class="pfa">'+portrait(p,44,col)+'</span><span class="capn">'+esc(real?short(p.name):'C')+'</span></div>').join('')+'</div>';
+ const teamCol=(nm,ab,col,caps,real)=>'<div class="vsteam" style="border-color:'+esc(col)+'66"><div class="tlogo lg" style="--lc:'+esc(col)+'">'+esc(ab)+'</div><div class="tn">'+esc(nm)+'</div>'+capCol(caps,col,real)+'</div>';
+ const skip='<button class="ghost introskip" onclick="introSkip()">Überspringen ▸</button>';
+ function s1(){M.innerHTML='<div class="introwrap">'+skip+'<div class="introsub">Heute im Spiel</div>'+
+   '<div class="vsrow">'+teamCol(uName,uAbbr,uColor,uCaps,true)+'<div class="vsmid">VS</div>'+teamCol(oName,oAbbr,oColor,oCaps,false)+'</div>'+
+   '<div class="introsub" style="font-size:12px">Kapitäne ohne Helm</div></div>';
+   window._introT=setTimeout(s2,2600);}
+ function s2(){const recv=g.coin&&g.coin.user_receives?uName:oName;
+   M.innerHTML='<div class="introwrap">'+skip+'<div class="introbig">Münzwurf</div><div class="coin">🏈</div>'+
+   '<div class="introbig"><b style="color:var(--acc)">'+esc(recv)+'</b></div><div class="introsub">gewinnt den Münzwurf und bekommt den Ball</div></div>';
+   window._introT=setTimeout(s3,2400);}
+ function s3(){const k=g.kickoff||{return_to:25,td:false};const recvCol=(g.coin&&g.coin.user_receives)?uColor:oColor;
+   const endX=k.td?96:Math.max(8,Math.min(92,k.return_to));
+   M.innerHTML='<div class="introwrap">'+skip+'<div class="introbig">Kickoff</div>'+
+   '<div class="kostrip"><div class="koball" id="koball" style="left:6%;background:'+esc(recvCol)+'"></div></div>'+
+   '<div class="introsub" id="kotxt">Return läuft …</div></div>';
+   setTimeout(()=>{const b=$('koball');if(b)b.style.left=endX+'%';},60);
+   setTimeout(()=>{const t=$('kotxt');if(t)t.innerHTML=k.td?'<b style="color:var(--acc)">RETURN-TOUCHDOWN!</b>':'Return bis zur eigenen <b>'+k.return_to+'</b>';},1100);
+   window._introT=setTimeout(end,2500);}
+ s1();}
 function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div class="yl" style="left:'+p+'%"></div>';
  const lab=(p===50?'50':(p<50?p:100-p));t+='<div class="yn" style="left:'+p+'%">'+lab+'</div><div class="yn b" style="left:'+p+'%">'+lab+'</div>';});
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
