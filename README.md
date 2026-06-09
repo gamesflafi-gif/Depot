@@ -63,6 +63,16 @@ Turnover-, Sack-Wahrscheinlichkeit und erwartetes EPA.
 - Engine = echte Liga-Basisraten × kalibrierte Football-Matchup-Logik
   (`gridiron/simulator.py`), transparent und nachvollziehbar.
 
+## 🏈 Team-Manager (Franchise-Spielmodus)
+Ein eigenes Spiel im Spiel (Madden-Franchise-Stil): gründe deine Franchise,
+**baue dein Team** (Einheiten QB/OL/WR/RB/DL/LB/DB mit Budget verbessern), wähle
+dein **Playbook**, spiele eine **Liga-Saison** gegen KI-Teams inkl. **Playoffs**
+und gewinne den Titel — über mehrere Saisons mit weiterentwickelnder Liga.
+- Spiele werden aus Team-Stärke **+ Matchup-Logik** (dein Konzept gegen die
+  gegnerische Coverage) berechnet, nicht blind gewürfelt (`gridiron/franchise.py`).
+- Tabelle, Spielplan, Ergebnisse, Budget-Wirtschaft, Meister-Historie.
+- Spielstand wird lokal gespeichert (`data/franchise.json`).
+
 ## Datenquelle
 - **nflverse** Play-by-Play (Parquet je Saison) — frei, vollständig ab 1999.
   Enthält Down, Distanz, Feldposition, Play-Typ, EPA, Win-Probability,

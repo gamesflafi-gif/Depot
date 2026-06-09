@@ -92,6 +92,7 @@ _PAGE = """<!doctype html><html lang="de"><head>
   <div class="tab on" data-s="scout" onclick="tab('scout')">Scouting</div>
   <div class="tab" data-s="sim" onclick="tab('sim')">Play-Simulator</div>
   <div class="tab" data-s="matrix" onclick="tab('matrix')">Matchup-Matrix</div>
+  <div class="tab" data-s="mgr" onclick="tab('mgr')">🏈 Manager</div>
  </div>
 
  <!-- ============ SCOUTING ============ -->
@@ -157,6 +158,12 @@ _PAGE = """<!doctype html><html lang="de"><head>
  <div id="matrix_out"></div>
  </div>
 
+ <!-- ============ MANAGER / FRANCHISE ============ -->
+ <div class="sect" id="s-mgr">
+ <div class="lead">Baue dein Team, spiele die Liga-Saison und gewinne den Titel. Verbessere mit deinem Budget die Einheiten und wähle dein Playbook.</div>
+ <div id="mgr_out" class="mut">Lade …</div>
+ </div>
+
  <div class="foot">Simulation = echte Liga-Basisraten × kalibrierte Football-Matchup-Logik. Wahrscheinlichkeiten, keine Garantie.</div>
 </div>
 <script>
@@ -167,7 +174,8 @@ const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
 function tab(s){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
  document.querySelectorAll('.sect').forEach(e=>e.classList.remove('on'));$('s-'+s).classList.add('on');
- if(s==='sim'&&!simReady)initSim(); if(s==='matrix'&&!$('matrix_out').dataset.done)runMatrix();}
+ if(s==='sim'&&!simReady)initSim(); if(s==='matrix'&&!$('matrix_out').dataset.done)runMatrix();
+ if(s==='mgr')loadMgr();}
 
 async function init(){
  const d=await (await fetch('/api/teams')).json();
@@ -285,13 +293,91 @@ async function runMatrix(){
  const qs='down='+$('m_d').value+'&ydstogo='+$('m_y').value+'&yardline='+$('m_yl').value+'&personnel='+$('m_p').value;
  const r=await (await fetch('/api/sim/matrix?'+qs)).json();
  let h='<div class="card scroll"><table class="heat"><tr><th class="cn">Konzept</th>';
- r.coverages.forEach(c=>h+='<th>'+esc(c.replace(/ —.*/,'').replace(/ \(.*/,''))+'</th>');
+ r.coverages.forEach(c=>h+='<th>'+esc(c.replace(/ —.*/,'').replace(/ [(].*/,''))+'</th>');
  h+='</tr>';
  r.rows.forEach(row=>{h+='<tr><td class="cn">'+esc(row.label)+' <span class="mut">'+row.type+'</span></td>';
   row.epa.forEach(e=>h+='<td class="val" style="background:'+heatColor(e)+'">'+sgn(e)+'</td>');h+='</tr>';});
  h+='</table><div class="note">Quelle Basisraten: '+esc(r.source)+'</div></div>';
  $('matrix_out').innerHTML=h; $('matrix_out').dataset.done='1';
 }
+
+/* ===================== MANAGER / FRANCHISE ===================== */
+let mgrMeta=null;
+async function api(path,method){return (await fetch(path,{method:method||'GET'})).json();}
+async function loadMgr(){
+ if(!mgrMeta)mgrMeta=await api('/api/fr/meta');
+ const s=await api('/api/fr/state');
+ if(!s.exists){renderNewTeam();return;}
+ renderMgr(s.view);
+}
+function renderNewTeam(){
+ $('mgr_out').innerHTML='<div class="card"><div class="sec" style="margin-top:0">Neue Franchise gründen</div>'+
+  '<div class="controls"><div><label>Teamname</label><input id="nt_name" value="Mein Team" style="width:200px"></div>'+
+  '<div><label>Liga-Größe</label><select id="nt_n"><option>6</option><option selected>8</option><option>10</option><option>12</option></select></div>'+
+  '<div><label>Schwierigkeit</label><select id="nt_diff">'+mgrMeta.difficulties.map(d=>'<option'+(d==='normal'?' selected':'')+'>'+d+'</option>').join('')+'</select></div>'+
+  '<button onclick="newTeam()">Franchise starten</button></div>'+
+  '<div class="note">Du startest mit einem Budget, baust dein Team auf und spielst um den Titel.</div></div>';
+}
+async function newTeam(){
+ const qs='team='+encodeURIComponent($('nt_name').value)+'&teams='+$('nt_n').value+'&difficulty='+$('nt_diff').value;
+ renderMgr(await api('/api/fr/new?'+qs,'POST'));
+}
+function pill(t){return '<span class="pill">'+esc(t)+'</span>';}
+function renderMgr(v){
+ const phaseLabel={regular:'Reguläre Saison',playoffs:(v.playoff?v.playoff.round:'Playoffs'),done:'Saison beendet'}[v.phase];
+ let h='<div class="card"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;align-items:center">'+
+   '<div class="big">'+esc(v.team_name)+' <span class="mut" style="font-size:14px">Saison '+v.season+' · '+esc(phaseLabel)+'</span></div>'+
+   '<div>'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('💰 '+v.budget+' Mio')+'</div></div>'+
+   '<div class="grid" style="margin-top:12px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
+   kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>';
+ if(v.champion)h+='<div class="reco" style="border-color:#f0b429;margin-top:12px"><span>🏆 <b>Meister '+esc(v.champion)+'</b> (Saison '+v.season+')</span></div>';
+ h+='</div>';
+
+ // Nächstes Spiel / Aktionen
+ h+='<div class="card"><div class="sec" style="margin-top:0">Spielbetrieb</div>';
+ if(v.phase==='regular'&&v.next){h+='<div class="reco"><span>Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+
+   '</b> <span class="mut">OVR '+v.next.ovr+' · spielt '+esc(v.next.coverage)+'</span></span></div>';}
+ if(v.phase==='playoffs'&&v.playoff){h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
+   v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';}
+ if(v.phase!=='done')h+='<button onclick="simWeek()">▶ Woche simulieren</button> ';
+ else h+='<button onclick="api(\'/api/fr/new_season\',\'POST\').then(renderMgr)">➕ Neue Saison</button> ';
+ h+='<button onclick="if(confirm(\'Franchise wirklich löschen?\'))api(\'/api/fr/reset\',\'POST\').then(loadMgr)" style="background:#3a2020;color:#ffb0b0">Zurücksetzen</button>';
+ if(v.last_result)h+=renderResult(v.last_result,v.team_name);
+ h+='</div>';
+
+ // Team-Aufbau
+ h+='<div class="grid" style="grid-template-columns:1fr 1fr">';
+ h+='<div class="card"><div class="sec" style="margin-top:0">Kader verbessern (Budget: '+v.budget+' Mio)</div>';
+ v.units.forEach(u=>{h+='<div class="reco"><span><b>'+esc(u.label)+'</b> <span class="mut">'+u.side+'</span> — Stufe '+u.level+'</span>'+
+   '<button onclick="upg(\''+u.key+'\')" '+(v.budget<u.cost||u.level>=95?'disabled style="opacity:.5"':'')+'>+2 ('+u.cost+' Mio)</button></div>';});
+ h+='</div>';
+ // Playbook
+ h+='<div class="card"><div class="sec" style="margin-top:0">Playbook</div><div class="controls">'+
+   '<div><label>Offense-Konzept</label><select id="pb_c">'+mgrMeta.concepts.map(c=>'<option value="'+esc(c.key)+'"'+(c.key===v.playbook.concept?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select></div>'+
+   '<div><label>Defense-Coverage</label><select id="pb_cov">'+mgrMeta.coverages.map(c=>'<option value="'+esc(c.key)+'"'+(c.key===v.playbook.coverage?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select></div>'+
+   '<button onclick="setPb()">Übernehmen</button></div>'+
+   '<div class="note">Dein Konzept trifft im Spiel auf die Coverage des Gegners — gute Matchups bringen Punkte.</div></div>';
+ h+='</div>';
+
+ // Tabelle
+ h+='<div class="card scroll"><div class="sec" style="margin-top:0">Tabelle</div><table class="heat" style="font-size:13px"><tr>'+
+   '<th class="cn">#</th><th class="cn">Team</th><th>S</th><th>N</th><th>Diff</th><th>OVR</th></tr>';
+ v.standings.forEach(t=>{h+='<tr'+(t.user?' style="background:#13251c"':'')+'><td>'+t.rank+'</td><td class="cn">'+(t.user?'▶ ':'')+esc(t.name)+
+   '</td><td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.ovr+'</td></tr>';});
+ h+='</table></div>';
+ $('mgr_out').innerHTML=h;
+}
+function renderResult(res,me){
+ if(!res||!res.games)return '';
+ let h='<div style="margin-top:12px"><div class="sec">Ergebnisse '+(typeof res.week==='number'?'Woche '+res.week:esc(res.week))+'</div>';
+ res.games.forEach(g=>{const mine=(g.home===me||g.away===me);const won=g.winner===me;
+   h+='<div class="reco"'+(mine?' style="border-color:'+(won?'#21c074':'#ef5d5d')+'"':' style="border-color:#26352e"')+'>'+
+   '<span>'+esc(g.away)+' '+g['as']+' @ '+esc(g.home)+' '+g.hs+'</span><span class="mut">'+esc(g.winner)+(mine?(won?' ✅':' ❌'):'')+'</span></div>';});
+ return h+'</div>';
+}
+async function simWeek(){const r=await api('/api/fr/sim_week','POST');if(r.view)renderMgr(r.view);}
+async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function setPb(){const r=await api('/api/fr/playbook?concept='+encodeURIComponent($('pb_c').value)+'&coverage='+encodeURIComponent($('pb_cov').value),'POST');if(r.view)renderMgr(r.view);}
 init();
 </script></body></html>"""
 
@@ -440,5 +526,73 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                    personnel: str = "11", box: int = 0):
         from gridiron.simulator import matrix
         return matrix(cfg, _sit(down, ydstogo, yardline, personnel, box))
+
+    # ---- Franchise / Team-Manager -------------------------------------- #
+    def _fr_load_or_404():
+        from gridiron import franchise as F
+        st = F.load(cfg)
+        if st is None:
+            return None, JSONResponse({"error": "Keine Franchise — bitte neu starten."}, status_code=404)
+        return st, None
+
+    @app.get("/api/fr/state")
+    def fr_state():
+        from gridiron import franchise as F
+        st = F.load(cfg)
+        return {"exists": st is not None, "view": (F.view(st) if st else None)}
+
+    @app.get("/api/fr/meta")
+    def fr_meta():
+        from gridiron import franchise as F
+        from gridiron.simulator import list_concepts, list_coverages
+        return {"concepts": list_concepts(), "coverages": list_coverages(),
+                "difficulties": ["leicht", "normal", "schwer"]}
+
+    @app.post("/api/fr/new")
+    def fr_new(team: str, teams: int = 8, difficulty: str = "normal"):
+        from gridiron import franchise as F
+        st = F.new_franchise(cfg, team, n_teams=teams, difficulty=difficulty)
+        return F.view(st)
+
+    @app.post("/api/fr/sim_week")
+    def fr_sim_week():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        res = F.sim_week(cfg, st)
+        return {"result": res, "view": F.view(st)}
+
+    @app.post("/api/fr/new_season")
+    def fr_new_season():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.view(F.new_season(cfg, st))
+
+    @app.post("/api/fr/upgrade")
+    def fr_upgrade(unit: str):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        res = F.upgrade_unit(cfg, st, unit)
+        return {"result": res, "view": F.view(st)}
+
+    @app.post("/api/fr/playbook")
+    def fr_playbook(concept: str = "", coverage: str = ""):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        res = F.set_playbook(cfg, st, concept or None, coverage or None)
+        return {"result": res, "view": F.view(st)}
+
+    @app.post("/api/fr/reset")
+    def fr_reset():
+        from gridiron import franchise as F
+        F.delete(cfg)
+        return {"ok": True}
 
     return app
