@@ -1236,6 +1236,39 @@ def abort_game(cfg: Config, state: dict) -> dict:
     return {"ok": True}
 
 
+def _auto_choice(state: dict) -> str:
+    """Sinnvolle automatische Spielzug-Wahl (für Sim-Buttons)."""
+    g = state["active_game"]
+    user_has_ball = (g["pos"] == 0) == g["user_is_home"]
+    return _scheme_pick(state["teams"][0], off=user_has_ball)
+
+
+def game_sim_drive(cfg: Config, state: dict) -> dict:
+    """Spielt den aktuellen Ballbesitz automatisch aus (bis Possession-Wechsel/Ende)."""
+    g = state.get("active_game")
+    if not g or g["over"]:
+        return {"error": "Kein laufendes Spiel."}
+    start, guard = g["pos"], 0
+    while not state["active_game"]["over"] and state["active_game"]["pos"] == start and guard < 60:
+        game_play(cfg, state, _auto_choice(state))
+        guard += 1
+    if state["active_game"]["over"]:
+        return finish_game(cfg, state)
+    return {"ok": True, "game": _game_view(state)}
+
+
+def game_sim_rest(cfg: Config, state: dict) -> dict:
+    """Simuliert das restliche Spiel automatisch zu Ende und wertet es."""
+    g = state.get("active_game")
+    if not g:
+        return {"error": "Kein laufendes Spiel."}
+    guard = 0
+    while not state["active_game"]["over"] and guard < 400:
+        game_play(cfg, state, _auto_choice(state))
+        guard += 1
+    return finish_game(cfg, state)
+
+
 def _game_view(state: dict) -> dict:
     g = state["active_game"]
     teams = state["teams"]
