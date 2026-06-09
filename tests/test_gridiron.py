@@ -224,6 +224,13 @@ def test_playviz_diagram():
     d = diagram("Four Verts", "Cover 3")
     assert d["kind"] == "pass" and len(d["offense"]) == 11 and len(d["defense"]) == 11
     assert any(o.get("target") for o in d["offense"]) and d["ball_target"]
+    # Defense hat Rollen; Front stürmt, Zone-Coverage hat Zonen-Drops
+    roles = [p["role"] for p in d["defense"]]
+    assert roles.count("rush") == 4 and "zone" in roles
+    # Mann-Coverage: Verteidiger decken konkrete Receiver
+    man_cov = diagram("Mesh", "Cover 0")["defense"]
+    assert any(p["role"] == "man" and p.get("cover") for p in man_cov)
+    assert sum(p["role"] == "rush" for p in man_cov) >= 5      # All-Out-Blitz
     # alle Koordinaten im Feld
     for o in d["offense"]:
         assert 0 <= o["x"] <= d["width"]

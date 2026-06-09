@@ -58,6 +58,34 @@ def _epa(concept: str, coverage: str) -> float:
     return _EPA_CACHE[key]
 
 
+# Team-Schemata (wirken übers ganze Spiel, nicht ein einzelner Spielzug).
+OFF_SCHEMES = {
+    "Vertikal": ["Four Verts", "Y-Cross", "Dagger", "Flood"],
+    "Quick Game": ["Slant-Flat", "Mesh", "Stick", "Drive", "Spacing"],
+    "Ausgeglichen": ["Smash", "Stick", "Inside Zone", "Y-Cross", "Slant-Flat"],
+    "Lauflastig": ["Inside Zone", "Outside Zone", "Power", "Counter", "Toss"],
+}
+DEF_SCHEMES = {
+    "Aggressiv (Blitz)": ["Cover 0", "Cover 1"],
+    "Ausgeglichen": ["Cover 1", "Cover 3", "Cover 2"],
+    "Zone": ["Cover 2", "Cover 3", "Cover 4", "Tampa 2"],
+    "Quarters": ["Cover 4", "Cover 6", "Cover 2"],
+}
+_PASS_BIAS = {"Vertikal": 0.66, "Quick Game": 0.62, "Ausgeglichen": 0.56, "Lauflastig": 0.42}
+_SCHEME_CACHE: dict[tuple, float] = {}
+
+
+def _scheme_epa(off_scheme: str, def_scheme: str) -> float:
+    """Mittleres EPA des Offense-Schemas gegen das Defense-Schema (Spiel-Ebene)."""
+    key = (off_scheme, def_scheme)
+    if key not in _SCHEME_CACHE:
+        cs = OFF_SCHEMES.get(off_scheme) or list(PASS_CONCEPTS)
+        cv = DEF_SCHEMES.get(def_scheme) or list(COVERAGES)
+        vals = [_epa(c, v) for c in cs for v in cv]
+        _SCHEME_CACHE[key] = sum(vals) / len(vals)
+    return _SCHEME_CACHE[key]
+
+
 def _rating(units: dict, weights: dict) -> int:
     return round(sum(units[u] * w for u, w in weights.items()))
 
@@ -125,8 +153,8 @@ def _new_team(name: str, abbr: str, color: str, color2: str, base: int,
     return {
         "name": name, "abbr": abbr, "color": color, "color2": color2, "user": user,
         "units": units,
-        "concept": "Inside Zone" if user else rng.choice(_AI_CONCEPTS),
-        "coverage": "Cover 3" if user else rng.choice(_AI_COVERS),
+        "off_scheme": "Ausgeglichen" if user else rng.choice(list(OFF_SCHEMES)),
+        "def_scheme": "Ausgeglichen" if user else rng.choice(list(DEF_SCHEMES)),
         "w": 0, "l": 0, "t": 0, "pf": 0, "pa": 0,
     }
 
@@ -156,9 +184,14 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
 # --------------------------------------------------------------------------- #
 # Spiel-Simulation
 # --------------------------------------------------------------------------- #
+def _team_epa(off_team: dict, def_team: dict) -> float:
+    return _scheme_epa(off_team.get("off_scheme", "Ausgeglichen"),
+                       def_team.get("def_scheme", "Ausgeglichen"))
+
+
 def _expected_points(off_team: dict, def_team: dict, home_adv: float) -> float:
     edge = 0.42 * (offense(off_team) - defense(def_team))
-    matchup = 11.0 * _epa(off_team["concept"], def_team["coverage"])
+    matchup = 13.0 * _team_epa(off_team, def_team)
     return max(3.0, 21.0 + edge + matchup + home_adv)
 
 
@@ -195,9 +228,10 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
         ytz, down, dist = 75.0, 1, 10                   # bis Endzone, Down, Distanz
         q = min(4, drive // 6 + 1)
         mean = max(2.0, min(8.5, 5.0 + 0.11 * (offense(off) - defense(deff))
-                            + 1.5 * _epa(off["concept"], deff["coverage"])))
+                            + 1.7 * _team_epa(off, deff)))
+        pass_bias = _PASS_BIAS.get(off.get("off_scheme", "Ausgeglichen"), 0.56)
         for _ in range(14):
-            is_pass = rng.random() < 0.57
+            is_pass = rng.random() < pass_bias
             # Turnover?
             if rng.random() < 0.028:
                 desc = "Interception!" if is_pass else "Fumble, Ball verloren!"
@@ -368,8 +402,10 @@ def new_season(cfg: Config, state: dict) -> dict:
         if not t["user"]:                                # KI entwickelt sich
             for u in ALL_UNITS:
                 t["units"][u] = max(50, min(95, t["units"][u] + rng.randint(-3, 3)))
-            t["concept"] = rng.choice(_AI_CONCEPTS)
-            t["coverage"] = rng.choice(_AI_COVERS)
+            if rng.random() < 0.4:
+                t["off_scheme"] = rng.choice(list(OFF_SCHEMES))
+            if rng.random() < 0.4:
+                t["def_scheme"] = rng.choice(list(DEF_SCHEMES))
     state["season"] += 1
     state["week"] = 0
     state["phase"] = "regular"
@@ -407,18 +443,18 @@ def upgrade_unit(cfg: Config, state: dict, unit: str) -> dict:
             "budget": state["budget"]}
 
 
-def set_playbook(cfg: Config, state: dict, concept: str | None, coverage: str | None) -> dict:
+def set_scheme(cfg: Config, state: dict, off_scheme: str | None, def_scheme: str | None) -> dict:
     team = state["teams"][0]
-    if concept is not None:
-        if concept not in _AI_CONCEPTS:
-            return {"error": "Unbekanntes Konzept."}
-        team["concept"] = concept
-    if coverage is not None:
-        if coverage not in COVERAGES:
-            return {"error": "Unbekannte Coverage."}
-        team["coverage"] = coverage
+    if off_scheme:
+        if off_scheme not in OFF_SCHEMES:
+            return {"error": "Unbekanntes Offense-Schema."}
+        team["off_scheme"] = off_scheme
+    if def_scheme:
+        if def_scheme not in DEF_SCHEMES:
+            return {"error": "Unbekanntes Defense-Schema."}
+        team["def_scheme"] = def_scheme
     save(cfg, state)
-    return {"ok": True, "concept": team["concept"], "coverage": team["coverage"]}
+    return {"ok": True, "off_scheme": team["off_scheme"], "def_scheme": team["def_scheme"]}
 
 
 # --------------------------------------------------------------------------- #
@@ -433,7 +469,8 @@ def _next_opponent(state: dict) -> dict | None:
                 return {"name": opp["name"], "abbr": opp.get("abbr", "?"),
                         "color": opp.get("color", "#ef5350"), "home": hi == user_i,
                         "ovr": overall(opp), "off": offense(opp), "def": defense(opp),
-                        "coverage": opp["coverage"]}
+                        "off_scheme": opp.get("off_scheme", "?"),
+                        "def_scheme": opp.get("def_scheme", "?")}
     return None
 
 
@@ -450,7 +487,10 @@ def view(state: dict) -> dict:
         "units": [{"key": u, "label": UNIT_LABELS[u], "level": team["units"][u],
                    "cost": upgrade_cost(team["units"][u]), "side": "Offense" if u in OFF_UNITS else "Defense"}
                   for u in ALL_UNITS],
-        "playbook": {"concept": team["concept"], "coverage": team["coverage"]},
+        "scheme": {"off": team.get("off_scheme", "Ausgeglichen"),
+                   "def": team.get("def_scheme", "Ausgeglichen")},
+        "off_schemes": {k: OFF_SCHEMES[k] for k in OFF_SCHEMES},
+        "def_schemes": {k: DEF_SCHEMES[k] for k in DEF_SCHEMES},
         "next": _next_opponent(state),
         "standings": standings(state),
         "playoff": state["playoff"],

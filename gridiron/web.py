@@ -420,17 +420,31 @@ function addPlayer(svg,p,color,id,o){
 function moveP(id,x,y){const c=$('pl_'+id);if(!c)return;c.setAttribute('cx',mapX(x));c.setAttribute('cy',mapY(y));
  const t=$('tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+2.8);}
  const r=$('rg_'+id);if(r){r.setAttribute('cx',mapX(x));r.setAttribute('cy',mapY(y));}}
+function curPos(id){const c=$('pl_'+id);return c?[parseFloat(c.getAttribute('cx'))/10,26-(parseFloat(c.getAttribute('cy'))-10)/10]:null;}
 function playAnim(){
  if(!lastDiag)return; cancelAnimationFrame(animReq);
- const d=lastDiag,T=2100,t0=performance.now();
- const qb=d.offense.find(o=>o.pos==='QB');
- const tgt=d.ball_target, isPass=d.kind==='pass', throwAt=.5;
- const ball=$('pball');
- function frame(now){const t=Math.min(1,(now-t0)/T);
-  d.offense.forEach((o,i)=>{if(o.route&&o.route.length>1){const pp=posAlong(o.route,t);moveP('o'+i,pp[0],pp[1]);}});
-  d.defense.forEach((p,i)=>{if(p.drop){moveP('d_'+i,p.x+(p.drop[0]-p.x)*t,p.y+(p.drop[1]-p.y)*t);}});
-  if(isPass&&ball){if(t>=throwAt){const tt=(t-throwAt)/(1-throwAt);ball.setAttribute('opacity',1);
-    ball.setAttribute('cx',mapX(qb.x+(tgt[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qb.y+(tgt[1]-qb.y)*tt-Math.sin(tt*Math.PI)*1.2));}}
+ const d=lastDiag,T=2200,t0=performance.now();
+ const qbi=d.offense.findIndex(o=>o.pos==='QB'),qb=d.offense[qbi];
+ const tgt=d.ball_target,isPass=d.kind==='pass',throwAt=.55,ball=$('pball');
+ const ease=t=>1-Math.pow(1-t,2);
+ function frame(now){const t=Math.min(1,(now-t0)/T),te=ease(t);
+  // Offense entlang der Routen, Positionen merken
+  const sp={};
+  d.offense.forEach((o,i)=>{if(o.route&&o.route.length>1){const pp=posAlong(o.route,te);moveP('o'+i,pp[0],pp[1]);if(o.pos)sp[o.pos]=pp;}else if(o.pos)sp[o.pos]=[o.x,o.y];});
+  // QB-Drop (Shotgun -> kurzer Drop)
+  const qy=qb.y-1.4*Math.min(1,t*2.2); moveP('o'+qbi,qb.x,qy); sp['QB']=[qb.x,qy];
+  // Defense nach Rolle
+  d.defense.forEach((p,i)=>{const id='d_'+i,cur=curPos(id)||[p.x,p.y];let tx,ty,k;
+   if(p.role==='rush'){tx=qb.x+(p.x-qb.x)*0.12;ty=qy+0.8;k=0.09;}
+   else if(p.role==='man'&&sp[p.cover]){const r=sp[p.cover];tx=r[0]+(p.x<r[0]?-0.7:0.7);ty=r[1]+0.8;k=0.20;}  // trailt knapp dahinter
+   else if(p.drop){tx=p.drop[0];ty=p.drop[1];                                  // Zone: zur Landmarke, leicht auf nächsten Receiver reagieren
+     let best=null,bd=99;for(const key in sp){if(key==='QB')continue;const r=sp[key];const dd=Math.hypot(r[0]-tx,r[1]-ty);if(dd<bd){bd=dd;best=r;}}
+     if(best&&bd<11){tx+=(best[0]-tx)*0.32;ty+=(best[1]-ty)*0.16;} k=0.10;}
+   else {tx=p.x;ty=p.y;k=0.1;}
+   moveP(id,cur[0]+(tx-cur[0])*k,cur[1]+(ty-cur[1])*k);
+  });
+  if(isPass&&ball&&t>=throwAt){const tt=(t-throwAt)/(1-throwAt);ball.setAttribute('opacity',1);
+    ball.setAttribute('cx',mapX(qb.x+(tgt[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qy+(tgt[1]-qy)*tt-Math.sin(tt*Math.PI)*1.3));}
   if(t<1)animReq=requestAnimationFrame(frame); else showResult();
  }
  animReq=requestAnimationFrame(frame);
@@ -511,7 +525,7 @@ function renderMgr(v){
  // Nächstes Spiel / Aktionen
  h+='<div class="card"><div class="sec" style="margin-top:0">Spielbetrieb</div>';
  if(v.phase==='regular'&&v.next){h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
-   'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · '+esc(v.next.coverage)+'</span></span></div>';}
+   'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';}
  if(v.phase==='playoffs'&&v.playoff){h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
    v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';}
  if(v.phase!=='done')h+='<button onclick="simWeek()">Woche simulieren</button> ';
@@ -527,12 +541,14 @@ function renderMgr(v){
  v.units.forEach(u=>{h+='<div class="reco"><span><b>'+esc(u.label)+'</b> <span class="mut">'+u.side+'</span> — Stufe '+u.level+'</span>'+
    '<button data-u="'+esc(u.key)+'" onclick="upg(this.dataset.u)" '+(v.budget<u.cost||u.level>=95?'disabled':'')+'>+2 ('+u.cost+' Mio)</button></div>';});
  h+='</div>';
- // Playbook
- h+='<div class="card"><div class="sec" style="margin-top:0">Playbook</div><div class="controls">'+
-   '<div><label>Offense-Konzept</label><select id="pb_c">'+mgrMeta.concepts.map(c=>'<option value="'+esc(c.key)+'"'+(c.key===v.playbook.concept?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select></div>'+
-   '<div><label>Defense-Coverage</label><select id="pb_cov">'+mgrMeta.coverages.map(c=>'<option value="'+esc(c.key)+'"'+(c.key===v.playbook.coverage?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select></div>'+
-   '<button onclick="setPb()">Übernehmen</button></div>'+
-   '<div class="note">Dein Konzept trifft im Spiel auf die Coverage des Gegners — gute Matchups bringen Punkte.</div></div>';
+ // Team-Schema
+ const offk=Object.keys(v.off_schemes),defk=Object.keys(v.def_schemes);
+ h+='<div class="card"><div class="sec" style="margin-top:0">Team-Schema</div><div class="controls">'+
+   '<div><label>Offense-Schema</label><select id="sc_off">'+offk.map(k=>'<option'+(k===v.scheme.off?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
+   '<div><label>Defense-Schema</label><select id="sc_def">'+defk.map(k=>'<option'+(k===v.scheme.def?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
+   '<button onclick="setScheme()">Übernehmen</button></div>'+
+   '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+
+   '<br>Dein Schema wirkt über das ganze Spiel und trifft auf das Schema des Gegners.</div></div>';
  h+='</div>';
 
  // Tabelle
@@ -580,7 +596,7 @@ function openBroadcast(g){
   '<div class="tvscore">'+
    '<div class="tvteam" style="--tc:'+esc(AC(g))+'"><span class="ab">'+esc(AB(g))+'</span><span class="nm">'+esc(g.away)+'</span></div>'+
    '<div class="tvpts" id="bc_as">0</div>'+
-   '<div class="tvmid"><div class="qn" id="bc_q">Q1</div><div class="sub">Endstand '+g['as']+'–'+g.hs+'</div></div>'+
+   '<div class="tvmid"><div class="qn" id="bc_q">Q1</div><div class="sub">läuft …</div></div>'+
    '<div class="tvpts" id="bc_hs">0</div>'+
    '<div class="tvteam r" style="--tc:'+esc(HC(g))+'"><span class="nm">'+esc(g.home)+'</span><span class="ab">'+esc(HB(g))+'</span></div>'+
   '</div>'+
@@ -605,7 +621,7 @@ function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const 
  const feed=$('bc_feed');feed.innerHTML='';g.plays.slice().reverse().forEach(p=>feed.appendChild(cmtRow(p)));}
 function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
-async function setPb(){const r=await api('/api/fr/playbook?concept='+encodeURIComponent($('pb_c').value)+'&coverage='+encodeURIComponent($('pb_cov').value),'POST');if(r.view)renderMgr(r.view);}
+async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 init();
 </script></body></html>"""
 
@@ -816,13 +832,13 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         res = F.upgrade_unit(cfg, st, unit)
         return {"result": res, "view": F.view(st)}
 
-    @app.post("/api/fr/playbook")
-    def fr_playbook(concept: str = "", coverage: str = ""):
+    @app.post("/api/fr/scheme")
+    def fr_scheme(off: str = "", deff: str = ""):
         from gridiron import franchise as F
         st, err = _fr_load_or_404()
         if err:
             return err
-        res = F.set_playbook(cfg, st, concept or None, coverage or None)
+        res = F.set_scheme(cfg, st, off or None, deff or None)
         return {"result": res, "view": F.view(st)}
 
     @app.get("/api/fr/last_game")
