@@ -807,8 +807,13 @@ function renderGame(g,play){
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()">Drive simulieren</button> <button class="ghost" onclick="simRest()">Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
- if(play&&play.concept)animateGamePlay(play);
+ if(play&&play.concept)animateGamePlay(play); else showFormation(g);
 }
+async function showFormation(g){const svg=$('gfield');if(!svg)return;
+ const concept=g.user_offense?((g.options[0]&&g.options[0].key)||'Inside Zone'):'Inside Zone';
+ const coverage=g.user_offense?'Cover 2':((g.options[0]&&g.options[0].key)||'Cover 2');
+ const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
+ if(!d.error)renderField(svg,d,g.dist||10);}
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,10); playAnim(svg,d,{mean_yards:play.yards});}
@@ -819,8 +824,10 @@ async function simDrive(){const r=await api('/api/fr/game/sim_drive','POST');if(
 async function simRest(){const r=await api('/api/fr/game/sim_rest','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 function showGameResult(res){closeGame();const o=document.createElement('div');o.className='overlay';o.id='resultoverlay';
  o.addEventListener('click',e=>{if(e.target===o)closeResult();});
+ const won=lastView&&res.winner===lastView.team_name;
  o.innerHTML='<div class="modal"><div class="modalhead"><h3>Endstand</h3><button class="ghost" onclick="closeResult()">Schließen</button></div>'+
-  '<div class="reco win"><span><b>'+esc(res.away)+'</b> '+res['as']+' : '+res.hs+' <b>'+esc(res.home)+'</b></span><span class="mut">Sieger: '+esc(res.winner)+'</span></div>'+
+  '<div class="reco '+(won?'win':'loss')+'"><span><b>'+esc(res.away)+'</b> '+res['as']+' : '+res.hs+' <b>'+esc(res.home)+'</b></span>'+
+  '<span class="mut">'+(won?'Sieg':'Niederlage')+' · Sieger: '+esc(res.winner)+'</span></div>'+
   boxSection({box:res.box})+'</div>';
  document.body.appendChild(o);}
 function closeResult(){const o=$('resultoverlay');if(o)o.remove();}

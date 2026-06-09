@@ -118,37 +118,50 @@ def _player_view(p: dict) -> dict:
                       for k in POS_ATTRS[p["pos"]]]}
 
 
+def _unique_name(rng: random.Random, used: set | None) -> str:
+    if used is None:
+        return _name(rng)
+    for _ in range(60):
+        n = _name(rng)
+        if n not in used:
+            used.add(n)
+            return n
+    n = f"{_name(rng)} jr."
+    used.add(n)
+    return n
+
+
 def _gen_player(pid: int, pos: str, base: int, rng: random.Random,
-                age: int | None = None, starter: bool = False) -> dict:
+                age: int | None = None, starter: bool = False, used: set | None = None) -> dict:
     age = age if age is not None else rng.randint(21, 33)
     attr, cap = {}, {}
     for k in POS_ATTRS[pos]:
         a = max(46, min(76, round(rng.gauss(base + 1, 4)) + (2 if starter else 0)))
         attr[k] = a
         cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
-    return {"id": pid, "name": _name(rng), "pos": pos, "age": age, "starter": starter,
+    return {"id": pid, "name": _unique_name(rng, used), "pos": pos, "age": age, "starter": starter,
             "attr": attr, "cap": cap, "exp": 0, "pts": 0, "inj": 0}
 
 
 def _gen_roster(base: int, rng: random.Random) -> list[dict]:
-    roster, pid = [], 0
+    roster, pid, used = [], 0, set()
     for grp, cnt in ROSTER_SLOTS.items():
         for i in range(cnt):
-            roster.append(_gen_player(pid, grp, base, rng, starter=i < STARTERS[grp]))
+            roster.append(_gen_player(pid, grp, base, rng, starter=i < STARTERS[grp], used=used))
             pid += 1
     return roster
 
 
 def _draft_class(state: dict, rng: random.Random, n: int = 16) -> list[dict]:
     """Erzeugt eine Klasse freier Spieler (Rookies mit Potenzial + Veteranen)."""
-    out = []
+    out, used = [], set()
     seq = state.get("pid_seq", 10000)
     for _ in range(n):
         pos = rng.choice(list(ROSTER_SLOTS))
         rookie = rng.random() < 0.6
         base = rng.randint(52, 64) if rookie else rng.randint(60, 72)
         age = rng.randint(21, 23) if rookie else rng.randint(24, 30)
-        p = _gen_player(seq, pos, base, rng, age=age)
+        p = _gen_player(seq, pos, base, rng, age=age, used=used)
         seq += 1
         if rookie:                                       # Rookies: mehr Entwicklung
             for k in p["cap"]:
@@ -441,10 +454,18 @@ def _avail(roster: list[dict], positions) -> list[dict]:
     return pool or [p for p in roster if p["pos"] in positions and p.get("inj", 0) == 0]
 
 
+def _healthy(roster: list[dict], positions) -> list[dict]:
+    return [p for p in roster if p["pos"] in positions and p.get("inj", 0) == 0]
+
+
 def _pick(pool: list[dict], rng: random.Random, wf) -> dict | None:
     if not pool:
         return None
     return rng.choices(pool, weights=[max(1, wf(p)) for p in pool])[0]
+
+
+def _w_start(p: dict) -> float:
+    return 2.0 if p["starter"] else 0.7              # Starter mehr Touches, Bank etwas
 
 
 def _stat(box: dict, p: dict) -> dict:
@@ -458,8 +479,8 @@ def _attr_off(box: dict, roster: list[dict], o: dict, yards: int, td: bool, rng:
     if o["pass"]:
         qb = (_avail(roster, ("QB",)) or [None])[0]
         if o["kind"] == "complete":
-            tgt = _pick(_avail(roster, ("WR", "RB")), rng,
-                        lambda p: player_ovr(p) * (1.5 if p["pos"] == "WR" else 0.6))
+            tgt = _pick(_healthy(roster, ("WR", "RB")), rng,
+                        lambda p: player_ovr(p) * (1.6 if p["pos"] == "WR" else 0.7) * _w_start(p))
             if qb:
                 _stat(box, qb)["pass_yds"] += max(0, yards)
             if tgt:
@@ -470,7 +491,7 @@ def _attr_off(box: dict, roster: list[dict], o: dict, yards: int, td: bool, rng:
                 if tgt:
                     _stat(box, tgt)["td"] += 1
     else:
-        rb = _pick(_avail(roster, ("RB",)), rng, lambda p: player_ovr(p))
+        rb = _pick(_healthy(roster, ("RB",)), rng, lambda p: player_ovr(p) * _w_start(p))
         if rb:
             s = _stat(box, rb); s["rush_att"] += 1; s["rush_yds"] += yards
             if td:
@@ -478,15 +499,15 @@ def _attr_off(box: dict, roster: list[dict], o: dict, yards: int, td: bool, rng:
 
 
 def _attr_def(box: dict, roster: list[dict], o: dict, rng: random.Random) -> None:
-    t = _pick(_avail(roster, ("DL", "LB", "DB")), rng, lambda p: player_ovr(p))
+    t = _pick(_healthy(roster, ("DL", "LB", "DB")), rng, lambda p: player_ovr(p) * _w_start(p))
     if t:
         _stat(box, t)["tkl"] += 1
     if o["kind"] == "sack":
-        s = _pick(_avail(roster, ("DL", "LB")), rng, lambda p: player_ovr(p))
+        s = _pick(_healthy(roster, ("DL", "LB")), rng, lambda p: player_ovr(p) * _w_start(p))
         if s:
             _stat(box, s)["sack"] += 1
     if o["turnover"] and o["pass"]:
-        d = _pick(_avail(roster, ("DB",)), rng, lambda p: player_ovr(p))
+        d = _pick(_healthy(roster, ("DB",)), rng, lambda p: player_ovr(p) * _w_start(p))
         if d:
             _stat(box, d)["intc"] += 1
 
@@ -564,7 +585,7 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
             "winner": home["name"] if sh > sa else away["name"], "plays": plays,
             "habbr": home.get("abbr", "HOM"), "aabbr": away.get("abbr", "AWY"),
             "hcolor": home.get("color", "#16c784"), "acolor": away.get("color", "#ef5350"),
-            "box": [b for b in box_lines if _box_exp(b) > 0][:12]}
+            "box": [b for b in box_lines if _box_exp(b) > 0][:10]}
 
 
 def _pl(q: int, team: str, desc: str, absx: float, score: list[int], scored: bool) -> dict:
@@ -1223,7 +1244,7 @@ def finish_game(cfg: Config, state: dict) -> dict:
     for pid, s in box.items():
         if pid in rid:
             _gain_exp(rid[pid], _box_exp(s))
-    box_lines = [b for b in sorted(box.values(), key=_box_exp, reverse=True) if _box_exp(b) > 0][:12]
+    box_lines = [b for b in sorted(box.values(), key=_box_exp, reverse=True) if _box_exp(b) > 0][:10]
     state["active_game"] = None
     out = sim_week(cfg, state, user_result=result)
     result["box"] = box_lines
