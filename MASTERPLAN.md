@@ -31,6 +31,13 @@ Big-Play-, TD-, Turnover-, Sack-Wahrscheinlichkeit, erwartetes EPA, Urteil.
   EPA) → sofort sehen, was wogegen funktioniert.
 - **Berater**: „Beste Antwort auf Cover 3" / „Welche Coverage stoppt Mesh?".
 
+### H. Team-Manager / Franchise (✅ neu)
+Ein vollwertiger Spielmodus (Madden-Franchise-Stil): eigene Franchise gründen,
+Team über Budget aufbauen (7 Einheiten), Playbook wählen, Liga-Saison gegen
+KI-Teams spielen, Playoffs, Titel, mehrere Saisons mit sich entwickelnder Liga.
+Spiele aus Team-Stärke × Simulator-Matchup-Logik. Bindet Nutzer langfristig
+(Spiel-Schleife) und ist ein eigener, breiter Markt (Football-Manager-Fans).
+
 ### C. Gameplan-Builder (geplant)
 Call-Sheet je Situation (1st&10, 3rd&short, Red Zone, 2-Minute …) aus
 Simulator + Gegner-Scouting automatisch vorgeschlagen; als PDF exportierbar.
@@ -93,7 +100,8 @@ Grenzkosten ≈ 0 (eigener Server, freie Daten). Wachstum über Football-Content
 | Phase | Inhalt | Status |
 |---|---|---|
 | 0 Fundament | Lake, Ingest, Scouting, Pass/Lauf-ML, CLI, Web, Druck-Report | ✅ |
-| **1 Simulator** | Konzept×Coverage Monte-Carlo, Matchup-Matrix, Berater, Web-Bereich | 🚀 dieser Schritt |
+| **1 Simulator** | Konzept×Coverage Monte-Carlo, Matchup-Matrix, Berater, Web-Bereich | ✅ |
+| **1b Franchise** | Team-Manager-Spielmodus (Liga, Playoffs, Kaderaufbau, Saisons) | ✅ |
 | 2 Gameplan | Call-Sheet-Builder, Situations-Empfehlungen, PDF | geplant |
 | 3 Tiefe/Daten | echte Saisons, Personnel/Formation, Charting-Kalibrierung, Spielerprofile | geplant |
 | 4 Entscheidungen | 4th-Down/2-Pt-EV, Uhrenmanagement | geplant |

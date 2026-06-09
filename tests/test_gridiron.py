@@ -167,6 +167,57 @@ def test_sim_web_endpoints(tmp_path):
     assert "Play-Simulator" in client.get("/").text
 
 
+def test_franchise_full_season(tmp_path):
+    """Franchise: gründen, Kader verbessern, ganze Saison bis zum Meister."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Berlin Adler", n_teams=8, difficulty="normal", seed=1)
+    assert len(st["teams"]) == 8 and len(st["schedule"]) == 7
+    assert st["teams"][0]["user"] and st["teams"][0]["name"] == "Berlin Adler"
+
+    # Upgrade hebt die Stufe, kostet Budget
+    before_ovr, before_budget = F.overall(st["teams"][0]), st["budget"]
+    res = F.upgrade_unit(cfg, st, "QB")
+    assert res["ok"] and st["budget"] < before_budget
+    assert F.overall(st["teams"][0]) >= before_ovr
+
+    # ganze Saison + Playoffs durchspielen
+    guard = 0
+    while st["phase"] != "done" and guard < 40:
+        F.sim_week(cfg, st)
+        guard += 1
+    assert st["phase"] == "done" and st["champion"]
+    tbl = F.standings(st)
+    assert tbl[0]["rank"] == 1 and tbl[0]["w"] >= tbl[-1]["w"]    # sortiert
+    assert st["history"] and st["history"][-1]["champion"] == st["champion"]
+
+    # Persistenz + neue Saison
+    assert F.load(cfg)["season"] == 1
+    F.new_season(cfg, st)
+    assert st["season"] == 2 and st["week"] == 0 and st["phase"] == "regular"
+    assert st["teams"][0]["w"] == 0
+
+
+def test_franchise_web(tmp_path):
+    from fastapi.testclient import TestClient
+    from gridiron.web import create_app
+    client = TestClient(create_app(_cfg(tmp_path)))
+    assert client.get("/api/fr/state").json()["exists"] is False
+    assert "Manager" in client.get("/").text
+
+    v = client.post("/api/fr/new", params={"team": "Test FC", "teams": 6}).json()
+    assert v["team_name"] == "Test FC" and len(v["standings"]) == 6
+    assert client.get("/api/fr/state").json()["exists"] is True
+
+    r = client.post("/api/fr/sim_week").json()
+    assert r["view"]["week"] == 1 and r["result"]["games"]
+
+    up = client.post("/api/fr/upgrade", params={"unit": "WR"}).json()
+    assert up["result"].get("ok") or up["result"].get("error")
+    assert client.post("/api/fr/reset").json()["ok"]
+    assert client.get("/api/fr/state").json()["exists"] is False
+
+
 def test_web_predict_without_model(tmp_path):
     """Ohne trainiertes Modell antwortet /api/predict sauber mit 503."""
     from fastapi.testclient import TestClient
