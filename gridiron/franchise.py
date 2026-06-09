@@ -26,10 +26,6 @@ UNIT_LABELS = {"QB": "Quarterback", "OL": "O-Line", "WR": "Receiver", "RB": "Run
                "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary"}
 ALL_UNITS = list(OFF_UNITS) + list(DEF_UNITS)
 
-_AI_NAMES = ["Hawks", "Bisons", "Storm", "Vipers", "Titans", "Comets", "Wolves",
-             "Sharks", "Raptors", "Outlaws", "Sentinels", "Blizzard"]
-_AI_CONCEPTS = list(PASS_CONCEPTS) + list(RUN_CONCEPTS)
-_AI_COVERS = list(COVERAGES)
 # KI-Teams mit Identität: Name, Kürzel, Primär-/Sekundärfarbe.
 TEAM_CATALOG = [
     ("Hawks", "HAW", "#2f81f7", "#0b2545"), ("Bisons", "BIS", "#b4530a", "#3a1d0a"),
@@ -266,7 +262,6 @@ DEF_SCHEMES = {
     "Zone": ["Cover 2", "Cover 3", "Cover 4", "Tampa 2"],
     "Quarters": ["Cover 4", "Cover 6", "Cover 2"],
 }
-_PASS_BIAS = {"Vertikal": 0.66, "Quick Game": 0.62, "Ausgeglichen": 0.56, "Lauflastig": 0.42}
 _SCHEME_CACHE: dict[tuple, float] = {}
 
 
@@ -290,7 +285,6 @@ COACH_ROLES = {"HC": "Head Coach", "OC": "Offensive Coordinator", "DC": "Defensi
 COACH_TRAITS = {"HC": ["Entwicklung", "Spielmanagement", "Moral"],
                 "OC": ["Passspiel", "Laufspiel", "Kreativität"],
                 "DC": ["Coverage", "Pass-Rush", "Disziplin"]}
-STAFF_LABELS = COACH_ROLES                                # Rückwärtskompatibel
 
 
 def _gen_coach(role: str, base: int, rng: random.Random) -> dict:
@@ -440,11 +434,6 @@ def simulate_game(home: dict, away: dict, rng: random.Random) -> dict:
             sa += rng.choice([3, 6, 7])
     return {"home": home["name"], "away": away["name"], "hs": sh, "as": sa,
             "winner": home["name"] if sh > sa else away["name"]}
-
-
-_PASS_DESC = ["Pass über die Mitte", "Pass nach außen", "tiefer Wurf",
-              "Quick-Pass", "Pass in die Flat", "Pass über die Naht"]
-_RUN_DESC = ["Lauf innen", "Lauf nach außen", "Draw", "Cutback", "Power-Lauf"]
 
 
 def _avail(roster: list[dict], positions) -> list[dict]:
@@ -962,6 +951,17 @@ def alloc_auto(cfg: Config, state: dict, pid: int) -> dict:
     return res
 
 
+def alloc_auto_all(cfg: Config, state: dict) -> dict:
+    """Verteilt offene Skillpunkte des ganzen Kaders automatisch."""
+    team = state["teams"][0]
+    total = 0
+    for p in team.get("roster", []):
+        if p.get("pts", 0) > 0:
+            total += auto_allocate(team, p["id"]).get("spent", 0)
+    save(cfg, state)
+    return {"ok": True, "spent": total}
+
+
 def depth_toggle(cfg: Config, state: dict, pid: int) -> dict:
     res = set_starter(state["teams"][0], pid)
     if res.get("ok"):
@@ -1035,7 +1035,9 @@ def view(state: dict) -> dict:
         "training_focus": state.get("training_focus"),
         "focus_options": [{"key": k, "label": POS_LABELS[k]} for k in POS_LABELS],
         "skillpoints": sum(p.get("pts", 0) for p in team.get("roster", [])),
-        "roster": [_player_view(p) for p in team.get("roster", [])],
+        "roster": [_player_view(p) for p in sorted(
+            team.get("roster", []),
+            key=lambda p: (list(ROSTER_SLOTS).index(p["pos"]), not p["starter"], -player_ovr(p)))],
         "active_game": bool(state.get("active_game")),
         "events": state.get("events", []),
         "slots": ROSTER_SLOTS,
