@@ -499,7 +499,7 @@ async function drawPlay(concept,coverage,res){
  renderField($('field'),d,parseInt($('sim_y').value)||10);
  playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0});
 }
-function renderField(svg,d,ytg,cols,fpos){
+function renderField(svg,d,ytg,cols,fpos,preSnap){
  cols=cols||{}; const offC=cols.off||'#16c784', defC=cols.def||'#ef5350';
  const P=svg.id;
  let s='<defs>'+
@@ -531,13 +531,14 @@ function renderField(svg,d,ytg,cols,fpos){
  }
  s+='<line x1="0" y1="'+mapY(0)+'" x2="533" y2="'+mapY(0)+'" stroke="#5fa8ff" stroke-width="2.5" opacity="0.9"/>';
  if(ytg<=24)s+='<line x1="0" y1="'+mapY(ytg)+'" x2="533" y2="'+mapY(ytg)+'" stroke="#ffd34d" stroke-width="2" opacity="0.7" stroke-dasharray="7 5"/>';
- d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
+ if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i));
- d.offense.forEach((o,i)=>addPlayer(svg,o,offC,'o'+i,o));
+ d.offense.forEach((o,i)=>addPlayer(svg,o,offC,'o'+i,preSnap?{pos:o.pos}:o));   // Vor-Snap: keine Ziel-Markierung
  const qb=d.offense.find(o=>o.pos==='QB');
- svg.appendChild(el('ellipse',{id:P+'_pball',cx:mapX(qb.x),cy:mapY(qb.y),rx:4,ry:2.5,fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:0}));
+ const bx=preSnap?26.65:qb.x, by=preSnap?-0.7:qb.y;   // Vor-Snap: Ball ruht am Spot (Line of Scrimmage)
+ svg.appendChild(el('ellipse',{id:P+'_pball',cx:mapX(bx),cy:mapY(by),rx:4,ry:2.5,fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:preSnap?1:0}));
 }
 const _ppos={};
 function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p.y);
@@ -1070,7 +1071,7 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
  const concept=g.user_offense?((g.options[0]&&g.options[0].key)||'Inside Zone'):'Inside Zone';
  const coverage=g.user_offense?'Cover 2':((g.options[0]&&g.options[0].key)||'Cover 2');
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
- if(!d.error)renderField(svg,d,g.dist||10,gameCols(g,g.user_offense),g.ytz);}   // Ball am aktuellen Feld-Spot
+ if(!d.error)renderField(svg,d,g.dist||10,gameCols(g,g.user_offense),g.ytz,true);}   // Vor-Snap-Aufstellung, Ball am aktuellen Spot
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
