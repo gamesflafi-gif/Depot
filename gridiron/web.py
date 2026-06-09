@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v15-formations"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v16-anim-hub"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -159,6 +159,14 @@ _STYLE2 = """
  .prospect .act button{min-width:108px;padding:7px 10px;font-size:12.5px}
  .reco.mini{padding:8px 12px;font-size:13px;margin:5px 0}
  .reco.champ{border-color:#5a4f20;background:#23200f}
+ .hubcard{background:linear-gradient(160deg,#16201c,var(--panel))}
+ .hubgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+ .hubb{background:var(--tile);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+ .hubb .hbi{width:100%;height:62px;border-radius:9px;background:#0c130f;display:flex;align-items:center;justify-content:center;overflow:hidden}
+ .hubb .hbn{font-weight:800;font-size:14px} .hubb .hbe{font-size:11.5px;color:var(--mut);flex:1}
+ .hubb button{width:100%;margin-top:2px} .hblvl{font-size:13px;font-weight:800;color:var(--acc)}
+ .hblv{display:inline-flex;gap:3px} .hblv i{width:10px;height:10px;border-radius:2px;background:#2c3a34} .hblv i.on{background:var(--acc)}
+ @media(max-width:560px){.hubgrid{grid-template-columns:1fr 1fr}}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
  .evtgrp{margin:11px 0} .evtlab{font-size:11px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
  .evtopts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -753,7 +761,8 @@ function playAnim(svg,d,res,onDone){
   // Defense (geschwindigkeitsbasiert)
   D.forEach(p=>{let tx,ty,mx=M(p.pos);
    if(kind==='sack'){tx=qb.x;ty=qb.y;}
-   else if(carrier){tx=carrier.x;ty=carrier.y;}                          // Ballträger verfolgen (eigenes Tempo)
+   else if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                       // Verfolgungswinkel: leicht vor den Läufer zielen
+     const ahead=Math.min(0.34,Math.max(0,(carrier.y-p.y))/20);tx=carrier.x+(dest[0]-carrier.x)*ahead;ty=carrier.y+(dest[1]-carrier.y)*ahead;}
    else if(p.role==='rush'){tx=qb.x+Math.sin(el*7+p.i)*0.5;ty=qb.y;mx*=0.92;}  // drückt zum QB – wird von der O-Line geblockt (Kollision)
    else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){tx=r.x+(p.x<r.x?-0.8:0.8);ty=r.y+0.7;}else{tx=p.x;ty=p.y;}}
    else if(p.drop){tx=p.drop[0];ty=p.drop[1];                              // Zone: zur Landmarke, dann auf nächsten Receiver in der Zone reagieren
@@ -775,10 +784,11 @@ function playAnim(svg,d,res,onDone){
   O.forEach(o=>moveP(P,'o'+o.i,o.x,o.y));
   D.forEach(p=>moveP(P,'d_'+p.i,p.x,p.y));
   if(ball){
-   if(!isPass){if(carrier){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(carrier.x));ball.setAttribute('cy',mapY(carrier.y));}else ball.setAttribute('opacity',0);}
+   if(!isPass){if(carrier){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(carrier.x));ball.setAttribute('cy',mapY(carrier.y));ball.setAttribute('transform','rotate('+(carrier.x*40).toFixed(0)+' '+mapX(carrier.x)+' '+mapY(carrier.y)+')');}else ball.setAttribute('opacity',0);}
    else if(kind==='sack'){ball.setAttribute('opacity',0);}
    else if(thrown){const fp=arrived?1:Math.min(1,(now-tAt)/1000/flightDur);const arc=Math.sin(fp*Math.PI)*14;
-     ball.setAttribute('cx',mapX(bp[0]));ball.setAttribute('cy',mapY(bp[1])-arc);
+     const bx=mapX(bp[0]),by=mapY(bp[1])-arc;ball.setAttribute('cx',bx);ball.setAttribute('cy',by);
+     ball.setAttribute('transform','rotate('+(fp*900).toFixed(0)+' '+bx+' '+by+')');                  // Football-Spirale im Flug
      ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
    else ball.setAttribute('opacity',0);
   }
@@ -794,10 +804,11 @@ function playAnim(svg,d,res,onDone){
     else if(onDone)setTimeout(onDone,2200);
   }
   else{
-    if(kind==='sack')downFig(P,'o'+qb.i);
-    else if(carrier&&kind!=='incomplete')downFig(P,'o'+carrier.i);                      // Tackle: Ballträger geht zu Boden
+    if(kind==='sack'){downFig(P,'o'+qb.i);D.filter(p=>p.role==='rush').sort((a,b)=>Math.hypot(a.x-qb.x,a.y-qb.y)-Math.hypot(b.x-qb.x,b.y-qb.y)).slice(0,2).forEach(p=>downFig(P,'d_'+p.i));}
+    else if(carrier&&kind!=='incomplete'){downFig(P,'o'+carrier.i);                     // Tackle: Ballträger + nächste Verteidiger gehen zu Boden (Gang-Tackle)
+      D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<2.6).sort((a,b)=>a[1]-b[1]).slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}
     showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
-    if(onDone)setTimeout(onDone,1100);}
+    if(onDone)setTimeout(onDone,1200);}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
@@ -1110,11 +1121,26 @@ async function signP(id){const r=await api('/api/fr/sign?pid='+id,'POST');if(r.r
 async function scoutP(id){const r=await api('/api/fr/scout?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function draftP(id){const r=await api('/api/fr/draft?pid='+id,'POST');if(r.result&&r.result.error){alert(r.result.error);return;}if(r.result&&r.result.drafted)alert('Gedraftet: '+r.result.drafted+' (OVR '+r.result.ovr+')');if(r.view)renderMgr(r.view);}
 async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const r=await api('/api/fr/cut?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view){lastView=r.view;closePlayer();renderMgr(r.view);}}
+function _bsvg(k){
+ if(k==='stadium')return '<svg viewBox="0 0 96 60" width="90" height="56"><ellipse cx="48" cy="32" rx="43" ry="25" fill="#22303c"/><ellipse cx="48" cy="32" rx="40" ry="22" fill="#16222b"/><ellipse cx="48" cy="32" rx="30" ry="15" fill="#1d7a48"/><line x1="48" y1="18" x2="48" y2="46" stroke="#cfe" stroke-opacity=".25"/>'+[12,48,84].map(x=>'<rect x="'+(x-1)+'" y="4" width="2" height="6" fill="#3a4750"/><rect x="'+(x-5)+'" y="1" width="10" height="3" rx="1" fill="#cfe3ff" opacity=".85"/>').join('')+'</svg>';
+ if(k==='train')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="4" y="8" width="88" height="44" rx="4" fill="#1d7a48"/>'+[20,40,60,76].map(x=>'<line x1="'+x+'" y1="8" x2="'+x+'" y2="52" stroke="#cfe" stroke-opacity=".25"/>').join('')+'<rect x="44" y="6" width="8" height="3" fill="#ffd34d"/><line x1="44" y1="6" x2="44" y2="2" stroke="#ffd34d" stroke-width="2"/><line x1="52" y1="6" x2="52" y2="2" stroke="#ffd34d" stroke-width="2"/><path d="M22 44 l3 6 h-6 Z" fill="#ff8a3a"/><path d="M70 40 l3 6 h-6 Z" fill="#ff8a3a"/></svg>';
+ return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="0" y="40" width="96" height="20" fill="#143d28"/><line x1="30" y1="41" x2="30" y2="14" stroke="#ffd34d" stroke-width="3"/><line x1="66" y1="41" x2="66" y2="14" stroke="#ffd34d" stroke-width="3"/><line x1="30" y1="24" x2="66" y2="24" stroke="#ffd34d" stroke-width="3"/><line x1="48" y1="24" x2="48" y2="41" stroke="#ffd34d" stroke-width="3"/><ellipse cx="48" cy="50" rx="6" ry="3.6" fill="#9a5a1e" stroke="#3a1f08"/></svg>';}
 function secBuild(v){
- const up=(key,label,sub,level,cost,maxed,plus)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
-   '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+plus+' ('+cost+' Mio)</button></div>';
+ const kU=(v.units||[]).find(u=>u.key==='K');
+ const dots=(lvl,max)=>{let s='<span class="hblv">';for(let i=0;i<max;i++)s+='<i class="'+(i<lvl?'on':'')+'"></i>';return s+'</span>';};
+ const bld=(key,name,svgk,lvl,sub,cost,maxed,plus)=>'<div class="hubb"><div class="hbi">'+_bsvg(svgk)+'</div>'+
+   '<div class="hbn">'+esc(name)+'</div>'+lvl+'<div class="hbe">'+esc(sub)+'</div>'+
+   '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+(maxed?'Ausgebaut':plus+' ('+cost+' Mio)')+'</button></div>';
+ // Visueller Anlagen-Hub (FIFA-11-Wii-Stil): ins Stadion gehen und ausbauen
+ let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Stadion &amp; Trainingsgelände</div>'+
+   '<div class="note">Geh in deine Anlagen und bau sie aus — jede Stufe bringt einen echten Vorteil. Budget: '+v.budget+' Mio.</div>'+
+   '<div class="hubgrid">'+
+     bld('stadium','Stadion','stadium',dots(v.stadium.level,5),'Einnahmen +'+v.stadium.income+'/Woche',v.stadium.cost,v.stadium.level>=5,'+1')+
+     bld('equipment','Trainingsgelände','train',dots(v.equipment.level,5),'+'+v.equipment.exp_week+' Trainings-EXP/Woche',v.equipment.cost,v.equipment.level>=5,'+1')+
+     (kU?bld('K','Kicker-Akademie','kick','<span class="hblvl">'+kU.level+' OVR</span>','Field Goals weiter & Extra-Punkte sicherer',kU.cost,kU.level>=95,'+2'):'')+
+   '</div></div>';
  // Trainerstab als Karten mit Stärken/Schwächen + Markt
- let h='<div class="sec">Trainerstab</div>';
+ h+='<div class="sec">Trainerstab</div>';
  v.coaches.forEach(c=>{const mk=v.coach_market[c.role]||[];
    h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
      '<div><b>'+esc(c.label)+'</b> · '+esc(c.name)+' <span class="mut">'+c.rating+' OVR</span></div>'+
@@ -1124,12 +1150,6 @@ function secBuild(v){
      mk.forEach(cd=>{h+='<div class="reco"><span>'+esc(cd.name)+' <span class="mut">'+cd.rating+' · '+cd.traits.map(t=>t.label[0]+t.val).join(' ')+'</span></span>'+
        '<button data-r="'+c.role+'" data-i="'+cd.idx+'" onclick="hireCoach(this.dataset.r,this.dataset.i)" '+(v.budget<cd.cost?'disabled':'')+'>Anheuern ('+cd.cost+' Mio)</button></div>';});}
    h+='</div>';});
- const kU=(v.units||[]).find(u=>u.key==='K');
- h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen &amp; Special Teams</div>'+
-   up('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Wo',v.stadium.level,v.stadium.cost,v.stadium.level>=5,'+1')+
-   up('equipment','Trainings-Equipment','+'+v.equipment.exp_week+' EXP/Wo',v.equipment.level,v.equipment.cost,v.equipment.level>=5,'+1')+
-   (kU?up('K','Kicker','Field Goals &amp; Extra-Punkte · '+kU.level+' OVR',kU.level,kU.cost,kU.level>=95,'+2'):'')+
-   '<div class="note">Ein besserer Kicker trifft Field Goals aus größerer Distanz und Extra-Punkte sicherer. Stadion bringt Einnahmen, Equipment mehr Spieler-EXP.</div></div>';
  return h;
 }
 async function improveCoach(role){const r=await api('/api/fr/improve_coach?role='+encodeURIComponent(role),'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
