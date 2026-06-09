@@ -51,9 +51,11 @@ _STYLE = """
    box-shadow:0 1px 2px rgba(0,0,0,.25)}
  .big{font-size:25px;font-weight:800;letter-spacing:-.01em}
  .row{display:flex;gap:24px;flex-wrap:wrap}
- .kpi{flex:1;min-width:88px;background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:7px 11px}
- .kpi .l{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
- .kpi .v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+ .kgrid{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
+ .kpi{background:var(--tile);border:1px solid var(--line);border-radius:11px;padding:8px 11px;
+   display:flex;flex-direction:column;justify-content:center;min-height:56px;min-width:0}
+ .kpi .l{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:700;line-height:1.18}
+ .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px;line-height:1.04;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .sec{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--fg);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 11px;font-weight:800}
  .sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--acc);flex:none}
  /* Positions-Farben & OVR-Tiers (Game-Look) */
@@ -90,7 +92,8 @@ _STYLE = """
   /* Team-Banner: Pills/Buttons unter den Namen */
   .teamhdr{flex-wrap:wrap;gap:10px} .teamhdr .crest{width:46px;height:46px;font-size:15px}
   .teamhdr>div:last-child{margin-left:0 !important;text-align:left !important;width:100%}
-  .kpi{min-width:0} .kpi .v{font-size:20px}
+  .kgrid{grid-template-columns:repeat(2,1fr);gap:8px} .kgrid.k6{grid-template-columns:repeat(3,1fr)}
+  .kpi{min-width:0} .kpi .v{font-size:18px}
   .hero h2{font-size:17px} .hero p{font-size:12.5px}
   /* Spielerkarte: Radar über den Attributen, zentriert */
   .pcols{flex-direction:column} .radarwrap{align-self:center}
@@ -175,6 +178,10 @@ _STYLE2 = """
  .crest{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;
    font-weight:800;font-size:17px;color:#fff;flex:none;box-shadow:inset 0 -3px 8px rgba(0,0,0,.3);letter-spacing:.02em}
  .cdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+ .tlogo{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+   background:var(--lc);color:#fff;font-weight:800;font-size:9.5px;letter-spacing:.02em;flex:none;vertical-align:middle;
+   border:1px solid rgba(255,255,255,.14);box-shadow:inset 0 -3px 6px rgba(0,0,0,.34),0 1px 2px rgba(0,0,0,.4);text-shadow:0 1px 1px rgba(0,0,0,.55)}
+ .tlogo.lg{width:34px;height:34px;font-size:12px;border-radius:9px}
  .swatch{width:30px;height:30px;border-radius:8px;cursor:pointer;border:2px solid transparent}
  .swatch.on{border-color:#fff;box-shadow:0 0 0 2px var(--acc)}
  /* TV-Broadcast */
@@ -394,7 +401,7 @@ async function loadScout(){
  $('rep').innerHTML='<div class="card mut">Analysiere …</div>';
  const r=await (await fetch('/api/scout?team='+encodeURIComponent(team)+'&season='+encodeURIComponent(season))).json();
  if(!r.n_plays){$('rep').innerHTML='<div class="card">Keine Daten für '+esc(team)+'.</div>';return;}
- let h='<div class="card"><div class="row">'+
+ let h='<div class="card"><div class="kgrid k6">'+
   '<div class="kpi"><div class="l">Plays</div><div class="v">'+r.n_plays+'</div></div>'+
   '<div class="kpi"><div class="l">Pass</div><div class="v">'+pct(r.pass_rate)+'</div></div>'+
   '<div class="kpi"><div class="l">Run</div><div class="v">'+pct(1-r.pass_rate)+'</div></div>'+
@@ -459,6 +466,7 @@ async function initSim(){
 function kpi(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';}
 function segCol(cls){return {ok:'#16c784',ok2:'#0e9f6a',mid:'#3a4a44',warn:'#e9b949',bad:'#ef5350'}[cls]||'#3a4a44';}
 function posBadge(p){return '<span class="posb p-'+p+'">'+p+'</span>';}
+function teamLogo(abbr,color,cls){return '<span class="tlogo'+(cls?' '+cls:'')+'" style="--lc:'+esc(color||'#16c784')+'">'+esc(((abbr||'?')+'').slice(0,3))+'</span>';}
 function ovrTier(o){return o>=88?'elite':o>=80?'good':o>=72?'ok':o>=62?'avg':'low';}
 function ovrBadge(o){return '<span class="ovrb ovr-'+ovrTier(o)+'">'+o+'</span>';}
 function devBadge(dev,label){if(!dev||dev==='normal')return '';const c=dev==='superstar'?'#ffd34d':'#5fa8ff';
@@ -472,7 +480,7 @@ async function runSim(){
  if(r.error){$('sim_out').innerHTML='<div class="card">'+esc(r.error)+'</div>';return;}
  let h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
    '<div class="big">'+esc(c)+' <span class="mut" style="font-size:15px">vs '+esc(cov)+'</span></div>'+badge(r)+'</div>'+
-   '<div class="grid" style="margin-top:14px">'+
+   '<div class="kgrid k6" style="margin-top:14px">'+
    kpi('Ø Yards',r.mean_yards.toFixed(1))+kpi('Erfolgsrate',pct(r.success_rate))+
    kpi('Big Play',pct(r.explosive_rate))+kpi('Touchdown',pct(r.td_rate))+
    kpi('Turnover',pct(r.turnover_rate))+kpi('Sack',pct(r.sack_rate))+
@@ -748,7 +756,7 @@ function renderMgr(v){
    '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut" style="color:#dfe7e3">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
    '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('Punkte '+v.skillpoints)+
    ' <button class="ghost" style="padding:5px 10px" onclick="openTutorial(0)">? Anleitung</button></div></div>'+
-   '<div class="grid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
+   '<div class="kgrid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
    kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>'+
    (v.champion?'<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>':'')+
    '</div>';
@@ -788,8 +796,8 @@ function secDash(v){
  else if(v.is_bye){h+='<div class="reco"><span><b>Bye Week</b> — diese Woche kein Spiel</span><span class="mut">Training erledigt — Woche abschließen</span></div>'+
    '<button onclick="simWeek()">Woche abschließen</button> ';}
  else{
-   if(v.next)h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
-     'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';
+   if(v.next)h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px">'+teamLogo(v.next.abbr,v.next.color)+
+     '<span>Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut" style="display:block;font-size:12px">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></span></div>';
    if(v.phase==='playoffs'&&v.playoff)h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
      v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';
    if(v.active_game)h+='<button onclick="resumeGame()">Spiel fortsetzen</button> ';
@@ -811,7 +819,7 @@ function secDash(v){
    '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+'</div></div>';
  h+='<div class="card scroll"><div class="sec" style="margin-top:0">Tabelle</div><table class="tbl"><tr>'+
    '<th class="cn">#</th><th class="cn">Team</th><th>S</th><th>N</th><th>Diff</th><th>OVR</th></tr>';
- v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn"><span class="cdot" style="background:'+esc(t.color||'#16c784')+'"></span>'+esc(t.name)+
+ v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn">'+teamLogo(t.abbr,t.color)+' <span style="vertical-align:middle">'+esc(t.name)+'</span>'+
    '</td><td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.ovr+'</td></tr>';});
  h+='</table></div>';
  h+='<div style="text-align:center;margin:16px 0 4px"><button class="ghost" onclick="resetFr()" style="opacity:.7;font-size:13px">Franchise zurücksetzen</button></div>';
@@ -819,7 +827,7 @@ function secDash(v){
 }
 function secKader(v){
  let h='<div class="card"><div class="sec" style="margin-top:0">Kader-Übersicht</div>'+
-   '<div class="grid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('Kadergröße',v.roster.length)+kpi('Overall',v.ratings.ovr)+'</div>'+
+   '<div class="kgrid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('Kadergröße',v.roster.length)+kpi('Overall',v.ratings.ovr)+'</div>'+
    (v.skillpoints>0?'<div style="margin-top:12px"><button onclick="allocAll()">Alle Skillpunkte auto-verteilen ('+v.skillpoints+')</button></div>':'')+
    '<div class="note">EXP kommt aus dem Wochen-Training (Dashboard) und aus Spiel-Leistung. Je 100 EXP = 1 Skillpunkt. Klick einen Spieler an, um Punkte auf Attribute zu verteilen.</div></div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
@@ -847,7 +855,7 @@ function renderPlayer(p){
  let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+devBadge(p.dev,p.dev_label)+
    '<span class="mut" style="font-weight:600;font-size:13px">'+(p.starter?'Starter':'Bank')+(p.inj>0?' · verletzt '+p.inj+'W':'')+'</span></h3>'+
    '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
-   '<div class="grid" style="grid-template-columns:repeat(4,1fr)">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
+   '<div class="kgrid">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
  h+='<div class="pcols">';
  // Radar
  h+='<div class="radarwrap">'+radarSVG(p.attrs)+'</div>';
@@ -1019,11 +1027,11 @@ function openBroadcast(g){
   '<div class="modalhead"><h3><span class="livedot"></span> LIVE · Spiel-Übertragung</h3>'+
    '<button class="ghost" onclick="closeBroadcast()">Schließen</button></div>'+
   '<div class="tvscore">'+
-   '<div class="tvteam" style="--tc:'+esc(AC(g))+'"><span class="ab">'+esc(AB(g))+'</span><span class="nm">'+esc(g.away)+'</span></div>'+
+   '<div class="tvteam">'+teamLogo(AB(g),AC(g),'lg')+'<span class="nm">'+esc(g.away)+'</span></div>'+
    '<div class="tvpts" id="bc_as">0</div>'+
    '<div class="tvmid"><div class="qn" id="bc_q">Q1</div><div class="sub">läuft …</div></div>'+
    '<div class="tvpts" id="bc_hs">0</div>'+
-   '<div class="tvteam r" style="--tc:'+esc(HC(g))+'"><span class="nm">'+esc(g.home)+'</span><span class="ab">'+esc(HB(g))+'</span></div>'+
+   '<div class="tvteam r"><span class="nm">'+esc(g.home)+'</span>'+teamLogo(HB(g),HC(g),'lg')+'</div>'+
   '</div>'+
   '<div class="tvfield"><div class="ez" style="background:'+esc(AC(g))+'">'+esc(AB(g))+'</div>'+
    '<div class="turf" id="bc_turf">'+turf+'<div class="ball" id="bc_ball" style="left:50%"></div></div>'+
@@ -1060,11 +1068,11 @@ function renderGame(g,play){
  let h='<div class="modalhead"><h3><span class="livedot"></span> Dein Spiel</h3>'+
    '<button class="ghost" onclick="abortGame()">Verlassen</button></div>'+
    '<div class="tvscore">'+
-     '<div class="tvteam" style="--tc:'+esc(g.acolor)+'"><span class="ab">'+esc(g.aabbr)+'</span><span class="nm">'+esc(g.away)+'</span></div>'+
+     '<div class="tvteam">'+teamLogo(g.aabbr,g.acolor,'lg')+'<span class="nm">'+esc(g.away)+'</span></div>'+
      '<div class="tvpts">'+g['as']+'</div>'+
      '<div class="tvmid"><div class="qn">Q'+g.q+'</div><div class="sub">Drive '+g.drive+'/'+g.max_drives+'</div></div>'+
      '<div class="tvpts">'+g.hs+'</div>'+
-     '<div class="tvteam r" style="--tc:'+esc(g.hcolor)+'"><span class="nm">'+esc(g.home)+'</span><span class="ab">'+esc(g.habbr)+'</span></div>'+
+     '<div class="tvteam r"><span class="nm">'+esc(g.home)+'</span>'+teamLogo(g.habbr,g.hcolor,'lg')+'</div>'+
    '</div>'+
    '<div class="tvfield"><div class="ez" style="background:'+esc(g.acolor)+'">'+esc(g.aabbr)+'</div>'+
      gameTurf(g)+'<div class="ez" style="background:'+esc(g.hcolor)+'">'+esc(g.habbr)+'</div></div>'+
