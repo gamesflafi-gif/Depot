@@ -57,22 +57,52 @@ _STYLE = """
  @media(max-width:560px){.controls{flex-direction:column;align-items:stretch} select,input,button{width:100%}}
 """
 
+_STYLE2 = """
+ .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 4px}
+ .tab{padding:9px 15px;border-radius:10px 10px 0 0;background:transparent;color:var(--mut);
+   border:1px solid transparent;cursor:pointer;font-weight:600;font-size:14px}
+ .tab:hover{color:var(--fg)} .tab.on{background:var(--panel);color:var(--acc);border-color:var(--line);border-bottom-color:var(--panel)}
+ .sect{display:none} .sect.on{display:block}
+ .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+ .badge{display:inline-block;padding:5px 14px;border-radius:20px;font-weight:800;font-size:15px}
+ .b-top{background:#10331f;color:#3ee089} .b-off{background:#15301f;color:#7fd9a5}
+ .b-ev{background:#262a1c;color:#e7d98a} .b-def{background:#33231b;color:#f0a875} .b-bad{background:#3a1d1d;color:#ff8a8a}
+ .hbar{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
+ .hbar .lab{width:64px;color:var(--mut);text-align:right}
+ .hbar .tr{flex:1;background:#0d1512;border-radius:5px;height:16px;overflow:hidden}
+ .hbar .fl{height:100%;background:linear-gradient(90deg,#2b7d52,#21c074)}
+ .hbar .vv{width:42px;font-variant-numeric:tabular-nums}
+ .heat{border-collapse:collapse;font-size:12px;width:100%} .heat th,.heat td{padding:5px 6px;text-align:center;white-space:nowrap}
+ .heat th{color:var(--mut);font-weight:600;position:sticky} .heat td.cn{text-align:left;color:var(--fg);font-weight:600}
+ .heat td.val{color:#06140d;font-weight:700;border-radius:4px}
+ .scroll{overflow-x:auto} .note{color:var(--mut);font-size:13px;margin-top:6px;font-style:italic}
+ .reco{padding:8px 12px;border-left:3px solid var(--acc);background:#13251c;border-radius:8px;margin:6px 0;font-size:14px;
+   display:flex;justify-content:space-between;gap:10px}
+"""
+
 _PAGE = """<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gridiron — NFL-Scouting</title><style>""" + _STYLE + """</style></head><body>
+<title>Gridiron — NFL-Analyseplattform</title><style>""" + _STYLE + _STYLE2 + """</style></head><body>
 <div class="top"><div class="topin">
  <div class="brand">Grid<b>iron</b></div>
- <div class="nav"><a href="/">Scouting</a><a href="/report" target="_blank">Druck-Report</a></div>
+ <div class="nav"><a href="/report" target="_blank">Druck-Report</a></div>
 </div></div>
 <div class="wrap">
- <div class="lead">Wähle ein Team — Gridiron liefert Tendenzen, „Tells" und die Live-Pass/Lauf-Vorhersage.</div>
+ <div class="tabs">
+  <div class="tab on" data-s="scout" onclick="tab('scout')">Scouting</div>
+  <div class="tab" data-s="sim" onclick="tab('sim')">Play-Simulator</div>
+  <div class="tab" data-s="matrix" onclick="tab('matrix')">Matchup-Matrix</div>
+ </div>
+
+ <!-- ============ SCOUTING ============ -->
+ <div class="sect on" id="s-scout">
+ <div class="lead">Wähle ein Team — Tendenzen, „Tells" und Live-Pass/Lauf-Vorhersage.</div>
  <div class="controls">
   <div><label>Team</label><select id="team"></select></div>
   <div><label>Saison</label><select id="season"></select></div>
   <button onclick="loadScout()">Report erstellen</button>
  </div>
  <div id="rep"></div>
-
  <div class="card">
   <div class="sec" style="margin-top:0">Live-Vorhersage: Pass oder Lauf?</div>
   <div class="controls">
@@ -86,12 +116,58 @@ _PAGE = """<!doctype html><html lang="de"><head>
   </div>
   <div id="pred"></div>
  </div>
- <div class="foot">Deskriptive/prognostische Analyse echter Plays — keine Garantie auf Ausgänge.</div>
+ </div>
+
+ <!-- ============ SIMULATOR ============ -->
+ <div class="sect" id="s-sim">
+ <div class="lead">Spiel ein <b>Konzept</b> gegen eine <b>Coverage</b> durch — tausende Simulationen liefern die Ertragsverteilung.</div>
+ <div class="card">
+  <div class="controls">
+   <div><label>Konzept (Offense)</label><select id="sim_c" style="min-width:190px"></select></div>
+   <div><label>Coverage (Defense)</label><select id="sim_cov" style="min-width:220px"></select></div>
+  </div>
+  <div class="controls" style="margin-top:10px">
+   <div><label>Down</label><select id="sim_d"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+   <div><label>Distanz</label><input id="sim_y" type="number" value="8" style="width:80px"></div>
+   <div><label>Yards z. EZ</label><input id="sim_yl" type="number" value="55" style="width:90px"></div>
+   <div><label>Personnel</label><select id="sim_p"><option>11</option><option>12</option><option>21</option><option>13</option><option>10</option></select></div>
+   <div><label>Box (optional)</label><input id="sim_box" type="number" value="" placeholder="auto" style="width:90px"></div>
+   <button onclick="runSim()">Simulieren</button>
+  </div>
+ </div>
+ <div id="sim_out"></div>
+ <div class="grid" style="grid-template-columns:1fr 1fr">
+  <div class="card"><div class="sec" style="margin-top:0">Beste Antwort auf diese Coverage</div><div id="sim_best" class="mut">—</div></div>
+  <div class="card"><div class="sec" style="margin-top:0">Was stoppt dieses Konzept?</div><div id="sim_stop" class="mut">—</div></div>
+ </div>
+ </div>
+
+ <!-- ============ MATRIX ============ -->
+ <div class="sect" id="s-matrix">
+ <div class="lead">Erwartetes <b>EPA</b> für jedes Konzept × jede Coverage. Grün = Vorteil Offense, Rot = Vorteil Defense.</div>
+ <div class="card">
+  <div class="controls">
+   <div><label>Down</label><select id="m_d"><option selected>1</option><option>2</option><option>3</option><option>4</option></select></div>
+   <div><label>Distanz</label><input id="m_y" type="number" value="10" style="width:80px"></div>
+   <div><label>Yards z. EZ</label><input id="m_yl" type="number" value="60" style="width:90px"></div>
+   <div><label>Personnel</label><select id="m_p"><option>11</option><option>12</option><option>21</option></select></div>
+   <button onclick="runMatrix()">Matrix berechnen</button>
+  </div>
+ </div>
+ <div id="matrix_out"></div>
+ </div>
+
+ <div class="foot">Simulation = echte Liga-Basisraten × kalibrierte Football-Matchup-Logik. Wahrscheinlichkeiten, keine Garantie.</div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
 const pct=x=>Math.round(x*100)+'%';
+const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
+
+function tab(s){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
+ document.querySelectorAll('.sect').forEach(e=>e.classList.remove('on'));$('s-'+s).classList.add('on');
+ if(s==='sim'&&!simReady)initSim(); if(s==='matrix'&&!$('matrix_out').dataset.done)runMatrix();}
 
 async function init(){
  const d=await (await fetch('/api/teams')).json();
@@ -149,6 +225,72 @@ async function predict(){
   '<div class="kpi"><div class="l">Erwartet</div><div class="v"><span class="pill">'+esc(r.likely)+'</span></div></div>'+
   '<div class="kpi"><div class="l">Vorhersehbarkeit</div><div class="v">'+pct(r.predictability)+'</div></div>'+
   '</div></div>';
+}
+
+/* ===================== SIMULATOR ===================== */
+let simReady=false;
+function badge(v){const e=v.expected_epa;let c='b-ev';
+ if(e>=0.20)c='b-top';else if(e>=0.07)c='b-off';else if(e>=-0.05)c='b-ev';else if(e>=-0.18)c='b-def';else c='b-bad';
+ return '<span class="badge '+c+'">'+esc(v.verdict)+'  ('+sgn(e)+' EPA)</span>';}
+function simSit(pfx){return 'down='+$(pfx+'d').value+'&ydstogo='+$(pfx+'y').value+'&yardline='+$(pfx+'yl').value+
+ '&personnel='+$(pfx+'p').value+'&box='+(pfx==='sim_'?($('sim_box').value||0):0);}
+async function initSim(){
+ const m=await (await fetch('/api/sim/meta')).json();
+ const pass=m.concepts.filter(c=>c.type==='Pass'),run=m.concepts.filter(c=>c.type==='Lauf');
+ $('sim_c').innerHTML='<optgroup label="Pass">'+pass.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>').join('')+
+  '</optgroup><optgroup label="Lauf">'+run.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>').join('')+'</optgroup>';
+ $('sim_cov').innerHTML=m.coverages.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>').join('');
+ simReady=true; runSim();
+}
+function kpi(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';}
+async function runSim(){
+ const c=$('sim_c').value,cov=$('sim_cov').value;
+ const qs='concept='+encodeURIComponent(c)+'&coverage='+encodeURIComponent(cov)+'&'+simSit('sim_');
+ $('sim_out').innerHTML='<div class="card mut">Simuliere …</div>';
+ const r=await (await fetch('/api/sim/run?'+qs)).json();
+ if(r.error){$('sim_out').innerHTML='<div class="card">'+esc(r.error)+'</div>';return;}
+ let h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+   '<div class="big">'+esc(c)+' <span class="mut" style="font-size:15px">vs '+esc(cov)+'</span></div>'+badge(r)+'</div>'+
+   '<div class="grid" style="margin-top:14px">'+
+   kpi('Ø Yards',r.mean_yards.toFixed(1))+kpi('Erfolgsrate',pct(r.success_rate))+
+   kpi('Big Play',pct(r.explosive_rate))+kpi('Touchdown',pct(r.td_rate))+
+   kpi('Turnover',pct(r.turnover_rate))+kpi('Sack',pct(r.sack_rate))+
+   kpi('Ø EPA',sgn(r.expected_epa))+kpi('Matchup-Faktor','×'+r.matchup_factor.toFixed(2))+
+   '</div><div class="sec">Ertragsverteilung (Yards)</div>';
+ const mx=Math.max(...r.hist.map(b=>b.pct))||1;
+ r.hist.forEach(b=>{h+='<div class="hbar"><div class="lab">'+esc(b.label)+'</div>'+
+   '<div class="tr"><div class="fl" style="width:'+(b.pct/mx*100)+'%"></div></div>'+
+   '<div class="vv">'+pct(b.pct)+'</div></div>';});
+ h+='<div class="note">'+esc(r.note)+'</div></div>';
+ $('sim_out').innerHTML=h;
+ loadBest(cov); loadStop(c);
+}
+async function loadBest(cov){
+ const r=await (await fetch('/api/sim/best?coverage='+encodeURIComponent(cov)+'&'+simSit('sim_'))).json();
+ $('sim_best').innerHTML=r.items.map(x=>'<div class="reco"><span><b>'+esc(x.concept)+'</b> <span class="mut">'+
+  (x.is_pass?'Pass':'Lauf')+'</span></span><span>'+sgn(x.expected_epa)+' EPA · '+pct(x.success_rate)+'</span></div>').join('');
+}
+async function loadStop(c){
+ const r=await (await fetch('/api/sim/stop?concept='+encodeURIComponent(c)+'&'+simSit('sim_'))).json();
+ if(r.error){$('sim_stop').innerHTML=esc(r.error);return;}
+ $('sim_stop').innerHTML=r.items.slice(0,5).map(x=>'<div class="reco"><span><b>'+esc(x.coverage)+'</b></span>'+
+  '<span>'+sgn(x.expected_epa)+' EPA (Offense)</span></div>').join('');
+}
+
+/* ===================== MATRIX ===================== */
+function heatColor(e){const v=Math.max(-0.45,Math.min(0.45,e));const t=(v+0.45)/0.9; // 0=rot..1=grün
+ const hue=t*130; return 'hsl('+hue+',62%,'+(48+18*Math.abs(t-0.5))+'%)';}
+async function runMatrix(){
+ $('matrix_out').innerHTML='<div class="card mut">Berechne Matrix (tausende Simulationen) …</div>';
+ const qs='down='+$('m_d').value+'&ydstogo='+$('m_y').value+'&yardline='+$('m_yl').value+'&personnel='+$('m_p').value;
+ const r=await (await fetch('/api/sim/matrix?'+qs)).json();
+ let h='<div class="card scroll"><table class="heat"><tr><th class="cn">Konzept</th>';
+ r.coverages.forEach(c=>h+='<th>'+esc(c.replace(/ —.*/,'').replace(/ \(.*/,''))+'</th>');
+ h+='</tr>';
+ r.rows.forEach(row=>{h+='<tr><td class="cn">'+esc(row.label)+' <span class="mut">'+row.type+'</span></td>';
+  row.epa.forEach(e=>h+='<td class="val" style="background:'+heatColor(e)+'">'+sgn(e)+'</td>');h+='</tr>';});
+ h+='</table><div class="note">Quelle Basisraten: '+esc(r.source)+'</div></div>';
+ $('matrix_out').innerHTML=h; $('matrix_out').dataset.done='1';
 }
 init();
 </script></body></html>"""
@@ -255,5 +397,48 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                "qtr": qtr, "game_seconds_remaining": gsr, "shotgun": bool(shotgun),
                "no_huddle": False}
         return _state["predictor"].assess(sit)
+
+    # ---- Play-Simulator ------------------------------------------------- #
+    def _sit(down, ydstogo, yardline, personnel, box):
+        return {"down": down, "ydstogo": ydstogo, "yardline_100": yardline,
+                "personnel": personnel, "box": box or None}
+
+    @app.get("/api/sim/meta")
+    def sim_meta():
+        from gridiron import simulator as S
+        return {"concepts": S.list_concepts(), "coverages": S.list_coverages()}
+
+    @app.get("/api/sim/run")
+    def sim_run(concept: str, coverage: str, down: int = 1, ydstogo: int = 10,
+                yardline: int = 60, personnel: str = "11", box: int = 0):
+        from gridiron.simulator import simulate
+        try:
+            r = simulate(cfg, concept, coverage, _sit(down, ydstogo, yardline, personnel, box))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        return asdict(r)
+
+    @app.get("/api/sim/best")
+    def sim_best(coverage: str, down: int = 1, ydstogo: int = 10, yardline: int = 60,
+                 personnel: str = "11", box: int = 0):
+        from gridiron.simulator import best_concepts
+        return {"items": [asdict(r) for r in
+                          best_concepts(cfg, coverage, _sit(down, ydstogo, yardline, personnel, box))]}
+
+    @app.get("/api/sim/stop")
+    def sim_stop(concept: str, down: int = 1, ydstogo: int = 10, yardline: int = 60,
+                 personnel: str = "11", box: int = 0):
+        from gridiron.simulator import stopping_coverages
+        try:
+            items = stopping_coverages(cfg, concept, _sit(down, ydstogo, yardline, personnel, box))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        return {"items": [asdict(r) for r in items]}
+
+    @app.get("/api/sim/matrix")
+    def sim_matrix(down: int = 1, ydstogo: int = 10, yardline: int = 60,
+                   personnel: str = "11", box: int = 0):
+        from gridiron.simulator import matrix
+        return matrix(cfg, _sit(down, ydstogo, yardline, personnel, box))
 
     return app
