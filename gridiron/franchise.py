@@ -1020,7 +1020,7 @@ def start_game(cfg: Config, state: dict) -> dict:
         "score": [0, 0], "pos": pos, "drive": 0, "q": 1,
         "down": 1, "dist": 10, "ytz": 75.0,
         "absx": 25.0 if pos == 0 else 75.0,
-        "log": [], "over": False,
+        "log": [], "over": False, "box": {},
     }
     state["active_game"] = g
     save(cfg, state)
@@ -1056,6 +1056,14 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
                      {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 0)
+    is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
+    # Box-Score (Nutzer-Team)
+    urost = teams[0].get("roster")
+    if urost:
+        if user_has_ball:
+            _attr_off(g.setdefault("box", {}), urost, o, yards, is_td, random)
+        else:
+            _attr_def(g.setdefault("box", {}), urost, o, random)
     g["absx"] = max(0.0, min(100.0, g["absx"] + (yards if attack_right else -yards)))
     label = _play_label(concept, o, yards)
     scored = False
@@ -1102,7 +1110,8 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
 
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored,
-                                 "kind": o["kind"]}, "game": _game_view(state)}
+                                 "kind": o["kind"], "concept": concept, "coverage": coverage,
+                                 "user_off": user_has_ball}, "game": _game_view(state)}
 
 
 def _play_label(concept: str, o: dict, yards: int) -> str:
@@ -1132,8 +1141,16 @@ def finish_game(cfg: Config, state: dict) -> dict:
         as_ += 3 if hs == as_ else 0
     result = {"home": home["name"], "away": away["name"], "hs": hs, "as": as_,
               "winner": home["name"] if hs > as_ else away["name"]}
+    # Leistungs-EXP aus dem selbst gespielten Spiel + Box-Score
+    box = g.get("box", {})
+    rid = {p["id"]: p for p in teams[0].get("roster", [])}
+    for pid, s in box.items():
+        if pid in rid:
+            _gain_exp(rid[pid], _box_exp(s))
+    box_lines = [b for b in sorted(box.values(), key=_box_exp, reverse=True) if _box_exp(b) > 0][:12]
     state["active_game"] = None
     out = sim_week(cfg, state, user_result=result)
+    result["box"] = box_lines
     return {"ok": True, "result": result, "advance": out, "view": view(state)}
 
 

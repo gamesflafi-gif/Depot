@@ -413,9 +413,10 @@ async function runSim(){
  drawPlay(c,cov,r); loadBest(cov); loadStop(c);
 }
 
-/* ---------- Spielfeld & Animation ---------- */
+/* ---------- Spielfeld & Animation (wiederverwendbar je SVG) ---------- */
 const SVGNS='http://www.w3.org/2000/svg';
-let lastDiag=null,lastRes=null,animReq=null;
+let lastDiag=null,lastRes=null;
+const _anim={};
 const mapX=x=>x*10, mapY=fy=>10+(26-fy)*10;
 function el(tag,a){const e=document.createElementNS(SVGNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e;}
 function routeLen(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
@@ -425,15 +426,16 @@ async function drawPlay(concept,coverage,res){
  if(d.error)return; lastDiag=d; lastRes=res;
  $('sim_fieldcard').style.display='block';
  $('field_title').textContent=concept+' vs '+coverage.replace(/ —.*/,'');
- renderField(d); playAnim();
+ renderField($('field'),d,parseInt($('sim_y').value)||10);
+ playAnim($('field'),d,{mean_yards:res?res.mean_yards:null});
 }
-function renderField(d){
- const svg=$('field'); const ytg=parseInt($('sim_y').value)||10;
+function renderField(svg,d,ytg){
+ const P=svg.id;
  let s='<defs>'+
-  '<linearGradient id="turf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#125433"/><stop offset="1" stop-color="#0b3a22"/></linearGradient>'+
-  '<marker id="ah" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
-  '<marker id="aht" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
- s+='<rect x="0" y="0" width="533" height="360" fill="url(#turf)"/>';
+  '<linearGradient id="turf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#125433"/><stop offset="1" stop-color="#0b3a22"/></linearGradient>'+
+  '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
+  '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
+ s+='<rect x="0" y="0" width="533" height="360" fill="url(#turf_'+P+')"/>';
  for(let i=0;i<8;i++)if(i%2)s+='<rect x="0" y="'+(i*45)+'" width="533" height="45" fill="#ffffff" opacity="0.025"/>';
  for(let fy=-5;fy<=25;fy+=5){const y=mapY(fy).toFixed(1);
   s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="'+(fy===0?0:1)+'" opacity="0.22"/>';
@@ -443,59 +445,56 @@ function renderField(d){
  s+='<line x1="0" y1="'+mapY(0)+'" x2="533" y2="'+mapY(0)+'" stroke="#5fa8ff" stroke-width="2.5" opacity="0.9"/>';
  if(ytg<=24)s+='<line x1="0" y1="'+mapY(ytg)+'" x2="533" y2="'+mapY(ytg)+'" stroke="#ffd34d" stroke-width="2" opacity="0.7" stroke-dasharray="7 5"/>';
  d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
-  const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht':'ah')+')"/>';}});
+  const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,p.deep?'#e09b3d':'#ef5350','d_'+i));
  d.offense.forEach((o,i)=>addPlayer(svg,o,o.target?'#ffd34d':(o.pos==='OL'?'#0c8f5d':'#16c784'),'o'+i,o));
  const qb=d.offense.find(o=>o.pos==='QB');
- svg.appendChild(el('circle',{id:'pball',cx:mapX(qb.x),cy:mapY(qb.y),r:3.8,fill:'#fff',opacity:0}));
+ svg.appendChild(el('circle',{id:P+'_pball',cx:mapX(qb.x),cy:mapY(qb.y),r:3.8,fill:'#fff',opacity:0}));
 }
-function addPlayer(svg,p,color,id,o){
+function addPlayer(svg,p,color,id,o){const P=svg.id;
  const g=el('g',{});
- if(o&&o.target){const ring=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:11.5,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.85,'class':'pulse'});ring.id='rg_'+id;g.appendChild(ring);}
- const c=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:7.5,fill:color,stroke:'#06140d','stroke-width':1.5,'class':'pl'});c.id='pl_'+id;
+ if(o&&o.target){const ring=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:11.5,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.85,'class':'pulse'});ring.id=P+'_rg_'+id;g.appendChild(ring);}
+ const c=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:7.5,fill:color,stroke:'#06140d','stroke-width':1.5,'class':'pl'});c.id=P+'_pl_'+id;
  g.appendChild(c);
- const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:mapX(p.x),y:mapY(p.y)+2.8,'text-anchor':'middle','font-size':7.5,fill:'#03130c','font-weight':800});t.textContent=lbl;t.id='tx_'+id;g.appendChild(t);}
+ const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:mapX(p.x),y:mapY(p.y)+2.8,'text-anchor':'middle','font-size':7.5,fill:'#03130c','font-weight':800});t.textContent=lbl;t.id=P+'_tx_'+id;g.appendChild(t);}
  svg.appendChild(g);
 }
-function moveP(id,x,y){const c=$('pl_'+id);if(!c)return;c.setAttribute('cx',mapX(x));c.setAttribute('cy',mapY(y));
- const t=$('tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+2.8);}
- const r=$('rg_'+id);if(r){r.setAttribute('cx',mapX(x));r.setAttribute('cy',mapY(y));}}
-function curPos(id){const c=$('pl_'+id);return c?[parseFloat(c.getAttribute('cx'))/10,26-(parseFloat(c.getAttribute('cy'))-10)/10]:null;}
-function playAnim(){
- if(!lastDiag)return; cancelAnimationFrame(animReq);
- const d=lastDiag,T=2200,t0=performance.now();
+function moveP(P,id,x,y){const c=$(P+'_pl_'+id);if(!c)return;c.setAttribute('cx',mapX(x));c.setAttribute('cy',mapY(y));
+ const t=$(P+'_tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+2.8);}
+ const r=$(P+'_rg_'+id);if(r){r.setAttribute('cx',mapX(x));r.setAttribute('cy',mapY(y));}}
+function curPos(P,id){const c=$(P+'_pl_'+id);return c?[parseFloat(c.getAttribute('cx'))/10,26-(parseFloat(c.getAttribute('cy'))-10)/10]:null;}
+function playAnim(svg,d,res){
+ const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
+ const T=2200,t0=performance.now();
  const qbi=d.offense.findIndex(o=>o.pos==='QB'),qb=d.offense[qbi];
- const tgt=d.ball_target,isPass=d.kind==='pass',throwAt=.55,ball=$('pball');
+ const tgt=d.ball_target,isPass=d.kind==='pass',throwAt=.55,ball=$(P+'_pball');
  const ease=t=>1-Math.pow(1-t,2);
  function frame(now){const t=Math.min(1,(now-t0)/T),te=ease(t);
-  // Offense entlang der Routen, Positionen merken
   const sp={};
-  d.offense.forEach((o,i)=>{if(o.route&&o.route.length>1){const pp=posAlong(o.route,te);moveP('o'+i,pp[0],pp[1]);if(o.pos)sp[o.pos]=pp;}else if(o.pos)sp[o.pos]=[o.x,o.y];});
-  // QB-Drop (Shotgun -> kurzer Drop)
-  const qy=qb.y-1.4*Math.min(1,t*2.2); moveP('o'+qbi,qb.x,qy); sp['QB']=[qb.x,qy];
-  // Defense nach Rolle
-  d.defense.forEach((p,i)=>{const id='d_'+i,cur=curPos(id)||[p.x,p.y];let tx,ty,k;
+  d.offense.forEach((o,i)=>{if(o.route&&o.route.length>1){const pp=posAlong(o.route,te);moveP(P,'o'+i,pp[0],pp[1]);if(o.pos)sp[o.pos]=pp;}else if(o.pos)sp[o.pos]=[o.x,o.y];});
+  const qy=qb.y-1.4*Math.min(1,t*2.2); moveP(P,'o'+qbi,qb.x,qy); sp['QB']=[qb.x,qy];
+  d.defense.forEach((p,i)=>{const id='d_'+i,cur=curPos(P,id)||[p.x,p.y];let tx,ty,k;
    if(p.role==='rush'){tx=qb.x+(p.x-qb.x)*0.12;ty=qy+0.8;k=0.09;}
-   else if(p.role==='man'&&sp[p.cover]){const r=sp[p.cover];tx=r[0]+(p.x<r[0]?-0.7:0.7);ty=r[1]+0.8;k=0.20;}  // trailt knapp dahinter
-   else if(p.drop){tx=p.drop[0];ty=p.drop[1];                                  // Zone: zur Landmarke, leicht auf nächsten Receiver reagieren
+   else if(p.role==='man'&&sp[p.cover]){const r=sp[p.cover];tx=r[0]+(p.x<r[0]?-0.7:0.7);ty=r[1]+0.8;k=0.20;}
+   else if(p.drop){tx=p.drop[0];ty=p.drop[1];
      let best=null,bd=99;for(const key in sp){if(key==='QB')continue;const r=sp[key];const dd=Math.hypot(r[0]-tx,r[1]-ty);if(dd<bd){bd=dd;best=r;}}
      if(best&&bd<11){tx+=(best[0]-tx)*0.32;ty+=(best[1]-ty)*0.16;} k=0.10;}
    else {tx=p.x;ty=p.y;k=0.1;}
-   moveP(id,cur[0]+(tx-cur[0])*k,cur[1]+(ty-cur[1])*k);
+   moveP(P,id,cur[0]+(tx-cur[0])*k,cur[1]+(ty-cur[1])*k);
   });
   if(isPass&&ball&&t>=throwAt){const tt=(t-throwAt)/(1-throwAt);ball.setAttribute('opacity',1);
     ball.setAttribute('cx',mapX(qb.x+(tgt[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qy+(tgt[1]-qy)*tt-Math.sin(tt*Math.PI)*1.3));}
-  if(t<1)animReq=requestAnimationFrame(frame); else showResult();
+  if(t<1)_anim[P]=requestAnimationFrame(frame); else showResult(svg,d,res);
  }
- animReq=requestAnimationFrame(frame);
+ _anim[P]=requestAnimationFrame(frame);
 }
-function showResult(){const svg=$('field');if(!lastRes||!lastDiag)return;const tgt=lastDiag.ball_target;
+function showResult(svg,d,res){if(!res||res.mean_yards==null||!d.ball_target)return;const tgt=d.ball_target;
  const g=el('g',{}); const x=Math.min(Math.max(mapX(tgt[0]),40),493),y=Math.max(mapY(tgt[1])-14,16);
  g.appendChild(el('rect',{x:x-26,y:y-13,width:52,height:20,rx:5,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':1.2}));
  const t=el('text',{x:x,y:y+1,'text-anchor':'middle','font-size':11,fill:'#ffd34d','font-weight':800});
- t.textContent=(lastRes.mean_yards>=0?'+':'')+lastRes.mean_yards.toFixed(1)+' Yds'; g.appendChild(t); svg.appendChild(g);}
-function replayPlay(){renderField(lastDiag);playAnim();}
+ t.textContent=(res.mean_yards>=0?'+':'')+Number(res.mean_yards).toFixed(1)+' Yds'; g.appendChild(t); svg.appendChild(g);}
+function replayPlay(){renderField($('field'),lastDiag,parseInt($('sim_y').value)||10);playAnim($('field'),lastDiag,{mean_yards:lastRes?lastRes.mean_yards:null});}
 async function loadBest(cov){
  const r=await (await fetch('/api/sim/best?coverage='+encodeURIComponent(cov)+'&'+simSit('sim_'))).json();
  $('sim_best').innerHTML=r.items.map(x=>'<div class="reco"><span><b>'+esc(x.concept)+'</b> <span class="mut">'+
@@ -779,7 +778,8 @@ function renderGame(g,play){
    '</div>'+
    '<div class="tvfield"><div class="ez" style="background:'+esc(g.acolor)+'">'+esc(g.aabbr)+'</div>'+
      gameTurf(g)+'<div class="ez" style="background:'+esc(g.hcolor)+'">'+esc(g.habbr)+'</div></div>'+
-   '<div class="dd"><span>'+g.down+'. &amp; '+g.dist+'</span><span class="mut">noch '+g.ytz+' Yd bis TD · Ball: '+esc(g.possession)+'</span></div>';
+   '<div class="dd"><span>'+g.down+'. &amp; '+g.dist+'</span><span class="mut">noch '+g.ytz+' Yd bis TD · Ball: '+esc(g.possession)+'</span></div>'+
+   '<div class="fieldwrap" style="margin:10px 0"><svg id="gfield" viewBox="0 0 533 360" style="width:100%;height:auto;display:block"></svg></div>';
  if(play)h+='<div class="reco'+(play.scored?' win':'')+'"><span>'+esc(play.desc)+'</span><span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span></div>';
  if(g.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(g.away)+' '+g['as']+' : '+g.hs+' '+esc(g.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
@@ -787,9 +787,20 @@ function renderGame(g,play){
    '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>';}
  h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
+ if(play&&play.concept)animateGamePlay(play);
 }
+async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
+ const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
+ if(d.error)return; renderField(svg,d,10); playAnim(svg,d,{mean_yards:play.yards});}
 async function gamePlay(choice){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
-async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}closeGame();if(r.view)renderMgr(r.view);}
+async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
+function showGameResult(res){closeGame();const o=document.createElement('div');o.className='overlay';o.id='resultoverlay';
+ o.addEventListener('click',e=>{if(e.target===o)closeResult();});
+ o.innerHTML='<div class="modal"><div class="modalhead"><h3>Endstand</h3><button class="ghost" onclick="closeResult()">Schließen</button></div>'+
+  '<div class="reco win"><span><b>'+esc(res.away)+'</b> '+res['as']+' : '+res.hs+' <b>'+esc(res.home)+'</b></span><span class="mut">Sieger: '+esc(res.winner)+'</span></div>'+
+  boxSection({box:res.box})+'</div>';
+ document.body.appendChild(o);}
+function closeResult(){const o=$('resultoverlay');if(o)o.remove();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
 function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
