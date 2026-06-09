@@ -349,6 +349,20 @@ def test_kicker_fg_and_extra_point(tmp_path):
     assert r2["game"]["hs"] + r2["game"]["as"] >= before
 
 
+def test_profiles_isolated(tmp_path):
+    """Spielstände werden pro Profilname getrennt gespeichert."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    try:
+        F.set_profile("max"); F.new_franchise(cfg, "MaxTeam", n_teams=6, seed=1)
+        F.set_profile("alex"); F.new_franchise(cfg, "AlexTeam", n_teams=6, seed=2)
+        F.set_profile("max"); assert F.load(cfg)["team_name"] == "MaxTeam"
+        F.set_profile("alex"); assert F.load(cfg)["team_name"] == "AlexTeam"
+        F.set_profile("neu"); assert F.load(cfg) is None        # frisches Profil = kein Stand
+    finally:
+        F.set_profile("default")
+
+
 def test_end_game_by_clock(tmp_path):
     """Spieluhr abgelaufen -> Spiel wird vorzeitig beendet und gewertet."""
     from gridiron import franchise as F

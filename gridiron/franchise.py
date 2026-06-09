@@ -13,6 +13,7 @@ import json
 import math
 import os
 import random
+import re
 from dataclasses import dataclass
 
 import numpy as np
@@ -512,9 +513,25 @@ def overall(team: dict) -> int:
 # --------------------------------------------------------------------------- #
 # Persistenz
 # --------------------------------------------------------------------------- #
+import contextvars
+_PROFILE = contextvars.ContextVar("gi_profile", default="default")
+
+
+def _sanitize_profile(name: str) -> str:
+    s = re.sub(r"[^a-z0-9_-]", "", (name or "").strip().lower())[:32]
+    return s or "default"
+
+
+def set_profile(name: str):
+    """Aktives Profil für diesen Request setzen (Spielstand pro Name)."""
+    return _PROFILE.set(_sanitize_profile(name))
+
+
 def _save_path(cfg: Config) -> str:
     cfg.ensure_dirs()
-    return os.path.join(cfg.data_dir, "franchise.json")
+    prof = _PROFILE.get()
+    fname = "franchise.json" if prof == "default" else f"franchise_{prof}.json"
+    return os.path.join(cfg.data_dir, fname)
 
 
 def exists(cfg: Config) -> bool:

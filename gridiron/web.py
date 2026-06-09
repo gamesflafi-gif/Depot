@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from gridiron.config import Config, load_config
@@ -184,6 +184,8 @@ _STYLE2 = """
  .conf{transform-origin:center;animation-name:confall;animation-iteration-count:infinite;animation-timing-function:linear}
  @keyframes confall{0%{transform:translateY(-30px) rotate(0)}100%{transform:translateY(400px) rotate(560deg)}}
  .tdword{animation:tdword .55s ease}@keyframes tdword{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+ .fig.sad{animation:sadshake 2.4s ease-in-out infinite}@keyframes sadshake{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+ .runin{animation:runin 1.7s ease-out both}@keyframes runin{from{transform:translate(var(--rx),var(--ry))}to{transform:translate(0,0)}}
  .pulse{animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
  .fieldlegend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;align-items:center}
  .fieldlegend i.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
@@ -593,36 +595,49 @@ function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelecto
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','spin');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
-/* Kino-Jubel: Spiel pausiert, Endzonen-Kamera zeigt den tanzenden Spieler groß im Feldbereich */
-function tdCelebration(svg,color,onDone){const P=svg.id;if(_anim[P]){cancelAnimationFrame(_anim[P]);_anim[P]=null;}
- const cel=Math.floor(Math.random()*10)+1;
+/* Kino-Jubel: Spiel pausiert, Endzonen-Kamera mit Stadion, Feld, traurigen Gegnern & herbeieilendem Team */
+function _celFig(color,cls,extra){return '<g class="fig '+(cls||'')+'"'+(extra||'')+'>'+
+   '<rect x="-2.1" y="3.4" width="4.2" height="5.8" rx="1.3" fill="'+color+'" stroke="#06140d" stroke-width="0.9"/>'+   // Rumpf/Beine
+   '<ellipse cx="0" cy="1.4" rx="6.4" ry="4.6" fill="'+color+'" stroke="#06140d" stroke-width="1"/>'+                  // Schultern
+   '<circle cx="0" cy="-4.4" r="3.4" fill="'+color+'" stroke="#06140d" stroke-width="1"/>'+                           // Helm
+   '<line x1="-2" y1="-5.7" x2="2" y2="-5.7" stroke="#06140d" stroke-width="0.8"/></g>';}                              // Facemask
+function tdCelebration(svg,color,defColor,onDone){const P=svg.id;if(_anim[P]){cancelAnimationFrame(_anim[P]);_anim[P]=null;}
+ defColor=defColor||'#ef5350';const cel=Math.floor(Math.random()*10)+1;
  let s='<defs>'+
-  '<linearGradient id="csky_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a1622"/><stop offset="1" stop-color="#0f3b25"/></linearGradient>'+
-  '<linearGradient id="ctf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a6b40"/><stop offset="1" stop-color="#0c3f25"/></linearGradient></defs>'+
-  '<rect x="0" y="0" width="533" height="360" fill="url(#csky_'+P+')"/>'+
-  '<rect x="0" y="150" width="533" height="210" fill="url(#ctf_'+P+')"/>';                       // Rasen
- // Ränge/Publikum oben
- for(let r=0;r<3;r++)for(let i=0;i<41;i++){const cx=8+i*13,cy=18+r*13;s+='<circle cx="'+cx+'" cy="'+cy+'" r="2.4" fill="'+((i+r)%5===0?color:'#26313f')+'" opacity="0.8"/>';}
- // Spotlights
- s+='<polygon points="0,0 533,150 0,150" fill="#ffffff" opacity="0.04"/><polygon points="533,0 0,150 533,150" fill="#ffffff" opacity="0.04"/>';
- // Endzone vorne (Kamera steht in der Endzone)
- s+='<rect x="0" y="300" width="533" height="60" fill="'+color+'" opacity="0.30"/>'+
-    '<line x1="0" y1="300" x2="533" y2="300" stroke="#ffffff" stroke-width="3" opacity="0.85"/>'+
-    '<text x="266" y="338" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff" opacity="0.45" letter-spacing="7">END ZONE</text>';
+  '<linearGradient id="csky_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a1622"/><stop offset="1" stop-color="#14243a"/></linearGradient>'+
+  '<linearGradient id="ctf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d7a48"/><stop offset="1" stop-color="#0b3a23"/></linearGradient></defs>'+
+  '<rect x="0" y="0" width="533" height="360" fill="url(#csky_'+P+')"/>';
+ // --- Tribünen (mehrere Ränge mit Geländer + Flutlichtmasten) ---
+ s+='<rect x="0" y="0" width="533" height="118" fill="#0c141f"/>';
+ ['#101b29','#0c151f','#0a1018'].forEach((bg,r)=>{const y0=8+r*34;s+='<rect x="0" y="'+y0+'" width="533" height="32" fill="'+bg+'"/>';
+   for(let i=0;i<60;i++){const cx=6+i*9,cy=y0+8+(i%3)*8,pal=[defColor,'#dfe7e3','#5a6b7a',color,'#c9a23a'];s+='<circle cx="'+cx+'" cy="'+cy+'" r="2" fill="'+pal[(i+r)%5]+'" opacity="0.85"/>';}
+   s+='<line x1="0" y1="'+(y0+32)+'" x2="533" y2="'+(y0+32)+'" stroke="#060b10" stroke-width="2"/>';});
+ [70,266,463].forEach(mx=>{s+='<rect x="'+(mx-2)+'" y="0" width="4" height="14" fill="#3a444f"/><rect x="'+(mx-16)+'" y="-2" width="32" height="7" rx="2" fill="#cfe3ff" opacity="0.85"/>';});
+ // --- Feld mit Linien/Perspektive ---
+ s+='<rect x="0" y="118" width="533" height="242" fill="url(#ctf_'+P+')"/>';
+ for(let i=0;i<10;i++)if(i%2)s+='<rect x="'+(i*55)+'" y="118" width="55" height="242" fill="#ffffff" opacity="0.03"/>';   // Mähstreifen
+ [140,166,196,232,274,300].forEach(y=>{s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#dfeee6" stroke-width="'+(y===300?3:1.2)+'" opacity="'+(y===300?0.9:0.28)+'"/>';
+   if(y<300)[150,383].forEach(hx=>{s+='<rect x="'+hx+'" y="'+(y-1)+'" width="14" height="2" fill="#dfeee6" opacity="0.3"/>';});});
+ // Endzone vorne (Kamera in der Endzone)
+ s+='<rect x="0" y="300" width="533" height="60" fill="'+color+'" opacity="0.34"/>'+
+    '<text x="266" y="342" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff" opacity="0.5" letter-spacing="8">END ZONE</text>';
+ // Spotlight-Strahlen
+ s+='<polygon points="70,14 300,300 -40,300" fill="#ffffff" opacity="0.04"/><polygon points="463,14 600,300 250,300" fill="#ffffff" opacity="0.04"/>';
+ // --- traurige Gegner im Hintergrund (an ihren Positionen, Kopf gesenkt/Schütteln) ---
+ [[110,150],[205,140],[300,146],[395,152],[470,138]].forEach((p,i)=>{
+   s+='<g transform="translate('+p[0]+' '+p[1]+') scale(1.7)">'+_celFig(defColor,'sad',' style="animation-delay:'+(i*0.3).toFixed(1)+'s"')+'</g>';});
+ // --- dein Team läuft langsam von seinen Positionen herbei und stellt sich um dich ---
+ [[150,250,-150,90],[372,250,150,80],[200,300,-120,-40],[330,300,120,-40]].forEach((p,i)=>{
+   s+='<g transform="translate('+p[0]+' '+p[1]+')"><g class="runin" style="--rx:'+p[2]+'px;--ry:'+p[3]+'px;animation-delay:'+(0.2+i*0.15).toFixed(2)+'s"><g transform="scale(2.4)">'+_celFig(color,'cel'+((i%10)+1))+'</g></g></g>';});
+ // --- großer tanzender Torschütze, zentral ---
+ s+='<g transform="translate(266 248) scale(6)">'+_celFig(color,'cel'+cel)+'</g>';
  // TOUCHDOWN-Schrift (ohne Emoji)
- s+='<text class="tdword" x="266" y="92" text-anchor="middle" font-size="40" font-weight="800" fill="#ffffff" stroke="#06140d" stroke-width="1" letter-spacing="3" style="transform-box:fill-box;transform-origin:center">TOUCHDOWN</text>';
- // großer tanzender Spieler, zentral im Feldbereich
- s+='<g transform="translate(266 232) scale(6)"><g class="fig cel'+cel+'">'+
-    '<rect x="-2.1" y="3.5" width="4.2" height="6" rx="1.4" fill="'+color+'" stroke="#06140d" stroke-width="0.9"/>'+      // Rumpf/Beine
-    '<ellipse cx="0" cy="1.5" rx="6.6" ry="4.7" fill="'+color+'" stroke="#06140d" stroke-width="1"/>'+                    // Schultern
-    '<circle cx="0" cy="-4.4" r="3.5" fill="'+color+'" stroke="#06140d" stroke-width="1"/>'+                             // Helm
-    '<line x1="-2.1" y1="-5.8" x2="2.1" y2="-5.8" stroke="#06140d" stroke-width="0.8"/>'+                                // Facemask
-    '</g></g>';
+ s+='<text class="tdword" x="266" y="96" text-anchor="middle" font-size="40" font-weight="800" fill="#ffffff" stroke="#06140d" stroke-width="1" letter-spacing="3" style="transform-box:fill-box;transform-origin:center">TOUCHDOWN</text>';
  // Konfetti
- for(let i=0;i<18;i++){const cx=12+i*29,dur=(1.4+(i%5)*0.28).toFixed(2),del=((i*0.21)%1.8).toFixed(2),col=[color,'#ffd34d','#ffffff','#5fa8ff'][i%4];
+ for(let i=0;i<20;i++){const cx=10+i*26,dur=(1.4+(i%5)*0.28).toFixed(2),del=((i*0.19)%1.8).toFixed(2),col=[color,'#ffd34d','#ffffff',defColor][i%4];
    s+='<rect class="conf" x="'+cx+'" y="-12" width="5" height="9" rx="1" fill="'+col+'" style="animation-duration:'+dur+'s;animation-delay:'+del+'s"/>';}
  svg.innerHTML=s;
- setTimeout(()=>{if(onDone)onDone();},2800);   // nach dem Tanz weiter (Extra-Punkt/FG)
+ setTimeout(()=>{if(onDone)onDone();},2800);   // 2,8 s Limit -> danach Extra-Punkt/FG, dann weiter
 }
 function curPos(P,id){return _ppos[P+id]||null;}
 const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5,DB:9.4,S:8.9};
@@ -723,7 +738,7 @@ function playAnim(svg,d,res,onDone){
   else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
     celebrate(P,'o'+carrier.i);
     showResult(svg,{kind,yards,td,pt:[carrier.x,carrier.y]});
-    if(res.celColor)setTimeout(()=>tdCelebration(svg,res.celColor,onDone),750);          // Schwenk auf den tanzenden Spieler
+    if(res.celColor)setTimeout(()=>tdCelebration(svg,res.celColor,res.celDef,onDone),750);          // Schwenk auf den tanzenden Spieler
     else if(onDone)setTimeout(onDone,2200);
   }
   else{
@@ -775,13 +790,26 @@ async function runMatrix(){
 
 /* ===================== MANAGER / FRANCHISE ===================== */
 let mgrMeta=null;
-async function api(path,method){return (await fetch(path,{method:method||'GET'})).json();}
+function curProfile(){return localStorage.getItem('gi_profile')||'';}
+async function api(path,method){const pr=curProfile();
+ if(pr)path+=(path.indexOf('?')>=0?'&':'?')+'profile='+encodeURIComponent(pr);
+ return (await fetch(path,{method:method||'GET'})).json();}
 async function loadMgr(){
+ if(!curProfile()){renderProfile();return;}                 // erst Profil anlegen
  if(!mgrMeta)mgrMeta=await api('/api/fr/meta');
  const s=await api('/api/fr/state');
  if(!s.exists){renderNewTeam();return;}
  renderMgr(s.view);
 }
+function renderProfile(){
+ $('mgr_out').innerHTML='<div class="card"><div class="sec" style="margin-top:0">Profil erstellen</div>'+
+  '<div class="note">Spiel dich mit deinem Namen ein — dein Spielstand wird darunter gespeichert. So könnt ihr getrennt spielen und jederzeit weitermachen.</div>'+
+  '<div class="controls" style="margin-top:14px"><div><label>Dein Name</label><input id="pf_name" placeholder="z. B. Max" style="width:220px" onkeydown="if(event.key===\'Enter\')saveProfile()"></div>'+
+  '<button onclick="saveProfile()">Weiter ▶</button></div></div>';
+ setTimeout(()=>{const i=$('pf_name');if(i)i.focus();},60);
+}
+function saveProfile(){const n=($('pf_name').value||'').trim();if(!n){alert('Bitte einen Namen eingeben.');return;}localStorage.setItem('gi_profile',n);mgrMeta=null;lastView=null;loadMgr();}
+function switchProfile(){if(confirm('Profil wechseln? Dein Spielstand bleibt unter „'+curProfile()+'" gespeichert.')){localStorage.removeItem('gi_profile');mgrMeta=null;lastView=null;loadMgr();}}
 let ntColor=null;
 function renderNewTeam(){
  ntColor=mgrMeta.colors[0];
@@ -815,6 +843,7 @@ function renderMgr(v){
    '<div class="crest" style="background:'+esc(v.color||'#16c784')+'">'+esc(v.abbr||'')+'</div>'+
    '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut" style="color:#dfe7e3">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
    '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('Punkte '+v.skillpoints)+
+   ' <button class="ghost" style="padding:5px 10px" onclick="switchProfile()">👤 '+esc(curProfile())+'</button>'+
    ' <button class="ghost" style="padding:5px 10px" onclick="openTutorial(0)">? Anleitung</button></div></div>'+
    '<div class="kgrid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
    kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>'+
@@ -1179,8 +1208,8 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
- const cc=liveG?gameCols(liveG,play.user_off).off:'#16c784';
- playAnim(svg,d,{kind:play.kind,yards:play.yards,td:play.td,celColor:cc},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
+ const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
+ playAnim(svg,d,{kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
  g.appendChild(el('rect',{x:x-72,y:y-19,width:144,height:34,rx:8,fill:'#0a0f0d',stroke:made?'#19e08f':'#ef5350','stroke-width':2}));
@@ -1337,7 +1366,12 @@ init();
 
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or load_config()
-    app = FastAPI(title="Gridiron", version="0.1")
+
+    async def _bind_profile(profile: str = "default"):
+        from gridiron import franchise as F          # Spielstand pro Profilname trennen
+        F.set_profile(profile)
+
+    app = FastAPI(title="Gridiron", version="0.1", dependencies=[Depends(_bind_profile)])
     _state: dict = {"predictor": None}
 
     @app.middleware("http")
