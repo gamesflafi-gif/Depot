@@ -1444,6 +1444,10 @@ def _user_pair(state: dict):
 
 def start_game(cfg: Config, state: dict) -> dict:
     if state.get("active_game"):
+        g = state["active_game"]
+        if "opts" not in g:                              # alte laufende Spiele nachrüsten
+            _new_decision_options(state)
+            save(cfg, state)
         return {"ok": True, "game": _game_view(state)}
     if not state.get("week_trained"):
         return {"error": "Erst das Training dieser Woche absolvieren."}
@@ -1459,10 +1463,49 @@ def start_game(cfg: Config, state: dict) -> dict:
         "down": 1, "dist": 10, "ytz": 75.0,
         "absx": 75.0 if pos == 0 else 25.0,   # Heim startet rechts (eigene 25) und greift nach links an
         "log": [], "over": False, "box": {},
+        "off_snaps": 0, "philly_at": random.randint(1, 3), "philly_used": False,  # 🦅 Easter Egg: 1x pro Spiel
     }
     state["active_game"] = g
+    _new_decision_options(state)
     save(cfg, state)
     return {"ok": True, "game": _game_view(state)}
+
+
+def _random_off_options() -> list[dict]:
+    """4 zufällige Offense-Plays, immer mindestens 1 Lauf und 1 Pass."""
+    passes, runs = list(PASS_CONCEPTS), list(RUN_CONCEPTS)
+    chosen = [random.choice(passes), random.choice(runs)]
+    pool = [k for k in passes + runs if k not in chosen]
+    random.shuffle(pool)
+    chosen += pool[:2]
+    random.shuffle(chosen)
+    return [{"key": k, "label": (PASS_CONCEPTS.get(k) or RUN_CONCEPTS[k])["label"],
+             "type": "Pass" if k in PASS_CONCEPTS else "Lauf"} for k in chosen]
+
+
+def _new_decision_options(state: dict) -> None:
+    """Erzeugt die Auswahl-Optionen für die aktuelle Spielsituation (einmal pro Snap)."""
+    g = state["active_game"]
+    if g.get("over"):
+        g["opts"] = []
+        return
+    teams = state["teams"]
+    off = teams[g["hi"] if g["pos"] == 0 else g["ai"]]
+    user_has_ball = (g["pos"] == 0) == g["user_is_home"]
+    if g.get("pat"):                                      # Extra-Punkt / 2-Punkte nach TD
+        g["opts"] = [{"key": "__XP__", "label": f"Extra-Punkt (Kick, {round(xp_make_prob(kicker(off)) * 100)}%)", "type": "+1"},
+                     {"key": "__2PT__", "label": "2-Punkte-Conversion", "type": "+2"}]
+    elif user_has_ball:
+        opts = _random_off_options()
+        if g["ytz"] <= 50:                                # Field Goal ab ca. Mittellinie
+            opts.append({"key": "__FG__", "label": f"Field Goal ({round(g['ytz'] + 17)} Yd, {round(fg_make_prob(g['ytz'], kicker(off)) * 100)}%)", "type": "Kick"})
+        g["off_snaps"] = g.get("off_snaps", 0) + 1
+        if not g.get("philly_used") and g["off_snaps"] == g.get("philly_at", 2):   # 🦅 genau einmal anbieten
+            opts.append({"key": "__PHILLY__", "label": "🦅 Philly Special", "type": "Trick"})
+        g["opts"] = opts
+    else:                                                 # Defense: 4 zufällige Coverages
+        covs = random.sample(list(COVERAGES), min(4, len(COVERAGES)))
+        g["opts"] = [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in covs]
 
 
 def _scheme_pick(team: dict, off: bool) -> str:
@@ -1486,18 +1529,27 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     if choice == "__FG__":                                # Nutzer entscheidet sich fürs Field Goal
         return _attempt_fg(cfg, state, g, off, user_has_ball)
 
+    philly = (choice == "__PHILLY__") and user_has_ball
     if user_has_ball:
-        if choice not in PASS_CONCEPTS and choice not in RUN_CONCEPTS:
+        if philly:
+            g["philly_used"] = True
+            concept, coverage = "Flood", _scheme_pick(deff, off=False)   # Trick-Play, visuell als Pass
+        elif choice in PASS_CONCEPTS or choice in RUN_CONCEPTS:
+            concept, coverage = choice, _scheme_pick(deff, off=False)
+        else:
             return {"error": "Unbekanntes Konzept."}
-        concept, coverage = choice, _scheme_pick(deff, off=False)
     else:
         if choice not in COVERAGES:
             return {"error": "Unbekannte Coverage."}
         coverage, concept = choice, _scheme_pick(off, off=True)
 
     ytz0, dist0 = g["ytz"], g["dist"]                # Feldposition vor dem Snap (für die Animation)
-    o = play_outcome(concept, coverage,
-                     {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
+    if philly:                                       # 🦅 Easter Egg: meist großer Raumgewinn
+        o = ({"yards": min(int(g["ytz"]), random.randint(16, 38)), "kind": "complete", "turnover": False, "pass": True}
+             if random.random() < 0.80 else {"yards": 0, "kind": "incomplete", "turnover": False, "pass": True})
+    else:
+        o = play_outcome(concept, coverage,
+                         {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
@@ -1510,6 +1562,8 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
             _attr_def(g.setdefault("box", {}), urost, o, random)
     g["absx"] = max(0.0, min(100.0, g["absx"] + (yards if attack_right else -yards)))
     label = _play_label(concept, o, yards)
+    if philly:                                            # 🦅 Trick-Play eigenes Label
+        label = f"🦅 Philly Special! +{yards}" if o["kind"] == "complete" else "🦅 Philly Special — vereitelt"
     scored = False
     switch = True
 
@@ -1518,7 +1572,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     elif g["ytz"] - yards <= 0:
         g["score"][g["pos"]] += 6                         # TD = 6, danach Extra-Punkt/2-Punkte
         g["absx"] = 100.0 if attack_right else 0.0
-        label = "TOUCHDOWN! " + off["name"]
+        label = ("🦅 Philly Special — " if philly else "") + "TOUCHDOWN! " + off["name"]
         scored = True
         if user_has_ball:
             g["pat"] = {"pos": g["pos"]}                  # Nutzer wählt XP/2PT -> noch kein Wechsel
@@ -1558,6 +1612,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     if switch:
         _switch_possession(g)
 
+    _new_decision_options(state)                          # Optionen für den nächsten Snap
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored,
                                  "kind": o["kind"], "concept": concept, "coverage": coverage,
@@ -1600,6 +1655,7 @@ def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
         kind, fg_dist = "fg", 18                          # Kick-Animation (Extra-Punkt)
     _pat_log(g, off, label, user_off)
     _switch_possession(g)
+    _new_decision_options(state)
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": True, "good": good, "kind": kind,
                                  "fg_dist": fg_dist, "concept": None, "coverage": None, "user_off": user_off},
@@ -1621,6 +1677,7 @@ def _attempt_fg(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) ->
         scored = False
     _pat_log(g, off, label, user_off)
     _switch_possession(g)
+    _new_decision_options(state)
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": scored, "good": scored, "kind": "fg",
                                  "fg_dist": dist, "concept": None, "coverage": None, "user_off": user_off},
@@ -1719,18 +1776,9 @@ def _game_view(state: dict) -> dict:
     off = teams[off_i]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
     pat = bool(g.get("pat"))
-    fg_dist = round(g["ytz"] + 17)
-    if pat:                                               # Extra-Punkt-Auswahl nach Touchdown
-        opts = [{"key": "__XP__", "label": f"Extra-Punkt (Kick, {round(xp_make_prob(kicker(off)) * 100)}%)", "type": "+1"},
-                {"key": "__2PT__", "label": "2-Punkte-Conversion", "type": "+2"}]
-    elif user_has_ball:
-        opts = [{"key": k, "label": (PASS_CONCEPTS.get(k) or RUN_CONCEPTS[k])["label"],
-                 "type": "Pass" if k in PASS_CONCEPTS else "Lauf"}
-                for k in OFF_SCHEMES.get(teams[0].get("off_scheme", "Ausgeglichen"), [])]
-        if g["ytz"] <= 50:                                # Field Goal im Bereich (ab ca. Mittellinie)
-            opts.append({"key": "__FG__", "label": f"Field Goal ({fg_dist} Yd, {round(fg_make_prob(g['ytz'], kicker(off)) * 100)}%)", "type": "Kick"})
-    else:
-        opts = [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in COVERAGES]
+    if "opts" not in g:                                   # Fallback (z. B. altes Spiel)
+        _new_decision_options(state)
+    opts = g.get("opts", [])
     return {
         "home": home["name"], "away": away["name"],
         "habbr": home.get("abbr", "HOM"), "aabbr": away.get("abbr", "AWY"),
