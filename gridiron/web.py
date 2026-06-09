@@ -571,7 +571,9 @@ function playAnim(svg,d,res){
   // Offense
   O.forEach(o=>{if(o.pos==='QB')return;
    if(o.pos==='OL'){const idx=ols.indexOf(o),off=idx-(ols.length-1)/2;
-     if(isPass){_toward(o,C+off*1.7,-2.2,M('OL'));}                       // Pocket vor dem QB
+     if(isPass){let r=null,bd=1e9;D.forEach(p=>{if(p.role!=='rush')return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
+       if(r){_toward(o,r.x*0.55+(C+off*1.4)*0.45,Math.max(-2.8,Math.min(-0.4,r.y-0.9)),M('OL'));}  // Blocker stellt sich goalside vor den Rusher
+       else _toward(o,C+off*1.7,-2.2,M('OL'));}
      else{const gx=runEnd?runEnd[0]:C;_toward(o,o.sy>-1?o.x+(gx-o.x)*0.18:o.x,Math.min(3.5,o.y+2.6),M('OL'));}  // Block nach vorn, Loch öffnen
      return;}
    if(o===tgt){
@@ -595,8 +597,7 @@ function playAnim(svg,d,res){
   D.forEach(p=>{let tx,ty,mx=M(p.pos);
    if(kind==='sack'){tx=qb.x;ty=qb.y;}
    else if(carrier){tx=carrier.x;ty=carrier.y;}                          // Ballträger verfolgen (eigenes Tempo)
-   else if(p.role==='rush'){let bl=null,bd=1e9;ols.forEach(o=>{const dd=Math.abs(o.x-p.x);if(dd<bd){bd=dd;bl=o;}});  // Blocking-Duell: nächster O-Liner
-     const bx=bl?bl.x:C,by=bl?bl.y:-2.2;tx=bx+(p.x>=bx?0.9:-0.9)+Math.sin(el*9+p.i)*0.55;ty=by+1.6+Math.sin(el*6.5+p.i)*0.35;mx*=0.5;}  // vom Blocker an der Line gehalten
+   else if(p.role==='rush'){tx=qb.x+Math.sin(el*7+p.i)*0.5;ty=qb.y;mx*=0.92;}  // drückt zum QB – wird von der O-Line geblockt (Kollision)
    else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){tx=r.x+(p.x<r.x?-0.8:0.8);ty=r.y+0.7;}else{tx=p.x;ty=p.y;}}
    else if(p.drop){tx=p.drop[0];ty=p.drop[1];                              // Zone: zur Landmarke, dann auf nächsten Receiver in der Zone reagieren
      let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});
@@ -606,6 +607,13 @@ function playAnim(svg,d,res){
   });
   // Sack: QB wird zurückgedrängt sobald Rusher nah
   if(kind==='sack'){if(D.some(p=>p.role==='rush'&&Math.hypot(p.x-qb.x,p.y-qb.y)<1.4)||el>1.3){sacked=true;qb.y=Math.max(qb.y-M('QB'),yards);}}
+  // Kollision: gegnerische Körper durchdringen sich nicht (Offense hält Stand, Verteidiger wird abgedrängt)
+  for(let it=0;it<2;it++)O.forEach(o=>{if(o.pos==='QB'&&kind!=='sack')return;
+    D.forEach(p=>{const dx=p.x-o.x,dy=p.y-o.y,dist=Math.hypot(dx,dy);
+      const mind=(o.pos==='OL')?1.9:(o===carrier?1.0:1.3);
+      if(dist<mind&&dist>1e-4){const push=mind-dist,ux=dx/dist,uy=dy/dist;
+        if(kind==='sack'&&o.pos==='OL'&&p.role==='rush'){o.x-=ux*push;o.y-=uy*push;}  // Sack: Rusher setzt sich durch
+        else{p.x+=ux*push;p.y+=uy*push;}}});});                                        // sonst: Verteidiger wird geblockt
   // schreiben
   O.forEach(o=>moveP(P,'o'+o.i,o.x,o.y));
   D.forEach(p=>moveP(P,'d_'+p.i,p.x,p.y));
