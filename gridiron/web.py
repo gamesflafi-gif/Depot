@@ -199,9 +199,10 @@ _STYLE2 = """
  .optbtn:hover{border-color:var(--acc)} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
- .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:5px}
- .subnav .s{flex:1;text-align:center;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--mut);white-space:nowrap}
- .subnav .s:hover{color:var(--fg);background:var(--panel2)} .subnav .s.on{background:var(--acc);color:#04140c}
+ .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+ .subnav .s{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 14px;border-radius:9px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--mut);white-space:nowrap;transition:background .12s,color .12s}
+ .subnav .s svg{width:16px;height:16px;flex:none}
+ .subnav .s:hover{color:var(--fg);background:rgba(255,255,255,.05)} .subnav .s.on{background:var(--acc);color:#04140c;box-shadow:0 1px 6px rgba(22,199,132,.4)}
  .tbanner{border-radius:14px;padding:18px 20px;margin:0 0 14px;position:relative;overflow:hidden;border:1px solid var(--line);
    background:linear-gradient(120deg,var(--tc) -10%,#0e1513 60%)}
  .tbanner .crest{box-shadow:0 2px 10px rgba(0,0,0,.4)}
@@ -545,7 +546,12 @@ function playAnim(svg,d,res){
    moveP(P,'o'+tgtI,tpos[0],tpos[1]);if(tgt.pos)sp[tgt.pos]=tpos;lastT=tpos;
   }
   moveP(P,'o'+qbi,qb.x,isPass?qy:qb.y);if(isPass)sp['QB']=[qb.x,qy];
+  // Ballträger nach Fang/Handoff -> Verteidigung verfolgt (Schwarm/Tackle)
+  const carrying=tpos&&((kind==='run'&&t>0.45)||(kind==='complete'&&t>arrive));
   d.defense.forEach((p,i)=>{const id='d_'+i,cur=curPos(P,id)||[p.x,p.y];let tx,ty,k;
+   if(carrying){const dd=Math.hypot(tpos[0]-cur[0],tpos[1]-cur[1]);
+     const kk=Math.min(0.32,Math.max(0.07,0.10+(12-dd)/55));
+     moveP(P,id,cur[0]+(tpos[0]-cur[0])*kk,cur[1]+(tpos[1]-cur[1])*kk);return;}
    if(p.role==='rush'){tx=qb.x+(p.x-qb.x)*0.12;ty=(isPass?qy:qb.y)+0.8;k=0.09;}
    else if(p.role==='man'&&sp[p.cover]){const r=sp[p.cover];tx=r[0]+(p.x<r[0]?-0.7:0.7);ty=r[1]+0.8;k=0.20;}
    else if(p.drop){tx=p.drop[0];ty=p.drop[1];let best=null,bd=99;for(const key in sp){if(key==='QB')continue;const r=sp[key];const dd=Math.hypot(r[0]-tx,r[1]-ty);if(dd<bd){bd=dd;best=r;}}if(best&&bd<11){tx+=(best[0]-tx)*0.32;ty+=(best[1]-ty)*0.16;}k=0.10;}
@@ -632,6 +638,11 @@ async function newTeam(){
  const qs='team='+encodeURIComponent($('nt_name').value)+'&teams='+$('nt_n').value+'&difficulty='+$('nt_diff').value+'&color='+encodeURIComponent(ntColor||'');
  renderMgr(await api('/api/fr/new?'+qs,'POST'));
 }
+function navIcon(k){const I={grid:'<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/>',
+ team:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0-1-5.8M21 20a5 5 0 0 0-4-4.9"/>',
+ chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',swap:'<path d="M7 7h13l-3-3M17 17H4l3 3"/>',
+ tool:'<path d="M14 7a4 4 0 0 1-5 5l-6 6 2 2 6-6a4 4 0 0 1 5-5l-2-2 2-2z"/>'};
+ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(I[k]||I.grid)+'</svg>';}
 function pill(t){return '<span class="pill">'+esc(t)+'</span>';}
 let mgrTab='dash',lastView=null;
 function mgrGo(t){mgrTab=t;renderMgr(lastView);}
@@ -648,8 +659,8 @@ function renderMgr(v){
    (v.champion?'<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>':'')+
    '</div>';
  // Unter-Navigation
- const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['stats','Statistik'],['transfer','Transfermarkt'],['build','Verbesserungen']];
- h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+t[1]+'</div>').join('')+'</div>';
+ const tabs=[['dash','Dashboard','grid'],['kader','Kader & Training','team'],['stats','Statistik','chart'],['transfer','Transfermarkt','swap'],['build','Verbesserungen','tool']];
+ h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+navIcon(t[2])+'<span>'+t[1]+'</span></div>').join('')+'</div>';
  h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
  if(!v.tutorial_seen && !window._tutShown){window._tutShown=true; openTutorial(0);}
@@ -990,13 +1001,20 @@ const TUT=[
 let _tutStep=0;
 function openTutorial(s){_tutStep=s||0;tutShow();}
 function tutShow(){const step=TUT[_tutStep];if(step.tab&&step.tab!==mgrTab)mgrGo(step.tab);
- requestAnimationFrame(()=>requestAnimationFrame(()=>tutPlace()));}
-function tutPlace(){const step=TUT[_tutStep],i=_tutStep,last=i===TUT.length-1;
+ // erst Bereich rendern lassen, Element ins Bild scrollen, DANN messen
+ setTimeout(()=>{const el=step.sel?document.querySelector(step.sel):null;
+   if(el)el.scrollIntoView({block:'center',behavior:'auto'});
+   setTimeout(()=>tutPlace(el),120);},60);}
+function tutPlace(el){const step=TUT[_tutStep],i=_tutStep,last=i===TUT.length-1;
  let host=$('tutspot');if(!host){host=document.createElement('div');host.id='tutspot';document.body.appendChild(host);lockBody();}
- const el=step.sel?document.querySelector(step.sel):null;let hole='',top=window.innerHeight/2-90;
- if(el){el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();
-   hole='<div class="tuthole" style="top:'+(r.top-6)+'px;left:'+(r.left-6)+'px;width:'+(r.width+12)+'px;height:'+(r.height+12)+'px"></div>';
-   top=r.bottom+14; if(top>window.innerHeight-200)top=Math.max(14,r.top-200);}
+ let hole='',top=window.innerHeight/2-90;
+ const r=el?el.getBoundingClientRect():null;
+ if(r&&r.height&&r.bottom>0&&r.top<window.innerHeight){
+   const t0=Math.max(4,r.top-6),h0=Math.min(window.innerHeight-8,r.bottom+6)-t0;
+   hole='<div class="tuthole" style="top:'+t0+'px;left:'+Math.max(4,r.left-6)+'px;width:'+(r.width+12)+'px;height:'+h0+'px"></div>';
+   top=(r.top<window.innerHeight*0.5)?(r.bottom+14):(r.top-210);
+   top=Math.max(8,Math.min(top,window.innerHeight-210));
+ }
  host.innerHTML=hole+'<div class="tuttip" style="top:'+top+'px"><div class="tutnum">Schritt '+(i+1)+' / '+TUT.length+'</div>'+
    '<h4>'+esc(step.title)+'</h4><p>'+esc(step.text)+'</p>'+
    '<div class="tutbtns"><button class="ghost" onclick="closeTutorial()">Überspringen</button><span>'+
