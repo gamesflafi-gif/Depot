@@ -280,9 +280,9 @@ _STYLE2 = """
    border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--fg);cursor:pointer;font:inherit;transition:border-color .12s,transform .04s}
  .traincard:hover{border-color:var(--acc)} .traincard:active{transform:translateY(1px)}
  .traincard .ti{color:var(--acc)} .traincard b{font-size:14px} .traincard .td{font-size:11.5px;color:var(--mut);font-weight:400}
- #tutspot{position:fixed;inset:0;z-index:60}
+ #tutspot{position:fixed;inset:0;z-index:60;pointer-events:none}
  .tuthole{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.74);border:2px solid var(--acc);transition:all .22s ease;pointer-events:none}
- .tuttip{position:fixed;left:50%;transform:translateX(-50%);max-width:380px;width:calc(100% - 28px);
+ .tuttip{position:fixed;left:50%;transform:translateX(-50%);max-width:380px;width:calc(100% - 28px);pointer-events:auto;
    background:var(--panel);border:1px solid var(--acc);border-radius:13px;padding:16px 18px;box-shadow:0 10px 34px rgba(0,0,0,.55)}
  .tuttip h4{margin:3px 0 6px;font-size:16px} .tuttip p{margin:0;color:var(--mut);line-height:1.55;font-size:14px}
  .tutnum{font-size:11px;color:var(--acc);font-weight:800;letter-spacing:.04em}
@@ -396,7 +396,10 @@ function unlockBodyIfNone(){if(!document.querySelector('.overlay'))document.body
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
-function tab(s){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
+function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
+ stopClock();liveG=null;playBusy=false;document.body.classList.remove('noscroll');}   // nichts darf den Bildschirm blockieren
+function tab(s){closeAllOverlays();                                                     // beim Tab-Wechsel offene Overlays/Sperren lösen
+ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
  document.querySelectorAll('.sect').forEach(e=>e.classList.remove('on'));$('s-'+s).classList.add('on');
  if(s==='sim'&&!simReady)initSim(); if(s==='matrix'&&!$('matrix_out').dataset.done)runMatrix();
  if(s==='mgr')loadMgr();}
