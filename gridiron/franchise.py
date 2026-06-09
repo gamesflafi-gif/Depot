@@ -449,7 +449,8 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
         "phase": "regular", "budget": 60, "difficulty": difficulty,
         "teams": teams, "schedule": _season_schedule(n_teams, rng),
         "results": [], "log": [], "history": [], "playoff": None,
-        "champion": None, "training_focus": None, "week_trained": False,
+        "champion": None, "training_focus": None, "week_trained": False, "week_done": False,
+        "tutorial_seen": False,
         "coach_market": _gen_market(rng), "events": [], "pid_seq": 10000,
     }
     state["market_players"] = _draft_class(state, rng)
@@ -1179,6 +1180,7 @@ def view(state: dict) -> dict:
             key=lambda p: (list(ROSTER_SLOTS).index(p["pos"]), not p["starter"], -player_ovr(p)))],
         "active_game": bool(state.get("active_game")),
         "week_done": bool(state.get("week_done")),
+        "tutorial_seen": bool(state.get("tutorial_seen")),
         "week_trained": bool(state.get("week_trained")),
         "trainings": TRAININGS,
         "game_bonus": team.get("game_bonus", 0),

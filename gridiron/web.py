@@ -206,6 +206,8 @@ _STYLE2 = """
    border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--fg);cursor:pointer;font:inherit;transition:border-color .12s,transform .04s}
  .traincard:hover{border-color:var(--acc)} .traincard:active{transform:translateY(1px)}
  .traincard .ti{color:var(--acc)} .traincard b{font-size:14px} .traincard .td{font-size:11.5px;color:var(--mut);font-weight:400}
+ .tutdots{display:flex;gap:6px;justify-content:center;margin:14px 0 2px}
+ .tutdot{width:8px;height:8px;border-radius:50%;background:var(--line)} .tutdot.on{background:var(--acc)}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -583,7 +585,8 @@ function renderMgr(v){
  let h='<div class="tbanner" style="--tc:'+esc(v.color||'#16c784')+'"><div class="teamhdr">'+
    '<div class="crest" style="background:'+esc(v.color||'#16c784')+'">'+esc(v.abbr||'')+'</div>'+
    '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut" style="color:#dfe7e3">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
-   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('Punkte '+v.skillpoints)+'</div></div>'+
+   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('Punkte '+v.skillpoints)+
+   ' <button class="ghost" style="padding:5px 10px" onclick="openTutorial(0)">? Anleitung</button></div></div>'+
    '<div class="grid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
    kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>'+
    (v.champion?'<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>':'')+
@@ -593,6 +596,7 @@ function renderMgr(v){
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+t[1]+'</div>').join('')+'</div>';
  h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
+ if(!v.tutorial_seen && !window._tutShown){window._tutShown=true; openTutorial(0);}
 }
 function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/>',
  off:'<path d="M12 19V5M6 11l6-6 6 6"/>',def:'<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
@@ -784,8 +788,7 @@ function renderResult(res,me){
    '<span class="mut">'+(mine?(won?'Sieg':'Niederlage'):esc(g.winner))+'</span></div>';});
  return h+'</div>';
 }
-async function simWeek(){const r=await api('/api/fr/sim_week','POST');if(r.view)renderMgr(r.view);
- if(r.result&&r.result.user_game)openBroadcast(r.result.user_game);}
+async function simWeek(){const r=await api('/api/fr/sim_week','POST');if(r.result&&r.result.error){alert(r.result.error);return;}if(r.view)renderMgr(r.view);}
 async function newSeason(){renderMgr(await api('/api/fr/new_season','POST'));}
 async function resetFr(){if(confirm('Franchise wirklich löschen?')){await api('/api/fr/reset','POST');loadMgr();}}
 async function watchLast(){const r=await api('/api/fr/last_game');if(r.game)openBroadcast(r.game);}
@@ -893,14 +896,17 @@ async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r
 async function simDrive(){const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
  if(r.result){if(r.view)renderMgr(r.view);showGameResult(r.result);}else renderGame(r.game);}
 async function simRest(){const r=await api('/api/fr/game/sim_rest','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
-function showGameResult(res){closeGame();const o=document.createElement('div');o.className='overlay';o.id='resultoverlay';
+let _resBox=null;
+function showGameResult(res){closeGame();_resBox=res.box||[];const o=document.createElement('div');o.className='overlay';o.id='resultoverlay';
  o.addEventListener('click',e=>{if(e.target===o)closeResult();});
  const won=lastView&&res.winner===lastView.team_name;
  o.innerHTML='<div class="modal"><div class="modalhead"><h3>Endstand</h3><button class="ghost" onclick="closeResult()">Schließen</button></div>'+
   '<div class="reco '+(won?'win':'loss')+'"><span><b>'+esc(res.away)+'</b> '+res['as']+' : '+res.hs+' <b>'+esc(res.home)+'</b></span>'+
-  '<span class="mut">'+(won?'Sieg':'Niederlage')+' · Sieger: '+esc(res.winner)+'</span></div>'+
-  boxSection({box:res.box})+'</div>';
+  '<span class="mut">'+(won?'Sieg':'Niederlage')+'</span></div>'+
+  (_resBox.length?'<div style="margin-top:10px"><button class="ghost" onclick="toggleResBox()" id="resbtn">Statistik anzeigen</button></div><div id="resbox"></div>':'')+'</div>';
  document.body.appendChild(o);lockBody();}
+function toggleResBox(){const b=$('resbox');if(!b)return;if(b.innerHTML){b.innerHTML='';$('resbtn').textContent='Statistik anzeigen';}
+ else{b.innerHTML=boxSection({box:_resBox});$('resbtn').textContent='Statistik ausblenden';}}
 function closeResult(){const o=$('resultoverlay');if(o)o.remove();unlockBodyIfNone();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
 function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;unlockBodyIfNone();}
@@ -908,6 +914,28 @@ async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.r
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function nextWeek(){const r=await api('/api/fr/next_week','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);}
+/* ---------- Tutorial ---------- */
+const TUT=[
+ ['Willkommen!','Du übernimmst deine eigene Football-Franchise. Ziel: das Team über die Saisons entwickeln und den Titel holen. Diese kurze Einführung zeigt dir den Ablauf.'],
+ ['Der Wochen-Ablauf','Jede Woche: 1) ein Training wählen, 2) das Spiel selbst spielen oder simulieren, 3) mit „Nächste Woche" weiter. Die Woche endet erst, wenn du klickst.'],
+ ['Kader & Training','Spieler sammeln EXP (Training + Spielleistung). Je 100 EXP = 1 Skillpunkt — den verteilst du in der Spielerkarte auf Attribute. Starter setzt du im Kader.'],
+ ['Verbesserungen','Mit Budget verbesserst du den Trainerstab (hebt Ratings/EXP), das Stadion (mehr Einnahmen) und das Trainings-Equipment (mehr EXP).'],
+ ['Transfermarkt','Verpflichte neue Spieler oder entlasse welche. Nach jeder Saison treten Veteranen ab und eine neue Draft-Klasse erscheint.'],
+ ['Statistik & Spiel','Im Statistik-Bereich siehst du Saison- und Karrierewerte. Im Spiel kannst du jeden Spielzug selbst callen — oder Drives/das ganze Spiel simulieren. Viel Erfolg!'],
+];
+let _tutStep=0;
+function openTutorial(s){_tutStep=s||0;let o=$('tutoverlay');if(!o){o=document.createElement('div');o.className='overlay';o.id='tutoverlay';document.body.appendChild(o);lockBody();}renderTut();}
+function renderTut(){const t=TUT[_tutStep];const last=_tutStep===TUT.length-1;
+ $('tutoverlay').innerHTML='<div class="modal" style="max-width:520px"><div class="modalhead"><h3>'+esc(t[0])+'</h3>'+
+  '<span class="mut">'+(_tutStep+1)+' / '+TUT.length+'</span></div>'+
+  '<p style="line-height:1.6;color:var(--fg)">'+esc(t[1])+'</p>'+
+  '<div class="tutdots">'+TUT.map((x,i)=>'<span class="tutdot'+(i===_tutStep?' on':'')+'"></span>').join('')+'</div>'+
+  '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
+  '<button class="ghost" onclick="closeTutorial()">Überspringen</button>'+
+  '<span>'+(_tutStep>0?'<button class="ghost" onclick="openTutorial('+(_tutStep-1)+')">Zurück</button> ':'')+
+  '<button onclick="'+(last?'closeTutorial()':'openTutorial('+(_tutStep+1)+')')+'">'+(last?'Los geht\\'s':'Weiter')+'</button></span></div></div>';
+}
+async function closeTutorial(){const o=$('tutoverlay');if(o)o.remove();unlockBodyIfNone();await api('/api/fr/tutorial_done','POST');if(lastView)lastView.tutorial_seen=true;}
 init();
 </script></body></html>"""
 
@@ -1078,6 +1106,16 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         from gridiron import franchise as F
         st = F.load(cfg)
         return {"exists": st is not None, "view": (F.view(st) if st else None)}
+
+    @app.post("/api/fr/tutorial_done")
+    def fr_tutorial_done():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        st["tutorial_seen"] = True
+        F.save(cfg, st)
+        return {"ok": True}
 
     @app.get("/api/fr/meta")
     def fr_meta():
