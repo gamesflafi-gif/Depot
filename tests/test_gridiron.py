@@ -363,6 +363,24 @@ def test_profiles_isolated(tmp_path):
         F.set_profile("default")
 
 
+def test_choice_events(tmp_path):
+    """Entscheidungs-Event: 2 Buffs + 1 Debuff, je 1 von 2 wählbar; Auswahl wirkt."""
+    import random
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Ev", n_teams=6, seed=3)
+    F._gen_event(st, random.Random(1))
+    ev = F.view(st)["pending_event"]
+    assert ev and len(ev["buffs"]) == 2 and len(ev["buffs"][0]) == 2 and len(ev["debuff"]) == 2
+    bud = st["budget"]
+    res = F.resolve_event(cfg, st, b0=1, b1=0, d=1)        # je 1 von 2 wählen
+    assert res.get("ok") and res["messages"]
+    assert F.view(st)["pending_event"] is None             # Event abgeschlossen
+    # Events sind getrennt vom Training und nicht jede Woche (process_events erzeugt kein Buff/Debuff-Event)
+    F.do_training(cfg, st, "team")
+    assert F.view(st)["pending_event"] is None
+
+
 def test_kickoff_and_start_ovr(tmp_path):
     """Start ~70 OVR, Münzwurf + Kickoff-Return setzen die Startposition."""
     from gridiron import franchise as F

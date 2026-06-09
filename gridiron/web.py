@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v12-gameflow"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v13-events"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -159,6 +159,13 @@ _STYLE2 = """
  .prospect .act button{min-width:108px;padding:7px 10px;font-size:12.5px}
  .reco.mini{padding:8px 12px;font-size:13px;margin:5px 0}
  .reco.champ{border-color:#5a4f20;background:#23200f}
+ .evtcard{border-color:#5a4f20;background:#1d1b11}
+ .evtgrp{margin:11px 0} .evtlab{font-size:11px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+ .evtopts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .evtopt{padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--tile);color:var(--fg);text-align:left;font-weight:600;cursor:pointer;font-size:12.5px;transition:border-color .12s,box-shadow .12s}
+ .evtopt.buff{border-left:3px solid var(--acc)} .evtopt.debuff{border-left:3px solid var(--bad)}
+ .evtopt.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--accsoft)}
+ .evtopt.debuff.on{border-color:var(--bad);box-shadow:0 0 0 2px #3a1d1d}
  .tag{display:inline-block;background:var(--warn);color:#1a1400;font-weight:800;font-size:11px;
    padding:3px 9px;border-radius:6px;letter-spacing:.04em}
  /* Section-Header */
@@ -938,6 +945,14 @@ function secDash(v){
  }
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
+ // Entscheidungs-Event (nicht jede Woche, getrennt vom Training)
+ if(v.pending_event){const ev=v.pending_event;_evt={b0:0,b1:0,d:0};
+   const grp=(key,title,opts,cls)=>'<div class="evtgrp"><div class="evtlab">'+esc(title)+'</div><div class="evtopts">'+
+     opts.map((o,i)=>'<button class="evtopt '+cls+(i===0?' on':'')+'" data-g="'+key+'" data-i="'+i+'" onclick="evtPick(this)">'+esc(o)+'</button>').join('')+'</div></div>';
+   h+='<div class="card evtcard"><div class="sec" style="margin-top:0">⚡ '+esc(ev.title)+'</div>'+
+     '<div class="note">Wähle 2 Buffs (je 1 von 2) und nimm 1 Nachteil in Kauf (kleineres Übel).</div>'+
+     grp('b0','Buff 1',ev.buffs[0],'buff')+grp('b1','Buff 2',ev.buffs[1],'buff')+grp('d','Nachteil',ev.debuff,'debuff')+
+     '<div style="margin-top:12px"><button onclick="resolveEvent()">Bestätigen</button></div></div>';}
  // Saison-Ziele (kompakt)
  if(v.goals&&v.goals.length){h+='<div class="card" id="goalcard"><div class="sec" style="margin-top:0">Saison-Ziele</div>'+
    v.goals.map(g=>{const prog=g.key==='wins'?' ('+g.progress+'/'+g.target+')':'';return '<div class="reco mini'+(g.done?' win':'')+'"><span>'+(g.done?'✓ ':'')+esc(g.label)+prog+'</span><span class="mut">'+(g.done?'erfüllt':'+'+g.reward+' Mio')+'</span></div>';}).join('')+'</div>';}
@@ -1348,6 +1363,11 @@ function closeGame(){stopClock();const o=$('gameoverlay');if(o)o.remove();liveG=
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+let _evt={b0:0,b1:0,d:0};
+function evtPick(b){const g=b.dataset.g;_evt[g]=+b.dataset.i;
+ document.querySelectorAll('.evtopt[data-g="'+g+'"]').forEach(x=>x.classList.toggle('on',x===b));}
+async function resolveEvent(){const r=await api('/api/fr/resolve_event?b0='+_evt.b0+'&b1='+_evt.b1+'&d='+_evt.d,'POST');
+ if(r.error){alert(r.error);return;}_evt={b0:0,b1:0,d:0};if(r.view)renderMgr(r.view);}
 async function nextWeek(){const r=await api('/api/fr/next_week','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);}
 /* ---------- Interaktives Tutorial (führt durch die Oberfläche) ---------- */
 const TUT=[
@@ -1669,6 +1689,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return {"result": F.do_training(cfg, st, kind), "view": F.view(st)}
+
+    @app.post("/api/fr/resolve_event")
+    def fr_resolve_event(b0: int = 0, b1: int = 0, d: int = 0):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.resolve_event(cfg, st, b0, b1, d)
 
     @app.post("/api/fr/sign")
     def fr_sign(pid: int):

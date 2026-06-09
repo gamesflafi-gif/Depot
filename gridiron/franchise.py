@@ -935,6 +935,10 @@ def next_week(cfg: Config, state: dict) -> dict:
     state["week_trained"] = False
     state["scout_pts"] = state.get("scout_pts", 0) + 3     # Scouting-Punkte fürs College
     state["teams"][0]["game_bonus"] = 0
+    # Entscheidungs-Event nicht jede Woche (~35 %), nur in der regulären Saison
+    if (state["phase"] == "regular" and not state.get("pending_event")
+            and state["teams"][0].get("roster") and random.random() < 0.35):
+        _gen_event(state, random.Random())
     save(cfg, state)
     return {"ok": True, "view": view(state)}
 
@@ -1025,7 +1029,8 @@ def _side(pos: str) -> str:
 
 
 def _process_events(state: dict, rng: random.Random) -> list[dict]:
-    """Verletzungen heilen + ein zufälliges Event pro Woche (Nutzer-Team)."""
+    """Wöchentlich nur Verletzungen heilen + kleine Flavor-Neuigkeit. Die echten
+    Entscheidungs-Events (Buffs/Debuff) sind davon getrennt und nicht jede Woche."""
     team = state["teams"][0]
     roster = team.get("roster", [])
     if not roster:
@@ -1036,47 +1041,122 @@ def _process_events(state: dict, rng: random.Random) -> list[dict]:
             p["inj"] -= 1
             if p["inj"] == 0:
                 msgs.append({"type": "ok", "text": f"{p['name']} ist wieder fit und einsatzbereit."})
-    # Genau ein Wochen-Event (überwiegend kleine Fan-/Geld-Events).
-    if True:
-        ev = rng.choices(["fans", "sponsor", "merch", "injury", "breakout", "mentor", "slump"],
-                         weights=[24, 18, 14, 16, 12, 9, 7])[0]
-        if ev == "fans":
-            inc = rng.randint(2, 5); state["budget"] += inc
-            msgs.append({"type": "money", "text": f"Fan-Andrang im Stadion: +{inc} Mio Einnahmen."})
-        elif ev == "sponsor":
-            inc = rng.randint(3, 7); state["budget"] += inc
-            msgs.append({"type": "money", "text": f"Sponsoren-Bonus: +{inc} Mio."})
-        elif ev == "merch":
-            inc = rng.randint(1, 4); state["budget"] += inc
-            msgs.append({"type": "money", "text": f"Merchandise-Verkäufe: +{inc} Mio."})
-        elif ev == "injury":
-            healthy = [p for p in roster if p.get("inj", 0) == 0 and p["starter"]] or \
-                      [p for p in roster if p.get("inj", 0) == 0]
-            if healthy:
-                p = rng.choice(healthy)
-                p["inj"] = rng.randint(1, 4)
-                msgs.append({"type": "bad", "text": f"Verletzung: {p['name']} ({p['pos']}) fällt {p['inj']} Woche(n) aus."})
-        elif ev == "breakout":
-            young = [p for p in roster if p["age"] <= 25 and player_ovr(p) < player_pot(p)]
-            if young:
-                p = rng.choice(young)
-                p["pts"] += 1
-                msgs.append({"type": "ok", "text": f"Breakout: {p['name']} macht einen Sprung (+1 Skillpunkt)."})
-        elif ev == "mentor":
-            young = sorted(roster, key=lambda p: p["age"])[:1]
-            if young:
-                p = young[0]
-                under = [k for k in p["attr"] if p["attr"][k] < p["cap"][k]]
-                if under:
-                    p["attr"][rng.choice(under)] += 1
-                    msgs.append({"type": "ok", "text": f"Mentor: ein Veteran pusht {p['name']} (+1 Attribut)."})
-        else:  # slump
-            p = rng.choice(roster)
-            p["exp"] = max(0, p["exp"] - 30)
-            msgs.append({"type": "bad", "text": f"Formtief: {p['name']} verliert etwas Trainingsfortschritt."})
+    if rng.random() < 0.5:                                # kleine Geld-Neuigkeit (Flavor)
+        inc = rng.randint(2, 6); state["budget"] += inc
+        flav = rng.choice(["Fan-Andrang im Stadion", "Sponsoren-Bonus", "Merchandise-Verkäufe", "TV-Einnahmen"])
+        msgs.append({"type": "money", "text": f"{flav}: +{inc} Mio."})
     state["events"] = msgs
     _sync_units(team)
     return msgs
+
+
+# --------------------------------------------------------------------------- #
+# Entscheidungs-Events: 2 Buffs (je 1 von 2) + 1 Debuff (1 von 2), nicht jede Woche
+# --------------------------------------------------------------------------- #
+_BUFFS = [
+    {"label": "Sponsoren-Deal: +9 Mio Budget", "eff": [{"k": "money", "n": 9}]},
+    {"label": "Trainingslager: +260 EXP fürs ganze Team", "eff": [{"k": "exp", "n": 260}]},
+    {"label": "Talent-Camp: +3 Skillpunkte auf Talente", "eff": [{"k": "skillpts", "n": 3}]},
+    {"label": "Reha-Wunder: alle Verletzten sofort fit", "eff": [{"k": "heal"}]},
+    {"label": "Taktik-Coup: Film-Bonus +2 fürs nächste Spiel", "eff": [{"k": "film", "n": 2}]},
+    {"label": "Scouting-Offensive: +6 Scouting-Punkte", "eff": [{"k": "scout", "n": 6}]},
+    {"label": "Star-Förderung: +2 Attribute auf einen Starter", "eff": [{"k": "attr", "n": 2}]},
+    {"label": "Merch-Hit: +5 Mio & +2 Scouting-Punkte", "eff": [{"k": "money", "n": 5}, {"k": "scout", "n": 2}]},
+]
+_DEBUFFS = [
+    {"label": "Verletzung: ein Starter fällt 2 Wochen aus", "eff": [{"k": "injure", "n": 2}]},
+    {"label": "Geldstrafe der Liga: -7 Mio Budget", "eff": [{"k": "money", "n": -7}]},
+    {"label": "Formtief: -1 Team-Bonus im nächsten Spiel", "eff": [{"k": "film", "n": -1}]},
+    {"label": "Trainingsausfall: ein Spieler verliert Fortschritt", "eff": [{"k": "exploss", "n": 130}]},
+    {"label": "Scouting-Budget gekürzt: -4 Scouting-Punkte", "eff": [{"k": "scout", "n": -4}]},
+]
+
+
+def _gen_event(state: dict, rng: random.Random) -> None:
+    """Erzeugt ein wählbares Event: 2 Buff-Paare + 1 Debuff-Paar (je 1 von 2)."""
+    b = rng.sample(_BUFFS, 4)
+    d = rng.sample(_DEBUFFS, 2)
+    state["pending_event"] = {
+        "buffs": [[b[0], b[1]], [b[2], b[3]]],
+        "debuff": [d[0], d[1]],
+        "title": rng.choice(["Saison-Ereignis", "Front-Office-Entscheidung", "Wochen-Ereignis", "Vereinsmeeting"]),
+    }
+
+
+def _event_view(ev: dict | None) -> dict | None:
+    """Nur die Labels fürs Frontend (Effekte bleiben serverseitig)."""
+    if not ev:
+        return None
+    return {"title": ev.get("title", "Ereignis"),
+            "buffs": [[o["label"] for o in pair] for pair in ev["buffs"]],
+            "debuff": [o["label"] for o in ev["debuff"]]}
+
+
+def _apply_eff(state: dict, team: dict, effs: list, rng: random.Random, msgs: list) -> None:
+    roster = team.get("roster", [])
+    for e in effs:
+        k, n = e["k"], e.get("n", 0)
+        if k == "money":
+            state["budget"] = max(0, state["budget"] + n)
+            msgs.append({"type": "money" if n >= 0 else "bad", "text": f"Budget {'+' if n >= 0 else ''}{n} Mio."})
+        elif k == "scout":
+            state["scout_pts"] = max(0, state.get("scout_pts", 0) + n)
+            msgs.append({"type": "ok" if n >= 0 else "bad", "text": f"Scouting-Punkte {'+' if n >= 0 else ''}{n}."})
+        elif k == "exp":
+            for p in roster:
+                _gain_exp(p, n)
+            msgs.append({"type": "ok", "text": f"+{n} EXP fürs Team."})
+        elif k == "skillpts":
+            cand = sorted([p for p in roster if player_ovr(p) < player_pot(p)], key=lambda p: p["age"])[:n] or roster[:n]
+            for p in cand:
+                p["pts"] += 1
+            msgs.append({"type": "ok", "text": f"+1 Skillpunkt für {len(cand)} Talente."})
+        elif k == "attr":
+            starters = [p for p in roster if p["starter"]] or roster
+            if starters:
+                p = max(starters, key=lambda x: player_pot(x) - player_ovr(x))
+                for _ in range(n):
+                    under = [a for a in p["attr"] if p["attr"][a] < p["cap"][a]]
+                    if under:
+                        p["attr"][rng.choice(under)] += 1
+                msgs.append({"type": "ok", "text": f"{p['name']}: +{n} Attribut(e)."})
+        elif k == "heal":
+            h = [p for p in roster if p.get("inj", 0) > 0]
+            for p in h:
+                p["inj"] = 0
+            msgs.append({"type": "ok", "text": f"{len(h)} Spieler sofort geheilt." if h else "Keine Verletzten — Reha ungenutzt."})
+        elif k == "film":
+            team["game_bonus"] = team.get("game_bonus", 0) + n
+            msgs.append({"type": "ok" if n >= 0 else "bad", "text": f"Team-Bonus nächstes Spiel {'+' if n >= 0 else ''}{n}."})
+        elif k == "injure":
+            healthy = [p for p in roster if p.get("inj", 0) == 0 and p["starter"]] or [p for p in roster if p.get("inj", 0) == 0]
+            if healthy:
+                p = rng.choice(healthy)
+                p["inj"] = n
+                msgs.append({"type": "bad", "text": f"{p['name']} ({p['pos']}) fällt {n} Woche(n) aus."})
+        elif k == "exploss":
+            if roster:
+                p = rng.choice(roster)
+                p["exp"] = max(0, p["exp"] - n)
+                msgs.append({"type": "bad", "text": f"{p['name']} verliert Trainingsfortschritt."})
+
+
+def resolve_event(cfg: Config, state: dict, b0: int, b1: int, d: int) -> dict:
+    """Wendet die gewählten Buffs + Debuff an und schließt das Event ab."""
+    ev = state.get("pending_event")
+    if not ev:
+        return {"error": "Kein offenes Event."}
+    team = state["teams"][0]
+    rng = random.Random()
+    msgs: list[dict] = []
+    _apply_eff(state, team, ev["buffs"][0][1 if b0 else 0]["eff"], rng, msgs)
+    _apply_eff(state, team, ev["buffs"][1][1 if b1 else 0]["eff"], rng, msgs)
+    _apply_eff(state, team, ev["debuff"][1 if d else 0]["eff"], rng, msgs)
+    state.pop("pending_event", None)
+    _sync_units(team)
+    state["events"] = msgs + state.get("events", [])
+    save(cfg, state)
+    return {"ok": True, "messages": msgs, "view": view(state)}
 
 
 def standings(state: dict) -> list[dict]:
@@ -1418,6 +1498,7 @@ def view(state: dict) -> dict:
         "is_bye": state["phase"] == "regular" and state["week"] < len(state["schedule"])
         and _user_pair(state) is None,
         "events": state.get("events", []),
+        "pending_event": _event_view(state.get("pending_event")),
         "slots": ROSTER_SLOTS,
         "market_players": [{"id": p["id"], "name": p["name"], "pos": p["pos"],
                             "ovr": player_ovr(p), "pot": player_pot(p), "age": p["age"],
