@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v16-anim-hub"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v17-facilities"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1124,9 +1124,13 @@ async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const 
 function _bsvg(k){
  if(k==='stadium')return '<svg viewBox="0 0 96 60" width="90" height="56"><ellipse cx="48" cy="32" rx="43" ry="25" fill="#22303c"/><ellipse cx="48" cy="32" rx="40" ry="22" fill="#16222b"/><ellipse cx="48" cy="32" rx="30" ry="15" fill="#1d7a48"/><line x1="48" y1="18" x2="48" y2="46" stroke="#cfe" stroke-opacity=".25"/>'+[12,48,84].map(x=>'<rect x="'+(x-1)+'" y="4" width="2" height="6" fill="#3a4750"/><rect x="'+(x-5)+'" y="1" width="10" height="3" rx="1" fill="#cfe3ff" opacity=".85"/>').join('')+'</svg>';
  if(k==='train')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="4" y="8" width="88" height="44" rx="4" fill="#1d7a48"/>'+[20,40,60,76].map(x=>'<line x1="'+x+'" y1="8" x2="'+x+'" y2="52" stroke="#cfe" stroke-opacity=".25"/>').join('')+'<rect x="44" y="6" width="8" height="3" fill="#ffd34d"/><line x1="44" y1="6" x2="44" y2="2" stroke="#ffd34d" stroke-width="2"/><line x1="52" y1="6" x2="52" y2="2" stroke="#ffd34d" stroke-width="2"/><path d="M22 44 l3 6 h-6 Z" fill="#ff8a3a"/><path d="M70 40 l3 6 h-6 Z" fill="#ff8a3a"/></svg>';
+ if(k==='medical')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#1a2530"/><rect x="42" y="18" width="12" height="24" rx="2" fill="#ef5350"/><rect x="36" y="24" width="24" height="12" rx="2" fill="#ef5350"/></svg>';
+ if(k==='athletic')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#16243a"/><rect x="20" y="27" width="56" height="6" rx="3" fill="#cfe3ff"/><rect x="14" y="20" width="9" height="20" rx="2" fill="#cfe3ff"/><rect x="73" y="20" width="9" height="20" rx="2" fill="#cfe3ff"/></svg>';
+ if(k==='scouting')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#15233a"/><circle cx="38" cy="30" r="11" fill="none" stroke="#5fa8ff" stroke-width="4"/><circle cx="58" cy="30" r="11" fill="none" stroke="#5fa8ff" stroke-width="4"/><rect x="46" y="28" width="4" height="5" fill="#5fa8ff"/></svg>';
+ if(k==='youth')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#14301f"/><rect x="46" y="32" width="4" height="16" fill="#7a4a28"/><path d="M48 36 q-14 -2 -16 -16 q14 2 16 16 Z" fill="#19e08f"/><path d="M48 32 q14 -2 16 -18 q-14 2 -16 18 Z" fill="#16c784"/></svg>';
  return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="0" y="40" width="96" height="20" fill="#143d28"/><line x1="30" y1="41" x2="30" y2="14" stroke="#ffd34d" stroke-width="3"/><line x1="66" y1="41" x2="66" y2="14" stroke="#ffd34d" stroke-width="3"/><line x1="30" y1="24" x2="66" y2="24" stroke="#ffd34d" stroke-width="3"/><line x1="48" y1="24" x2="48" y2="41" stroke="#ffd34d" stroke-width="3"/><ellipse cx="48" cy="50" rx="6" ry="3.6" fill="#9a5a1e" stroke="#3a1f08"/></svg>';}
 function secBuild(v){
- const kU=(v.units||[]).find(u=>u.key==='K');
+ const kU=(v.units||[]).find(u=>u.key==='K');const F=v.facilities||{};
  const dots=(lvl,max)=>{let s='<span class="hblv">';for(let i=0;i<max;i++)s+='<i class="'+(i<lvl?'on':'')+'"></i>';return s+'</span>';};
  const bld=(key,name,svgk,lvl,sub,cost,maxed,plus)=>'<div class="hubb"><div class="hbi">'+_bsvg(svgk)+'</div>'+
    '<div class="hbn">'+esc(name)+'</div>'+lvl+'<div class="hbe">'+esc(sub)+'</div>'+
@@ -1137,6 +1141,10 @@ function secBuild(v){
    '<div class="hubgrid">'+
      bld('stadium','Stadion','stadium',dots(v.stadium.level,5),'Einnahmen +'+v.stadium.income+'/Woche',v.stadium.cost,v.stadium.level>=5,'+1')+
      bld('equipment','Trainingsgelände','train',dots(v.equipment.level,5),'+'+v.equipment.exp_week+' Trainings-EXP/Woche',v.equipment.cost,v.equipment.level>=5,'+1')+
+     (F.medical?bld('medical','Medizinzentrum','medical',dots(F.medical.level,5),F.medical.effect,F.medical.cost,F.medical.level>=5,'+1'):'')+
+     (F.athletic?bld('athletic','Athletik-Center','athletic',dots(F.athletic.level,5),F.athletic.effect,F.athletic.cost,F.athletic.level>=5,'+1'):'')+
+     (F.scouting_fac?bld('scouting_fac','Scouting-Akademie','scouting',dots(F.scouting_fac.level,5),F.scouting_fac.effect,F.scouting_fac.cost,F.scouting_fac.level>=5,'+1'):'')+
+     (F.youth?bld('youth','Jugend-Akademie','youth',dots(F.youth.level,5),F.youth.effect,F.youth.cost,F.youth.level>=5,'+1'):'')+
      (kU?bld('K','Kicker-Akademie','kick','<span class="hblvl">'+kU.level+' OVR</span>','Field Goals weiter & Extra-Punkte sicherer',kU.cost,kU.level>=95,'+2'):'')+
    '</div></div>';
  // Trainerstab als Karten mit Stärken/Schwächen + Markt
