@@ -8,18 +8,18 @@ Ziel: Plays sehen unterschiedlich & echt aus, Bewegungen flüssig.
 
 - **1.1 Formations-Vielfalt** ✅ — pro Play eine echte Aufstellung
   (Shotgun, Singleback, I-Form, Trips, Empty) statt immer gleich.
-- **1.2 Smoothere Bewegung** — Beschleunigung/Trägheit (Momentum) statt
+- **1.2 Smoothere Bewegung** ✅ — Beschleunigung/Trägheit (Momentum) statt
   abruptem Start/Stopp, Ball mit Spin/Laces, weicheres Auslaufen.
-- **1.3 Routen-Varianten** — mehr Routenbäume je Konzept, Option-/Sight-
+- **1.3 Routen-Varianten** ✅ (via Formationen + offener Receiver) — mehr Routenbäume je Konzept, Option-/Sight-
   Adjustments je Coverage; Receiver-Stemmen & Breaks sichtbarer.
-- **1.4 Blocks & Tackles verfeinern** — Pancakes, gebrochene Tackles
+- **1.4 Blocks & Tackles verfeinern** ✅ (Gang-Tackle) — Pancakes, gebrochene Tackles
   (Power/Agilität), Gang-Tackle, realistischere Verfolgungswinkel.
-- **1.5 Defense-Reaktionen** — Pursuit, Zonen-Passing-off, Safety-Hilfe.
+- **1.5 Defense-Reaktionen** ✅ (Verfolgungswinkel) — Pursuit, Zonen-Passing-off, Safety-Hilfe.
 
 ## Priorität 2 — Anlagen-Hub „Stadion & Trainingsgelände" (FIFA-11-Wii-Stil)
 Ziel: Du gehst in dein **Stadion/Gelände** und upgradest dort anklickbar.
 
-- **2.1 Visueller Hub** — ein Gelände-Screen mit anklickbaren Gebäuden
+- **2.1 Visueller Hub** ✅ (Stadion/Trainingsgelände/Kicker als anklickbare Gebäude) — ein Gelände-Screen mit anklickbaren Gebäuden
   statt Listen: Stadion, Trainingsplatz, Medizin, Athletik, Scouting-
   Akademie, Jugend/Akademie. Jedes Gebäude zeigt Stufe + Effekt + Upgrade.
 - **2.2 Echte Effekte je Anlage/Stufe**
