@@ -688,6 +688,8 @@ def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
         return {"error": "Saison beendet — starte eine neue Saison."}
     if state.get("week_done"):
         return {"error": "Diese Woche ist bereits ausgewertet — bitte zur nächsten Woche gehen."}
+    if not state.get("week_trained"):
+        return {"error": "Erst das Training dieser Woche absolvieren."}
     rng = random.Random()
     teams = state["teams"]
 
@@ -1266,6 +1268,8 @@ def _user_pair(state: dict):
 def start_game(cfg: Config, state: dict) -> dict:
     if state.get("active_game"):
         return {"ok": True, "game": _game_view(state)}
+    if not state.get("week_trained"):
+        return {"error": "Erst das Training dieser Woche absolvieren."}
     pair = _user_pair(state)
     if not pair:
         return {"error": "Diese Woche kein Nutzer-Spiel."}
