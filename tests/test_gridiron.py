@@ -280,6 +280,11 @@ def test_franchise_detailed_game(tmp_path):
     for p in g["plays"]:
         assert 0 <= p["x"] <= 100 and p["q"] in (1, 2, 3, 4)
     assert F.view(st)["has_last_game"]
+    # Feldrichtung: jedes Team läuft in die GEGNERISCHE Endzone (Heim -> links x=0,
+    # Gast -> rechts x=100), nicht in die eigene.
+    for p in g["plays"]:
+        if "TOUCHDOWN" in p["desc"]:
+            assert p["x"] == (0 if p["team"] == g["home"] else 100)
     # Endpoint-Form
     from fastapi.testclient import TestClient
     from gridiron.web import create_app
