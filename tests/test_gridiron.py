@@ -277,6 +277,18 @@ def test_simulator_outcomes_and_sampler():
     assert {"complete", "incomplete"} & kinds
 
 
+def test_franchise_box_scores(tmp_path):
+    """Simuliertes Nutzer-Spiel erzeugt Box-Scores und vergibt Leistungs-EXP."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=21)
+    g = F.sim_week(cfg, st)["user_game"]
+    assert g["box"] and len(g["box"]) >= 4
+    assert any(s["pass_yds"] or s["rush_yds"] or s["rec_yds"] for s in g["box"])   # Offense
+    assert any(s["tkl"] or s["sack"] or s["intc"] for s in g["box"])               # Defense
+    assert any(p["exp"] > 0 or p["pts"] > 0 for p in st["teams"][0]["roster"])     # Leistungs-EXP
+
+
 def test_franchise_events_injuries(tmp_path):
     """Verletzungen senken das Rating; Wochen erzeugen Events."""
     from gridiron import franchise as F

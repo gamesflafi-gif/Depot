@@ -712,6 +712,15 @@ function cmtRow(p){const big=/TOUCHDOWN|Field Goal gut|Interception|Fumble/.test
  const c=document.createElement('div');c.className='cmt'+(big?' big':'');
  c.innerHTML='<span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span>';return c;}
 function bcBallLeft(x){return Math.max(1,Math.min(99,x))+'%';}
+function statLine(s){const o=[];
+ if(s.pass_yds||s.pass_td)o.push(s.pass_yds+' Pass-Yds'+(s.pass_td?', '+s.pass_td+' TD':''));
+ if(s.rush_att)o.push(s.rush_att+' Läufe, '+s.rush_yds+' Yds');
+ if(s.rec)o.push(s.rec+' Fänge, '+s.rec_yds+' Yds');
+ const d=[];if(s.tkl)d.push(s.tkl+' Tkl');if(s.sack)d.push(s.sack+' Sack');if(s.intc)d.push(s.intc+' INT');
+ if(d.length)o.push(d.join(', '));return o.join(' · ');}
+function boxSection(g){if(!g.box||!g.box.length)return '';
+ return '<div class="sec">Statistik · dein Team</div><div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">'+
+   g.box.map(s=>'<div class="cmt"><span class="t"><b>'+esc(s.name)+'</b> <span class="mut">'+s.pos+'</span></span><span class="mut" style="text-align:right">'+esc(statLine(s))+'</span></div>').join('')+'</div>';}
 function openBroadcast(g){
  closeBroadcast(); bcGame=g;
  let turf='';[10,20,30,40,50,60,70,80,90].forEach(p=>{turf+='<div class="yl" style="left:'+p+'%"></div>';
@@ -731,6 +740,7 @@ function openBroadcast(g){
    '<div class="turf" id="bc_turf">'+turf+'<div class="ball" id="bc_ball" style="left:50%"></div></div>'+
    '<div class="ez" style="background:'+esc(HC(g))+'">'+esc(HB(g))+'</div></div>'+
   '<div style="margin-top:10px"><button class="ghost" onclick="skipBroadcast()">Überspringen ▸</button></div>'+
+  boxSection(g)+
   '<div class="commentary" id="bc_feed"></div></div>';
  document.body.appendChild(o);
  o.addEventListener('click',e=>{if(e.target===o)closeBroadcast();});

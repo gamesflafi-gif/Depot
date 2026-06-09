@@ -425,47 +425,112 @@ _PASS_DESC = ["Pass über die Mitte", "Pass nach außen", "tiefer Wurf",
 _RUN_DESC = ["Lauf innen", "Lauf nach außen", "Draw", "Cutback", "Power-Lauf"]
 
 
+def _avail(roster: list[dict], positions) -> list[dict]:
+    pool = [p for p in roster if p["pos"] in positions and p["starter"] and p.get("inj", 0) == 0]
+    return pool or [p for p in roster if p["pos"] in positions and p.get("inj", 0) == 0]
+
+
+def _pick(pool: list[dict], rng: random.Random, wf) -> dict | None:
+    if not pool:
+        return None
+    return rng.choices(pool, weights=[max(1, wf(p)) for p in pool])[0]
+
+
+def _stat(box: dict, p: dict) -> dict:
+    return box.setdefault(p["id"], {"id": p["id"], "name": p["name"], "pos": p["pos"],
+                                    "pass_yds": 0, "pass_td": 0, "rec": 0, "rec_yds": 0,
+                                    "rush_att": 0, "rush_yds": 0, "td": 0,
+                                    "tkl": 0, "sack": 0, "intc": 0})
+
+
+def _attr_off(box: dict, roster: list[dict], o: dict, yards: int, td: bool, rng: random.Random) -> None:
+    if o["pass"]:
+        qb = (_avail(roster, ("QB",)) or [None])[0]
+        if o["kind"] == "complete":
+            tgt = _pick(_avail(roster, ("WR", "RB")), rng,
+                        lambda p: player_ovr(p) * (1.5 if p["pos"] == "WR" else 0.6))
+            if qb:
+                _stat(box, qb)["pass_yds"] += max(0, yards)
+            if tgt:
+                s = _stat(box, tgt); s["rec"] += 1; s["rec_yds"] += max(0, yards)
+            if td:
+                if qb:
+                    _stat(box, qb)["pass_td"] += 1
+                if tgt:
+                    _stat(box, tgt)["td"] += 1
+    else:
+        rb = _pick(_avail(roster, ("RB",)), rng, lambda p: player_ovr(p))
+        if rb:
+            s = _stat(box, rb); s["rush_att"] += 1; s["rush_yds"] += yards
+            if td:
+                s["td"] += 1
+
+
+def _attr_def(box: dict, roster: list[dict], o: dict, rng: random.Random) -> None:
+    t = _pick(_avail(roster, ("DL", "LB", "DB")), rng, lambda p: player_ovr(p))
+    if t:
+        _stat(box, t)["tkl"] += 1
+    if o["kind"] == "sack":
+        s = _pick(_avail(roster, ("DL", "LB")), rng, lambda p: player_ovr(p))
+        if s:
+            _stat(box, s)["sack"] += 1
+    if o["turnover"] and o["pass"]:
+        d = _pick(_avail(roster, ("DB",)), rng, lambda p: player_ovr(p))
+        if d:
+            _stat(box, d)["intc"] += 1
+
+
+def _box_exp(s: dict) -> int:
+    return (s["pass_yds"] // 20 + s["pass_td"] * 4 + (s["rush_yds"] + s["rec_yds"]) // 12
+            + s["rec"] + s["rush_att"] // 3 + s["td"] * 4 + s["tkl"] + s["sack"] * 5 + s["intc"] * 8)
+
+
 def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
-    """Spiel als Play-by-Play (für die visuelle Übertragung). Score bleibt an
-    Team-Stärke + Matchup gekoppelt, damit es zur Liga passt."""
-    score = [0, 0]                                       # [home, away]
+    """Spiel als Play-by-Play auf Spielerebene. Erzeugt für das Nutzer-Team einen
+    Box-Score und vergibt danach leistungsbasierte EXP."""
+    score = [0, 0]
     plays: list[dict] = []
     teams = [home, away]
+    user_side = 0 if home.get("user") else (1 if away.get("user") else None)
+    box: dict = {}
     pos = 0 if rng.random() < 0.5 else 1
     for drive in range(22):
         off, deff = teams[pos], teams[1 - pos]
         attack_right = (pos == 0)
-        absx = 25.0 if attack_right else 75.0           # absolute Feldposition 0..100
-        ytz, down, dist = 75.0, 1, 10                   # bis Endzone, Down, Distanz
+        absx = 25.0 if attack_right else 75.0
+        ytz, down, dist = 75.0, 1, 10
         q = min(4, drive // 6 + 1)
-        mean = max(2.0, min(8.5, 5.0 + 0.11 * (offense(off) - defense(deff))
-                            + 1.7 * _team_epa(off, deff)))
-        pass_bias = _PASS_BIAS.get(off.get("off_scheme", "Ausgeglichen"), 0.56)
+        oc_pool = OFF_SCHEMES.get(off.get("off_scheme", "Ausgeglichen"), list(PASS_CONCEPTS))
+        dc_pool = DEF_SCHEMES.get(deff.get("def_scheme", "Ausgeglichen"), list(COVERAGES))
+        edge = 0.10 * (offense(off) - defense(deff))     # Stärke-Bias auf die Yards
         for _ in range(14):
-            is_pass = rng.random() < pass_bias
-            # Turnover?
-            if rng.random() < 0.028:
-                desc = "Interception!" if is_pass else "Fumble, Ball verloren!"
-                plays.append(_pl(q, off["name"], desc, absx, score, False))
+            concept, coverage = rng.choice(oc_pool), rng.choice(dc_pool)
+            o = play_outcome(concept, coverage, {"yardline_100": ytz, "down": down, "ydstogo": dist}, _RNG)
+            yards = max(-12, min(round(o["yards"] + edge), int(ytz)))
+            td = (ytz - yards <= 0) and not o["turnover"]
+            if user_side is not None:
+                if pos == user_side and off.get("roster"):
+                    _attr_off(box, off["roster"], o, yards, td, rng)
+                elif (1 - pos) == user_side and deff.get("roster"):
+                    _attr_def(box, deff["roster"], o, rng)
+            absx = min(100, max(0, absx + (yards if attack_right else -yards)))
+            if o["turnover"]:
+                plays.append(_pl(q, off["name"], "Interception!" if o["pass"] else "Fumble, Ball verloren!", absx, score, False))
                 break
-            gain = round(rng.gauss(mean if not is_pass else mean + 0.6, 6))
-            ytz -= gain
-            absx = min(100, max(0, absx + (gain if attack_right else -gain)))
-            if ytz <= 0:                                # Touchdown
+            if td:
                 score[pos] += 7
-                plays.append(_pl(q, off["name"], "TOUCHDOWN! " + off["name"],
-                                 100 if attack_right else 0, score, True))
+                plays.append(_pl(q, off["name"], "TOUCHDOWN! " + off["name"], 100 if attack_right else 0, score, True))
                 break
-            dist -= gain
-            label = (rng.choice(_PASS_DESC) if is_pass else rng.choice(_RUN_DESC))
-            label += f", {'+' if gain >= 0 else ''}{gain}"
+            ytz -= yards
+            dist -= yards
+            label = _play_label(concept, o, yards)
             if dist <= 0:
                 down, dist = 1, 10
                 label += " — First Down"
             else:
                 down += 1
             if down > 4:
-                if ytz <= 22 and rng.random() < 0.82:   # Field-Goal-Versuch
+                if ytz <= 22 and rng.random() < 0.82:
                     score[pos] += 3
                     plays.append(_pl(q, off["name"], "Field Goal gut (3)", absx, score, True))
                 else:
@@ -475,14 +540,20 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
         pos ^= 1
     sh, sa = score[0], score[1]
     while sh == sa:
-        if rng.random() < 0.5:
-            sh += 3
-        else:
-            sa += 3
+        sh += 3 if rng.random() < 0.5 else 0
+        sa += 3 if sh == sa else 0
+    # Leistungs-EXP auf das Nutzer-Team
+    if user_side is not None:
+        rid = {p["id"]: p for p in teams[user_side].get("roster", [])}
+        for pid, s in box.items():
+            if pid in rid:
+                _gain_exp(rid[pid], _box_exp(s))
+    box_lines = sorted(box.values(), key=_box_exp, reverse=True)
     return {"home": home["name"], "away": away["name"], "hs": sh, "as": sa,
             "winner": home["name"] if sh > sa else away["name"], "plays": plays,
             "habbr": home.get("abbr", "HOM"), "aabbr": away.get("abbr", "AWY"),
-            "hcolor": home.get("color", "#16c784"), "acolor": away.get("color", "#ef5350")}
+            "hcolor": home.get("color", "#16c784"), "acolor": away.get("color", "#ef5350"),
+            "box": [b for b in box_lines if _box_exp(b) > 0][:12]}
 
 
 def _pl(q: int, team: str, desc: str, absx: float, score: list[int], scored: bool) -> dict:
