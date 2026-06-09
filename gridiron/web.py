@@ -165,6 +165,13 @@ _STYLE2 = """
  .optgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:6px 0 4px}
  .optbtn{padding:11px 13px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:9px;cursor:pointer;text-align:left;font-weight:700;transition:border-color .12s}
  .optbtn:hover{border-color:var(--acc)} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
+ /* Manager Sub-Navigation & Kader */
+ .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
+ .subnav .s{padding:9px 15px;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--mut)}
+ .subnav .s:hover{color:var(--fg)} .subnav .s.on{background:var(--accsoft);color:var(--acc);border-color:#1c5a40}
+ .ovrbar{height:5px;background:var(--bg);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:5px;width:170px;max-width:42vw}
+ .ovrfill{height:100%;background:var(--acc)}
+ .ovrnum{font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -530,19 +537,27 @@ async function newTeam(){
  renderMgr(await api('/api/fr/new?'+qs,'POST'));
 }
 function pill(t){return '<span class="pill">'+esc(t)+'</span>';}
+let mgrTab='dash',lastView=null;
+function mgrGo(t){mgrTab=t;renderMgr(lastView);}
 function renderMgr(v){
+ lastView=v;
  const phaseLabel={regular:'Reguläre Saison',playoffs:(v.playoff?v.playoff.round:'Playoffs'),done:'Saison beendet'}[v.phase];
  let h='<div class="card"><div class="teamhdr">'+
    '<div class="crest" style="background:'+esc(v.color||'#16c784')+'">'+esc(v.abbr||'')+'</div>'+
    '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
-   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+'</div></div>'+
+   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('TP '+v.tp)+'</div></div>'+
    '<div class="grid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
    kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>';
  if(v.champion)h+='<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>';
  h+='</div>';
-
- // Nächstes Spiel / Aktionen
- h+='<div class="card"><div class="sec" style="margin-top:0">Spielbetrieb</div>';
+ // Unter-Navigation
+ const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['build','Verbesserungen']];
+ h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+t[1]+'</div>').join('')+'</div>';
+ h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):secDash(v));
+ $('mgr_out').innerHTML=h;
+}
+function secDash(v){
+ let h='<div class="card"><div class="sec" style="margin-top:0">Spielbetrieb</div>';
  if(v.phase==='regular'&&v.next){h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
    'Nächstes Spiel: <b>'+(v.next.home?'vs':'@')+' '+esc(v.next.name)+'</b> <span class="mut">OVR '+v.next.ovr+' · Off: '+esc(v.next.off_scheme)+' · Def: '+esc(v.next.def_scheme)+'</span></span></div>';}
  if(v.phase==='playoffs'&&v.playoff){h+='<div class="reco"><span><b>'+esc(v.playoff.round)+'</b> — '+
@@ -555,38 +570,51 @@ function renderMgr(v){
  h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
-
- // Team-Aufbau
- const upRow=(key,label,sub,level,cost,maxed)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
-   '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>+'+(key==='stadium'?'1':'2')+' ('+cost+' Mio)</button></div>';
- h+='<div class="grid" style="grid-template-columns:1fr 1fr">';
- h+='<div class="card"><div class="sec" style="margin-top:0">Kader (Budget: '+v.budget+' Mio)</div>';
- v.units.forEach(u=>{h+=upRow(u.key,u.label,u.side,u.level,u.cost,u.level>=95);});
- h+='</div>';
- h+='<div class="card"><div class="sec" style="margin-top:0">Trainerstab</div>';
- v.staff.forEach(s=>{h+=upRow(s.key,s.label,'',s.level,s.cost,s.level>=95);});
- h+='<div class="note">OC hebt die Offense, DC die Defense, Head Coach beides.</div></div>';
- h+='</div>';
- // Anlagen
- h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen</div>'+
-   upRow('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Woche',v.stadium.level,v.stadium.cost,v.stadium.level>=5)+'</div>';
- // Team-Schema
  const offk=Object.keys(v.off_schemes),defk=Object.keys(v.def_schemes);
  h+='<div class="card"><div class="sec" style="margin-top:0">Team-Schema</div><div class="controls">'+
    '<div><label>Offense-Schema</label><select id="sc_off">'+offk.map(k=>'<option'+(k===v.scheme.off?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
    '<div><label>Defense-Schema</label><select id="sc_def">'+defk.map(k=>'<option'+(k===v.scheme.def?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
    '<button onclick="setScheme()">Übernehmen</button></div>'+
-   '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+
-   '<br>Dein Schema wirkt über das ganze Spiel und trifft auf das Schema des Gegners.</div></div>';
-
- // Tabelle
+   '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+'</div></div>';
  h+='<div class="card scroll"><div class="sec" style="margin-top:0">Tabelle</div><table class="tbl"><tr>'+
    '<th class="cn">#</th><th class="cn">Team</th><th>S</th><th>N</th><th>Diff</th><th>OVR</th></tr>';
  v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn"><span class="cdot" style="background:'+esc(t.color||'#16c784')+'"></span>'+esc(t.name)+
    '</td><td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.ovr+'</td></tr>';});
- h+='</table></div>';
- $('mgr_out').innerHTML=h;
+ return h+'</table></div>';
 }
+function secKader(v){
+ let h='<div class="card"><div class="sec" style="margin-top:0">Trainingszentrum</div>'+
+   '<div class="grid">'+kpi('Trainingspunkte',v.tp)+kpi('Equipment','St. '+v.equipment.level)+kpi('TP / Woche','+'+v.equipment.tp_week)+kpi('Kadergröße',v.roster.length)+'</div>'+
+   '<div class="note">Trainiere Spieler, um ihr OVR Richtung Potenzial zu steigern. Besseres Trainings-Equipment (Bereich „Verbesserungen") bringt mehr Trainingspunkte pro Woche.</div></div>';
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+   h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
+   grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos);if(!ps.length)return;
+     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 2px"><span class="mut" style="font-weight:700;letter-spacing:.04em">'+pos+'</span>'+
+        '<button class="ghost" data-g="'+pos+'" onclick="trainGroup(this.dataset.g)">Schwächsten trainieren</button></div>';
+     ps.forEach(p=>{const bar=Math.round(p.ovr/p.pot*100);
+       h+='<div class="reco"><span>'+(p.starter?'<b>'+esc(p.name)+'</b> <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':esc(p.name))+
+        ' <span class="mut">Alter '+p.age+'</span><div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span>'+
+        '<span style="display:flex;align-items:center;gap:10px"><span class="ovrnum">'+p.ovr+'<span class="mut" style="font-size:11px"> / '+p.pot+'</span></span>'+
+        '<button data-i="'+p.id+'" onclick="trainP(this.dataset.i)" '+((v.tp<p.cost||p.maxed)?'disabled':'')+'>'+(p.maxed?'max':'+1 ('+p.cost+' TP)')+'</button></span></div>';});
+   });
+   h+='</div>';});
+ return h;
+}
+function secBuild(v){
+ const up=(key,label,sub,level,cost,maxed,plus)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
+   '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+plus+' ('+cost+' Mio)</button></div>';
+ let h='<div class="grid" style="grid-template-columns:1fr 1fr">';
+ h+='<div class="card"><div class="sec" style="margin-top:0">Trainerstab</div>'+
+   v.staff.map(s=>up(s.key,s.label,'',s.level,s.cost,s.level>=95,'+2')).join('')+
+   '<div class="note">OC hebt die Offense, DC die Defense, Head Coach beides.</div></div>';
+ h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen</div>'+
+   up('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Wo',v.stadium.level,v.stadium.cost,v.stadium.level>=5,'+1')+
+   up('equipment','Trainings-Equipment','+'+v.equipment.tp_week+' TP/Wo',v.equipment.level,v.equipment.cost,v.equipment.level>=5,'+1')+
+   '<div class="note">Stadion bringt mehr Wocheneinnahmen, Equipment mehr Trainingspunkte.</div></div>';
+ return h+'</div>';
+}
+async function trainP(id){const r=await api('/api/fr/train?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function trainGroup(g){const r=await api('/api/fr/train_unit?group='+g,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 function renderResult(res,me){
  if(!res||!res.games)return '';
  let h='<div style="margin-top:12px"><div class="sec">Ergebnisse '+(typeof res.week==='number'?'Woche '+res.week:esc(res.week))+'</div>';
@@ -894,6 +922,22 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             return err
         res = F.upgrade_unit(cfg, st, unit)
         return {"result": res, "view": F.view(st)}
+
+    @app.post("/api/fr/train")
+    def fr_train(pid: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.train_player(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/train_unit")
+    def fr_train_unit(group: str):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.train_unit(cfg, st, group), "view": F.view(st)}
 
     @app.post("/api/fr/scheme")
     def fr_scheme(off: str = "", deff: str = ""):
