@@ -51,9 +51,9 @@ _STYLE = """
    box-shadow:0 1px 2px rgba(0,0,0,.25)}
  .big{font-size:25px;font-weight:800;letter-spacing:-.01em}
  .row{display:flex;gap:24px;flex-wrap:wrap}
- .kpi{flex:1;min-width:96px;background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
- .kpi .l{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
- .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px}
+ .kpi{flex:1;min-width:88px;background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:7px 11px}
+ .kpi .l{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+ .kpi .v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
  .sec{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--fg);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 11px;font-weight:800}
  .sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--acc);flex:none}
  /* Positions-Farben & OVR-Tiers (Game-Look) */
@@ -137,6 +137,17 @@ _STYLE2 = """
    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
  .reco>span:first-child{min-width:0}
  .reco b{font-weight:700} .reco.win{border-color:#1c5a40} .reco.loss{border-color:#5a2a20}
+ /* College-Scouting: Punkte-Badge, Scouting-Pips, kompakte Prospect-Karten */
+ .schead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+ .scoutpts{display:flex;flex-direction:column;align-items:center;background:var(--accsoft);border:1px solid var(--acc);border-radius:10px;padding:5px 14px;min-width:66px;flex:none}
+ .scoutpts .v{font-size:23px;font-weight:800;color:var(--acc);line-height:1;font-variant-numeric:tabular-nums}
+ .scoutpts .l{font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:700;margin-top:2px}
+ .sdots{display:inline-flex;gap:4px;align-items:center;vertical-align:middle}
+ .sdots i{width:8px;height:8px;border-radius:50%;background:transparent;border:1.5px solid var(--mut);box-sizing:border-box}
+ .sdots i.on{background:var(--acc);border-color:var(--acc)}
+ .prospect{padding:10px 12px} .prospect .nm{font-weight:700;font-size:14px} .prospect .sub{display:block;font-size:11.5px;margin:2px 0 4px}
+ .prospect .act{display:flex;flex-direction:column;gap:5px;flex:none}
+ .prospect .act button{min-width:108px;padding:7px 10px;font-size:12.5px}
  .reco.mini{padding:8px 12px;font-size:13px;margin:5px 0}
  .reco.champ{border-color:#5a4f20;background:#23200f}
  .tag{display:inline-block;background:var(--warn);color:#1a1400;font-weight:800;font-size:11px;
@@ -452,7 +463,7 @@ function ovrTier(o){return o>=88?'elite':o>=80?'good':o>=72?'ok':o>=62?'avg':'lo
 function ovrBadge(o){return '<span class="ovrb ovr-'+ovrTier(o)+'">'+o+'</span>';}
 function devBadge(dev,label){if(!dev||dev==='normal')return '';const c=dev==='superstar'?'#ffd34d':'#5fa8ff';
  return '<span style="border:1px solid '+c+';color:'+c+';border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800;letter-spacing:.3px">'+esc(label||dev)+'</span>';}
-function scoutDots(sc,mx){let s='';for(let i=0;i<mx;i++)s+=(i<sc?'●':'○');return s;}
+function scoutDots(sc,mx){let s='<span class="sdots">';for(let i=0;i<mx;i++)s+='<i class="'+(i<sc?'on':'')+'"></i>';return s+'</span>';}
 async function runSim(){
  const c=$('sim_c').value,cov=$('sim_cov').value;
  const qs='concept='+encodeURIComponent(c)+'&coverage='+encodeURIComponent(cov)+'&'+simSit('sim_');
@@ -879,8 +890,9 @@ function secTransfer(v){
  const cnt={};v.roster.forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);
  // --- College-Scouting & Draft (Kopf-Feature) ---
  const sp=v.scout_pts||0;
- let h='<div class="card"><div class="sec" style="margin-top:0">College-Scouting — Draft</div>'+
-   '<div class="note">Scouting-Punkte: <b>'+sp+'</b> · jede Woche +3. Scoute Talente, um Können, Potenzial &amp; Entwicklungs-Trait aufzudecken — oder draften und auf die Anlage wetten (Boom oder Bust). Budget: '+v.budget+' Mio.</div></div>';
+ let h='<div class="card"><div class="schead"><div class="sec" style="margin:0">College-Scouting — Draft</div>'+
+   '<div class="scoutpts"><span class="v">'+sp+'</span><span class="l">Punkte</span></div></div>'+
+   '<div class="note">Scoute Talente (1 Punkt je Stufe), um Werte, Potenzial &amp; Entwicklungs-Trait aufzudecken — oder direkt draften und auf die Anlage wetten. Jede Woche +3 Punkte.</div></div>';
  const pros=v.prospects||[];
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    const ps=pros.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
@@ -889,12 +901,12 @@ function secTransfer(v){
      const ovrTxt=(p.ovr!=null)?('OVR '+p.ovr+' · Pot '+p.pot):('OVR '+p.ovr_lo+'–'+p.ovr_hi);
      const dev=(p.ovr!=null)?(' '+devBadge(p.dev,p.dev_label)):'';
      const extra=(p.grade&&p.grade!=='?'?' · '+esc(p.grade):'')+(p.strength?' · '+esc(p.strength):'');
-     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'+posBadge(p.pos)+
-       '<span style="min-width:0"><b>'+esc(p.name)+'</b>'+dev+
-       '<span class="mut" style="display:block;font-size:12px">'+ovrTxt+' · Alter '+p.age+' · '+esc(p.round)+extra+'</span>'+
-       '<span class="mut" style="font-size:11px;letter-spacing:1px">Scouting '+scoutDots(p.scout,p.scout_max)+'</span></span></span>'+
-       '<span style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'+
-       '<button class="ghost" data-i="'+p.id+'" onclick="scoutP(this.dataset.i)" '+((sp<1||done)?'disabled':'')+'>'+(done?'Komplett':'Scouten')+'</button>'+
+     h+='<div class="reco prospect"><span style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'+posBadge(p.pos)+
+       '<span style="min-width:0"><span class="nm">'+esc(p.name)+'</span>'+dev+
+       '<span class="mut sub">'+ovrTxt+' · Alter '+p.age+' · '+esc(p.round)+extra+'</span>'+
+       scoutDots(p.scout,p.scout_max)+'</span></span>'+
+       '<span class="act">'+
+       '<button class="ghost" data-i="'+p.id+'" onclick="scoutP(this.dataset.i)" '+((sp<1||done)?'disabled':'')+'>'+(done?'✓ Komplett':'Scouten (1)')+'</button>'+
        '<button data-i="'+p.id+'" onclick="draftP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Draften ('+p.cost+')')+'</button>'+
        '</span></div>';});
    h+='</div>';});
