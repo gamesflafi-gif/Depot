@@ -79,6 +79,18 @@ ATTR_LABELS = {"ACC": "Genauigkeit", "ARM": "Wurfkraft", "AWR": "Übersicht", "M
 POS_LABELS = {"QB": "Quarterback", "RB": "Running Back", "WR": "Receiver", "OL": "O-Line",
               "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary"}
 
+# Entwicklungs-Trait (Madden-Stil): wie schnell ein Spieler EXP in Können umsetzt.
+DEV_TRAITS = {"normal": 1.0, "star": 1.4, "superstar": 1.9}
+DEV_LABELS = {"normal": "Normal", "star": "Star", "superstar": "Superstar"}
+
+
+def _gen_dev(rng: random.Random, prospect: bool = False) -> str:
+    """Würfelt einen Entwicklungs-Trait. Prospects haben mehr Boom-Potenzial."""
+    r = rng.random()
+    if prospect:
+        return "superstar" if r < 0.09 else "star" if r < 0.32 else "normal"
+    return "superstar" if r < 0.04 else "star" if r < 0.18 else "normal"
+
 _FIRST = ["Marcus", "Tyler", "Jalen", "Deon", "Chris", "Andre", "Malik", "Cody",
           "Jordan", "Xavier", "Trey", "Devin", "Isaiah", "Brandon", "Kyle", "Drew",
           "Cam", "Aaron", "Josh", "Mason", "Elias", "Noah", "Leon", "Finn", "Theo",
@@ -138,6 +150,7 @@ def _player_view(p: dict) -> dict:
     return {"id": p["id"], "name": p["name"], "pos": p["pos"], "age": p["age"],
             "starter": p["starter"], "ovr": player_ovr(p), "pot": player_pot(p),
             "exp": p.get("exp", 0), "pts": p.get("pts", 0), "inj": p.get("inj", 0),
+            "dev": p.get("dev", "normal"), "dev_label": DEV_LABELS.get(p.get("dev", "normal"), "Normal"),
             "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
             "attrs": [{"key": k, "label": ATTR_LABELS[k], "val": p["attr"][k], "cap": p["cap"][k]}
                       for k in POS_ATTRS[p["pos"]]],
@@ -167,7 +180,7 @@ def _gen_player(pid: int, pos: str, base: int, rng: random.Random,
         cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
     return {"id": pid, "name": _unique_name(rng, used), "pos": pos, "age": age, "starter": starter,
             "attr": attr, "cap": cap, "exp": 0, "pts": 0, "inj": 0,
-            "season": _blank_stats(), "career": _blank_stats()}
+            "dev": _gen_dev(rng), "season": _blank_stats(), "career": _blank_stats()}
 
 
 def _gen_roster(base: int, rng: random.Random) -> list[dict]:
@@ -198,6 +211,114 @@ def _draft_class(state: dict, rng: random.Random, n: int = 16) -> list[dict]:
     return out
 
 
+# --------------------------------------------------------------------------- #
+# College-Scouting & Draft
+# --------------------------------------------------------------------------- #
+SCOUT_MAX = 3                          # volle Aufklärung nach 3 Scouting-Stufen
+_SCOUT_HALF = {0: 9, 1: 5, 2: 2, 3: 0}  # Unsicherheits-Halbweite der OVR-Spanne je Stufe
+
+
+def _gen_prospects(state: dict, rng: random.Random, n: int = 12) -> list[dict]:
+    """College-Prospects: junge Talente mit verstecktem Können & Boom/Bust-Risiko."""
+    out, used = [], set()
+    seq = state.get("pid_seq", 10000)
+    for _ in range(n):
+        pos = rng.choice(list(ROSTER_SLOTS))
+        base = rng.randint(50, 66)
+        p = _gen_player(seq, pos, base, rng, age=rng.randint(20, 23), used=used)
+        seq += 1
+        for k in p["cap"]:                               # College-Talent: deutliches Ceiling
+            p["cap"][k] = min(99, p["cap"][k] + rng.randint(4, 14))
+        p["dev"] = _gen_dev(rng, prospect=True)
+        p["scout"] = 0
+        p["_bias"] = rng.randint(-4, 4)                  # Scouting-Konsens kann danebenliegen
+        out.append(p)
+    state["pid_seq"] = seq
+    return out
+
+
+def _proj_round(p: dict) -> str:
+    """Öffentlicher Scouting-Konsens (kann durch _bias daneben liegen = Boom/Bust)."""
+    est = player_pot(p) + p.get("_bias", 0)
+    return "1. Runde" if est >= 82 else "2.–3. Runde" if est >= 74 \
+        else "4.–5. Runde" if est >= 66 else "Spätrunde"
+
+
+def _grade_word(ovr: int) -> str:
+    return "Star-Anlage" if ovr >= 80 else "Sofort-Starter" if ovr >= 72 \
+        else "Rotationsspieler" if ovr >= 64 else "Projekt"
+
+
+def prospect_cost(p: dict) -> int:
+    return {"1. Runde": 26, "2.–3. Runde": 17, "4.–5. Runde": 10}.get(_proj_round(p), 6)
+
+
+def prospect_view(p: dict) -> dict:
+    """Zeigt nur, was bereits gescoutet wurde. Volle Werte erst ab Stufe 3."""
+    sc = p.get("scout", 0)
+    ovr, pot = player_ovr(p), player_pot(p)
+    half = _SCOUT_HALF.get(sc, 9)
+    lo = max(40, ovr + p.get("_bias", 0) - half)
+    hi = min(99, ovr + p.get("_bias", 0) + half)
+    full = sc >= SCOUT_MAX
+    out = {
+        "id": p["id"], "pos": p["pos"], "age": p["age"], "scout": sc, "scout_max": SCOUT_MAX,
+        "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
+        "name": p["name"] if sc >= 1 else f"Prospect #{p['id'] % 1000:03d}",
+        "round": _proj_round(p), "cost": prospect_cost(p),
+        "ovr_lo": lo, "ovr_hi": hi,
+        "ovr": ovr if full else None,
+        "grade": _grade_word(ovr) if sc >= 2 else "?",
+    }
+    if sc >= 2:
+        topk = max(p["attr"], key=lambda k: p["attr"][k])
+        out["strength"] = ATTR_LABELS[topk]
+    if full:
+        out["pot"] = pot
+        out["dev"] = p.get("dev", "normal")
+        out["dev_label"] = DEV_LABELS.get(p.get("dev", "normal"), "Normal")
+        out["attrs"] = [{"key": k, "label": ATTR_LABELS[k], "val": p["attr"][k], "cap": p["cap"][k]}
+                        for k in POS_ATTRS[p["pos"]]]
+    return out
+
+
+def scout_prospect(cfg: Config, state: dict, pid: int) -> dict:
+    p = next((x for x in state.get("prospects", []) if x["id"] == pid), None)
+    if not p:
+        return {"error": "Prospect nicht gefunden."}
+    if p.get("scout", 0) >= SCOUT_MAX:
+        return {"error": "Bereits vollständig gescoutet."}
+    if state.get("scout_pts", 0) < 1:
+        return {"error": "Keine Scouting-Punkte übrig — nächste Woche gibt es neue."}
+    state["scout_pts"] -= 1
+    p["scout"] = p.get("scout", 0) + 1
+    save(cfg, state)
+    return {"ok": True, "scout": p["scout"]}
+
+
+def draft_prospect(cfg: Config, state: dict, pid: int) -> dict:
+    team = state["teams"][0]
+    pool = state.get("prospects", [])
+    p = next((x for x in pool if x["id"] == pid), None)
+    if not p:
+        return {"error": "Prospect nicht verfügbar."}
+    pos = p["pos"]
+    if sum(1 for x in team["roster"] if x["pos"] == pos) >= ROSTER_SLOTS[pos]:
+        return {"error": f"{POS_LABELS[pos]} ist voll ({ROSTER_SLOTS[pos]}) — erst jemanden entlassen."}
+    cost = prospect_cost(p)
+    if state["budget"] < cost:
+        return {"error": f"Budget zu niedrig (brauchst {cost}, hast {state['budget']})."}
+    pool.remove(p)
+    for key in ("scout", "_bias"):
+        p.pop(key, None)
+    p["starter"] = False
+    team["roster"].append(p)
+    state["budget"] -= cost
+    _sync_units(team)
+    save(cfg, state)
+    return {"ok": True, "drafted": p["name"], "ovr": player_ovr(p), "cost": cost}
+
+
 def _units_from_roster(roster: list[dict]) -> dict:
     by: dict[str, list[tuple[int, int]]] = {g: [] for g in ROSTER_SLOTS}
     for p in roster:
@@ -222,6 +343,7 @@ def _sync_units(team: dict) -> None:
 
 
 def _gain_exp(p: dict, amount: int) -> None:
+    amount = round(amount * DEV_TRAITS.get(p.get("dev", "normal"), 1.0))   # Dev-Trait beschleunigt Wachstum
     p["exp"] += amount
     while p["exp"] >= 100:
         p["exp"] -= 100
@@ -378,7 +500,21 @@ def load(cfg: Config) -> dict | None:
     if not os.path.exists(p):
         return None
     with open(p, encoding="utf-8") as fh:
-        return json.load(fh)
+        state = json.load(fh)
+    _migrate(state)
+    return state
+
+
+def _migrate(state: dict) -> None:
+    """Ältere Spielstände um neue Felder ergänzen (Dev-Traits, College-Scouting)."""
+    rng = random.Random(state.get("season", 1) * 7 + 13)
+    for t in state.get("teams", []):
+        for pl in t.get("roster", []):
+            pl.setdefault("dev", "normal")
+    if "scout_pts" not in state:
+        state["scout_pts"] = 6
+    if "prospects" not in state:
+        state["prospects"] = _gen_prospects(state, rng)
 
 
 def save(cfg: Config, state: dict) -> None:
@@ -452,8 +588,10 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
         "champion": None, "training_focus": None, "week_trained": False, "week_done": False,
         "tutorial_seen": False,
         "coach_market": _gen_market(rng), "events": [], "pid_seq": 10000,
+        "scout_pts": 6,
     }
     state["market_players"] = _draft_class(state, rng)
+    state["prospects"] = _gen_prospects(state, rng)
     state["goals"] = _gen_goals(state)
     save(cfg, state)
     return state
@@ -743,6 +881,7 @@ def next_week(cfg: Config, state: dict) -> dict:
         state["events"] = (state.get("events") or []) + extra
     state["week_done"] = False
     state["week_trained"] = False
+    state["scout_pts"] = state.get("scout_pts", 0) + 3     # Scouting-Punkte fürs College
     state["teams"][0]["game_bonus"] = 0
     save(cfg, state)
     return {"ok": True, "view": view(state)}
@@ -990,6 +1129,8 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["budget"] += 20                                 # Saisonbudget
     state["coach_market"] = _gen_market(rng)              # neuer Trainermarkt
     state["market_players"] = _draft_class(state, rng)    # neue Draft-/FA-Klasse
+    state["prospects"] = _gen_prospects(state, rng)       # neuer College-Jahrgang
+    state["scout_pts"] = state.get("scout_pts", 0) + 6    # Scouting-Punkte für die neue Klasse
     state["goals"] = _gen_goals(state)                    # neue Saisonziele
     ret = state.pop("_retired", [])
     state["events"] = ([{"type": "bad", "text": f"Karriereende: {n}"} for n in ret]
@@ -1231,6 +1372,9 @@ def view(state: dict) -> dict:
                             "cost": max(8, (player_ovr(p) - 50) * 2),
                             "side": "Offense" if p["pos"] in OFF_UNITS else "Defense"}
                            for p in sorted(state.get("market_players", []), key=player_ovr, reverse=True)],
+        "scout_pts": state.get("scout_pts", 0),
+        "prospects": [prospect_view(p) for p in sorted(
+            state.get("prospects", []), key=lambda x: (player_pot(x) + x.get("_bias", 0)), reverse=True)],
         "scheme": {"off": team.get("off_scheme", "Ausgeglichen"),
                    "def": team.get("def_scheme", "Ausgeglichen")},
         "off_schemes": {k: OFF_SCHEMES[k] for k in OFF_SCHEMES},

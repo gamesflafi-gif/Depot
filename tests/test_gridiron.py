@@ -266,6 +266,42 @@ def test_diagram_open_receiver_varies_by_coverage():
     assert len(picks) >= 2
 
 
+def test_college_scouting_and_draft(tmp_path):
+    """College-Prospects starten verdeckt, Scouting deckt sie auf, Draften holt sie ins Team."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=11)
+    v = F.view(st)
+    assert v["scout_pts"] == 6 and len(v["prospects"]) >= 8
+    p0 = v["prospects"][0]
+    assert p0["scout"] == 0 and p0["ovr"] is None and p0["ovr_lo"] < p0["ovr_hi"]
+    assert p0["name"].startswith("Prospect #")          # Name erst ab Scouting-Stufe 1
+
+    pid = p0["id"]
+    for _ in range(3):
+        assert F.scout_prospect(cfg, st, pid).get("ok")
+    assert F.scout_prospect(cfg, st, pid)["error"]       # 4. Mal: schon komplett
+    assert F.view(st)["scout_pts"] == 3                  # 3 Punkte verbraucht
+    pp = next(p for p in F.view(st)["prospects"] if p["id"] == pid)
+    assert pp["scout"] == 3 and pp["ovr"] is not None and "pot" in pp and pp["dev"] in F.DEV_TRAITS
+
+    # Position ist anfangs voll -> erst cutten, dann draften
+    team = st["teams"][0]
+    same = next(x for x in team["roster"] if x["pos"] == pp["pos"])
+    F.cut_player(cfg, st, same["id"])
+    res = F.draft_prospect(cfg, st, pid)
+    assert res.get("ok") and any(x["id"] == pid for x in team["roster"])
+    drafted = next(x for x in team["roster"] if x["id"] == pid)
+    assert "scout" not in drafted and drafted.get("dev") in F.DEV_TRAITS
+
+    # Dev-Trait beschleunigt EXP: Superstar bekommt mehr aus derselben Menge
+    a = {"dev": "normal", "exp": 0, "pts": 0}
+    b = {"dev": "superstar", "exp": 0, "pts": 0}
+    F._gain_exp(a, 100)
+    F._gain_exp(b, 100)
+    assert b["exp"] + b["pts"] * 100 > a["exp"] + a["pts"] * 100
+
+
 def test_franchise_detailed_game(tmp_path):
     """Nutzer-Spiel liefert ein vollständiges Play-by-Play für die Übertragung."""
     from gridiron import franchise as F

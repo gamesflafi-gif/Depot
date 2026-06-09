@@ -450,6 +450,9 @@ function segCol(cls){return {ok:'#16c784',ok2:'#0e9f6a',mid:'#3a4a44',warn:'#e9b
 function posBadge(p){return '<span class="posb p-'+p+'">'+p+'</span>';}
 function ovrTier(o){return o>=88?'elite':o>=80?'good':o>=72?'ok':o>=62?'avg':'low';}
 function ovrBadge(o){return '<span class="ovrb ovr-'+ovrTier(o)+'">'+o+'</span>';}
+function devBadge(dev,label){if(!dev||dev==='normal')return '';const c=dev==='superstar'?'#ffd34d':'#5fa8ff';
+ return '<span style="border:1px solid '+c+';color:'+c+';border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800;letter-spacing:.3px">'+esc(label||dev)+'</span>';}
+function scoutDots(sc,mx){let s='';for(let i=0;i<mx;i++)s+=(i<sc?'●':'○');return s;}
 async function runSim(){
  const c=$('sim_c').value,cov=$('sim_cov').value;
  const qs='concept='+encodeURIComponent(c)+'&coverage='+encodeURIComponent(cov)+'&'+simSit('sim_');
@@ -711,7 +714,7 @@ function renderMgr(v){
    '</div>';
  // Unter-Navigation
  const tabs=[['dash','Dashboard','grid'],['kader','Kader & Training','team'],['stats','Statistik','chart'],['transfer','Transfermarkt','swap'],['build','Verbesserungen','tool']];
- const needs={dash:(v.phase!=='done'&&!v.week_done&&!v.week_trained),kader:v.skillpoints>0,stats:false,transfer:false,build:false};
+ const needs={dash:(v.phase!=='done'&&!v.week_done&&!v.week_trained),kader:v.skillpoints>0,stats:false,transfer:(v.scout_pts>0),build:false};
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+navIcon(t[2])+'<span>'+t[1]+'</span>'+(needs[t[0]]?'<span class="navbadge">!</span>':'')+'</div>').join('')+'</div>';
  h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
@@ -801,7 +804,7 @@ function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)=
  o.innerHTML='<div class="modal" id="playermodal"></div>';renderPlayer(p);
 }
 function renderPlayer(p){
- let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+
+ let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+devBadge(p.dev,p.dev_label)+
    '<span class="mut" style="font-weight:600;font-size:13px">'+(p.starter?'Starter':'Bank')+(p.inj>0?' · verletzt '+p.inj+'W':'')+'</span></h3>'+
    '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
    '<div class="grid" style="grid-template-columns:repeat(4,1fr)">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
@@ -845,8 +848,30 @@ function afterPlayer(r){if(r.view){lastView=r.view;renderMgr(r.view);const p=r.v
 function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;unlockBodyIfNone();}
 function secTransfer(v){
  const cnt={};v.roster.forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);
- let h='<div class="card"><div class="sec" style="margin-top:0">Transfermarkt — Draft &amp; Free Agents</div>'+
-   '<div class="note">Budget: '+v.budget+' Mio. Verpflichte Spieler (Rookies haben hohes Potenzial). Position voll? Erst im Kader jemanden entlassen.</div></div>';
+ // --- College-Scouting & Draft (Kopf-Feature) ---
+ const sp=v.scout_pts||0;
+ let h='<div class="card"><div class="sec" style="margin-top:0">College-Scouting — Draft</div>'+
+   '<div class="note">Scouting-Punkte: <b>'+sp+'</b> · jede Woche +3. Scoute Talente, um Können, Potenzial &amp; Entwicklungs-Trait aufzudecken — oder draften und auf die Anlage wetten (Boom oder Bust). Budget: '+v.budget+' Mio.</div></div>';
+ const pros=v.prospects||[];
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+   const ps=pros.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
+   h+='<div class="card"><div class="sec" style="margin-top:0">College · '+grp[0]+'</div>';
+   ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];const done=p.scout>=p.scout_max;
+     const ovrTxt=(p.ovr!=null)?('OVR '+p.ovr+' · Pot '+p.pot):('OVR '+p.ovr_lo+'–'+p.ovr_hi);
+     const dev=(p.ovr!=null)?(' '+devBadge(p.dev,p.dev_label)):'';
+     const extra=(p.grade&&p.grade!=='?'?' · '+esc(p.grade):'')+(p.strength?' · '+esc(p.strength):'');
+     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'+posBadge(p.pos)+
+       '<span style="min-width:0"><b>'+esc(p.name)+'</b>'+dev+
+       '<span class="mut" style="display:block;font-size:12px">'+ovrTxt+' · Alter '+p.age+' · '+esc(p.round)+extra+'</span>'+
+       '<span class="mut" style="font-size:11px;letter-spacing:1px">Scouting '+scoutDots(p.scout,p.scout_max)+'</span></span></span>'+
+       '<span style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'+
+       '<button class="ghost" data-i="'+p.id+'" onclick="scoutP(this.dataset.i)" '+((sp<1||done)?'disabled':'')+'>'+(done?'Komplett':'Scouten')+'</button>'+
+       '<button data-i="'+p.id+'" onclick="draftP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Draften ('+p.cost+')')+'</button>'+
+       '</span></div>';});
+   h+='</div>';});
+ // --- Free Agents (sofort einsatzbereit, voll sichtbar) ---
+ h+='<div class="card"><div class="sec" style="margin-top:0">Free Agents</div>'+
+   '<div class="note">Fertige Spieler mit bekannten Werten. Position voll? Erst im Kader jemanden entlassen.</div></div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    const ps=v.market_players.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
@@ -883,6 +908,8 @@ function secStats(v){
 }
 function playerImpact(p){const s=p.season;return s.pass_yds/20+s.rush_yds/12+s.rec_yds/12+s.tkl+s.sack*3+s.intc*5+s.td*4;}
 async function signP(id){const r=await api('/api/fr/sign?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function scoutP(id){const r=await api('/api/fr/scout?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function draftP(id){const r=await api('/api/fr/draft?pid='+id,'POST');if(r.result&&r.result.error){alert(r.result.error);return;}if(r.result&&r.result.drafted)alert('Gedraftet: '+r.result.drafted+' (OVR '+r.result.ovr+')');if(r.view)renderMgr(r.view);}
 async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const r=await api('/api/fr/cut?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view){lastView=r.view;closePlayer();renderMgr(r.view);}}
 function secBuild(v){
  const up=(key,label,sub,level,cost,maxed,plus)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
@@ -1050,7 +1077,7 @@ const TUT=[
  {tab:'dash',sel:'.traingrid',title:'1× Training pro Woche',text:'Wähle eine Trainingskarte — z. B. Teamtraining, Einzeltraining oder eine Film-Session für einen Spielbonus.'},
  {tab:'dash',sel:'#gamecard',title:'Spiel & Woche',text:'Spiel selbst spielen oder simulieren. Erst danach schaltest du mit „Nächste Woche" weiter — die Woche endet nie von allein.'},
  {tab:'kader',sel:'.prow',title:'Spieler entwickeln',text:'Klicke einen Spieler an, um seine Attribute mit Skillpunkten zu steigern und ihn als Starter zu setzen.'},
- {tab:'transfer',sel:'.card',title:'Transfermarkt',text:'Verpflichte neue Spieler (Rookies mit Potenzial) oder entlasse welche. Jede Saison: Ruhestand + neue Draft-Klasse.'},
+ {tab:'transfer',sel:'.card',title:'College-Scouting & Transfermarkt',text:'Scoute College-Talente mit deinen Scouting-Punkten, um Können, Potenzial und Entwicklungs-Trait aufzudecken — dann draften. Darunter findest du fertige Free Agents. Jede Saison: Ruhestand + neuer Jahrgang.'},
  {tab:'stats',sel:'.card',title:'Statistik',text:'Saison- und Karrierewerte sowie Bestenlisten deines Teams.'},
  {tab:'build',sel:'.card',title:'Verbesserungen',text:'Investiere Budget in Trainerstab, Stadion (mehr Geld) und Equipment (mehr EXP). Viel Erfolg!'},
 ];
@@ -1369,6 +1396,22 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return {"result": F.cut_player(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/scout")
+    def fr_scout(pid: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.scout_prospect(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/draft")
+    def fr_draft(pid: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.draft_prospect(cfg, st, pid), "view": F.view(st)}
 
     @app.post("/api/fr/hire_coach")
     def fr_hire_coach(role: str, idx: int):
