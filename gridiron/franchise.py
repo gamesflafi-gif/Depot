@@ -195,23 +195,27 @@ def _unique_name(rng: random.Random, used: set | None) -> str:
 
 
 def _gen_player(pid: int, pos: str, base: int, rng: random.Random,
-                age: int | None = None, starter: bool = False, used: set | None = None) -> dict:
+                age: int | None = None, starter: bool = False, used: set | None = None,
+                hicap: bool = False) -> dict:
     age = age if age is not None else rng.randint(21, 33)
     attr, cap = {}, {}
     for k in POS_ATTRS[pos]:
-        a = max(46, min(76, round(rng.gauss(base + 1, 4)) + (2 if starter else 0)))
+        a = max(46, min(82, round(rng.gauss(base + 1, 4)) + (2 if starter else 0)))
         attr[k] = a
-        cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
+        if hicap:                                        # eigenes Team: viel Luft nach oben (bis 99 erreichbar)
+            cap[k] = min(99, max(a + rng.randint(10, 22), rng.randint(90, 99)))
+        else:
+            cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
     return {"id": pid, "name": _unique_name(rng, used), "pos": pos, "age": age, "starter": starter,
             "attr": attr, "cap": cap, "exp": 0, "pts": 0, "inj": 0,
             "dev": _gen_dev(rng), "season": _blank_stats(), "career": _blank_stats()}
 
 
-def _gen_roster(base: int, rng: random.Random) -> list[dict]:
+def _gen_roster(base: int, rng: random.Random, hicap: bool = False) -> list[dict]:
     roster, pid, used = [], 0, set()
     for grp, cnt in ROSTER_SLOTS.items():
         for i in range(cnt):
-            roster.append(_gen_player(pid, grp, base, rng, starter=i < STARTERS[grp], used=used))
+            roster.append(_gen_player(pid, grp, base, rng, starter=i < STARTERS[grp], used=used, hicap=hicap))
             pid += 1
     return roster
 
@@ -616,13 +620,13 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
     rng = random.Random(seed)
     nm = team_name.strip()[:24] or "Mein Team"
     ucolor = color if color in USER_COLORS else USER_COLORS[0]
-    user_team = _new_team(nm, _abbr(nm), ucolor, "#0c1a12", 60, rng, user=True)
-    user_team["roster"] = _gen_roster(60, rng)            # Start: ~60-OVR-Kader
+    user_team = _new_team(nm, _abbr(nm), ucolor, "#0c1a12", 70, rng, user=True)
+    user_team["roster"] = _gen_roster(70, rng, hicap=True)   # Start: ~70-OVR-Kader, viel Entwicklungs-Potenzial
     user_team["equipment"] = 1                            # Trainings-Equipment (EXP/Woche)
     _sync_units(user_team)                                # Units aus dem Kader ableiten
     teams = [user_team]
-    # KI-Stärke je Schwierigkeit (Nutzer startet bei 60 und wächst durch Training)
-    ai_lo, ai_hi = {"leicht": (58, 68), "normal": (62, 74), "schwer": (68, 80)}.get(difficulty, (62, 74))
+    # KI-Stärke je Schwierigkeit (Nutzer startet bei 70 und wächst ~8-9 OVR/Saison)
+    ai_lo, ai_hi = {"leicht": (64, 74), "normal": (70, 80), "schwer": (76, 86)}.get(difficulty, (70, 80))
     for cname, cabbr, c1, c2 in rng.sample(TEAM_CATALOG, n_teams - 1):
         teams.append(_new_team(cname, cabbr, c1, c2, rng.randint(ai_lo, ai_hi), rng))
     teams[0]["game_bonus"] = 0
@@ -984,20 +988,20 @@ def do_training(cfg: Config, state: dict, kind: str) -> dict:
     msg = ""
     if kind == "team":
         for p in roster:
-            _gain_exp(p, round(16 * m))
+            _gain_exp(p, round(150 * m))
         msg = "Teamtraining: alle Spieler haben EXP gesammelt."
     elif kind in ("offense", "defense"):
         side = "Offense" if kind == "offense" else "Defense"
         for p in roster:
             if _side(p["pos"]) == side:
-                _gain_exp(p, round(34 * m))
+                _gain_exp(p, round(260 * m))
         msg = f"{side}-Drills: Gruppe hat ordentlich EXP gesammelt."
     elif kind == "single":
         cand = [p for p in roster if player_ovr(p) < player_pot(p)]
         if not cand:
             return {"error": "Alle Spieler sind am Potenzial — kein Einzeltraining nötig."}
         target = min(cand, key=lambda p: (p["age"], -(player_pot(p) - player_ovr(p))))
-        _gain_exp(target, round(70 * m))
+        _gain_exp(target, round(520 * m))
         msg = f"Einzeltraining: {target['name']} ({target['pos']}) macht einen großen Schritt."
     elif kind == "regen":
         healed = 0
@@ -1134,9 +1138,9 @@ def new_season(cfg: Config, state: dict) -> dict:
     rng = random.Random()
     for t in state["teams"]:
         t["w"] = t["l"] = t["t"] = t["pf"] = t["pa"] = 0
-        if not t["user"]:                                # KI entwickelt sich
+        if not t["user"]:                                # KI wird jede Saison stärker (bleibt eine Herausforderung)
             for u in ALL_UNITS:
-                t["units"][u] = max(50, min(95, t["units"][u] + rng.randint(-3, 3)))
+                t["units"][u] = max(50, min(97, t["units"][u] + rng.randint(3, 7)))
             if rng.random() < 0.4:
                 t["off_scheme"] = rng.choice(list(OFF_SCHEMES))
             if rng.random() < 0.4:
@@ -1459,6 +1463,20 @@ def _user_pair(state: dict):
     return None
 
 
+def _kickoff_return(rng) -> tuple[int, bool]:
+    """Kickoff-Return: meist eigene 15-22, längere Returns immer unwahrscheinlicher, selten TD."""
+    r = rng.random()
+    if r < 0.60:
+        return rng.randint(15, 22), False
+    if r < 0.85:
+        return rng.randint(23, 30), False
+    if r < 0.96:
+        return rng.randint(31, 45), False
+    if r < 0.995:
+        return rng.randint(46, 80), False
+    return 100, True
+
+
 def start_game(cfg: Config, state: dict) -> dict:
     if state.get("active_game"):
         g = state["active_game"]
@@ -1473,15 +1491,29 @@ def start_game(cfg: Config, state: dict) -> dict:
         return {"error": "Diese Woche kein Nutzer-Spiel."}
     hi, ai = pair
     teams = state["teams"]
-    pos = 0 if random.random() < 0.5 else 1
+    user_is_home = hi == 0
+    # Münzwurf: Gewinner bekommt den Ball (Kickoff-Return)
+    user_receives = random.random() < 0.5
+    pos = (0 if user_is_home else 1) if user_receives else (1 if user_is_home else 0)
+    ret_to, ret_td = _kickoff_return(random)
     g = {
-        "hi": hi, "ai": ai, "user_is_home": hi == 0,
+        "hi": hi, "ai": ai, "user_is_home": user_is_home,
         "score": [0, 0], "pos": pos, "drive": 0, "q": 1,
         "down": 1, "dist": 10, "ytz": 75.0,
-        "absx": 75.0 if pos == 0 else 25.0,   # Heim startet rechts (eigene 25) und greift nach links an
+        "absx": 75.0 if pos == 0 else 25.0,
         "log": [], "over": False, "box": {},
         "off_snaps": 0, "philly_at": random.randint(1, 3), "philly_used": False,  # 🦅 Easter Egg: 1x pro Spiel
+        "coin": {"user_receives": user_receives},
+        "kickoff": {"return_to": ret_to, "td": ret_td, "by_user": (pos == 0) == user_is_home},
     }
+    if ret_td:                                            # Kickoff-Return-Touchdown (selten)
+        g["score"][pos] += 7                              # TD + Extra-Punkt
+        g["pos"] ^= 1                                     # Gegner bekommt danach den Ball an eigener 25
+        pos = g["pos"]
+        g["ytz"], g["absx"] = 75.0, (75.0 if pos == 0 else 25.0)
+    else:
+        g["ytz"] = float(100 - ret_to)                    # Startposition nach Return (eigene ret_to-Linie)
+        g["absx"] = float(100 - ret_to) if pos == 0 else float(ret_to)
     state["active_game"] = g
     _new_decision_options(state)
     save(cfg, state)
@@ -1818,4 +1850,5 @@ def _game_view(state: dict) -> dict:
         "pat": pat, "kicker": kicker(teams[0]),
         "options": opts, "log": g["log"][:12],
         "user_is_home": g["user_is_home"],
+        "coin": g.get("coin"), "kickoff": g.get("kickoff"),
     }

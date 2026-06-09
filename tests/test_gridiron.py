@@ -363,6 +363,22 @@ def test_profiles_isolated(tmp_path):
         F.set_profile("default")
 
 
+def test_kickoff_and_start_ovr(tmp_path):
+    """Start ~70 OVR, Münzwurf + Kickoff-Return setzen die Startposition."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Kicks", n_teams=8, seed=1)
+    assert F.view(st)["ratings"]["ovr"] >= 70           # Start ~70+
+    F.do_training(cfg, st, "team")
+    r = F.start_game(cfg, st)
+    g = r["game"]
+    assert g["coin"] and "user_receives" in g["coin"]
+    k = g["kickoff"]
+    assert 15 <= k["return_to"] <= 100 or k["td"]
+    if not k["td"]:
+        assert g["ytz"] == 100 - k["return_to"]         # Feldposition aus Return
+
+
 def test_end_game_by_clock(tmp_path):
     """Spieluhr abgelaufen -> Spiel wird vorzeitig beendet und gewertet."""
     from gridiron import franchise as F
