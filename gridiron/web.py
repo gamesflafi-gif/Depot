@@ -100,6 +100,12 @@ _STYLE = """
   .tuttip{max-width:none}
   /* breite Tabellen/Heatmap bleiben wischbar */
   .tbl td,.tbl th{padding:7px 7px}
+  /* Spiel-/Broadcast-Overlay kompakt halten (kein seitliches Überlaufen) */
+  .modal{overflow-x:hidden}
+  .tvscore{gap:6px;padding:9px 8px} .tvscore .nm{display:none} .tvpts{font-size:24px;min-width:38px} .tvteam .ab{font-size:12px;padding:5px 8px}
+  .tvmid .qn{font-size:14px} .tvfield{height:58px} .tvfield .ez{width:24px;font-size:10px}
+  .optgrid{grid-template-columns:1fr 1fr;gap:7px} .optbtn{padding:9px 10px;font-size:12.5px}
+  .dd{padding:9px 11px;font-size:13px} .dd .mut{font-size:11px}
  }
 """
 
@@ -203,7 +209,9 @@ _STYLE2 = """
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
  .subnav .s{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 14px;border-radius:9px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--mut);white-space:nowrap;transition:background .12s,color .12s}
  .subnav .s svg{width:16px;height:16px;flex:none}
- .subnav .s:hover{color:var(--fg);background:rgba(255,255,255,.05)} .subnav .s.on{background:var(--acc);color:#04140c;box-shadow:0 1px 6px rgba(22,199,132,.4)}
+ .subnav .s{position:relative} .subnav .s:hover{color:var(--fg);background:rgba(255,255,255,.05)} .subnav .s.on{background:var(--acc);color:#04140c;box-shadow:0 1px 6px rgba(22,199,132,.4)}
+ .navbadge{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--warn);color:#1a1400;font-size:11px;font-weight:800;margin-left:3px}
+ .stepcard{border-left:3px solid var(--acc)} .stepnum{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--acc);color:#04140c;font-size:11px;font-weight:800;margin-right:6px}
  .tbanner{border-radius:14px;padding:18px 20px;margin:0 0 14px;position:relative;overflow:hidden;border:1px solid var(--line);
    background:linear-gradient(120deg,var(--tc) -10%,#0e1513 60%)}
  .tbanner .crest{box-shadow:0 2px 10px rgba(0,0,0,.4)}
@@ -531,14 +539,15 @@ function playAnim(svg,d,res){
  const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry}));
  const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop}));
  const qb=O.find(o=>o.pos==='QB'),tgt=O.find(o=>o.target||o.carry),ols=O.filter(o=>o.pos==='OL');
- // Completion: Route auf die tatsächliche Fangtiefe kürzen (Fang dort, dann YAC bis Yards)
- if(kind==='complete'&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1],cy=Math.min(rY,Math.max(1,yards));
-   const out=[r[0]];for(let k=1;k<r.length;k++){const a=r[k-1],b=r[k];if(b[1]<=cy+0.01){out.push(b);}else{const f=(cy-a[1])/((b[1]-a[1])||1);out.push([a[0]+(b[0]-a[0])*f,cy]);break;}}
+ // Ballträger-Route auf den tatsächlichen Raumgewinn kürzen (Completion: Fang dann YAC; Lauf: bis Yards, auch negativ)
+ if((kind==='complete'||kind==='run')&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1];
+   const cy=(kind==='complete')?Math.min(rY,Math.max(1,yards)):Math.min(rY,yards);
+   const out=[r[0]];for(let k=1;k<r.length;k++){const a=r[k-1],b=r[k];
+     if(b[1]<=cy+0.01){out.push(b);}else{const f=Math.max(0,Math.min(1,(cy-a[1])/((b[1]-a[1])||1)));out.push([a[0]+(b[0]-a[0])*f,cy]);break;}}
    tgt.route=out;}
  const catchPt=(tgt&&tgt.route)?tgt.route[tgt.route.length-1]:(d.ball_target||[qb.x,qb.y]);
- const gain=[catchPt[0],Math.max(catchPt[1],yards)];
- const runLast=(!isPass&&tgt&&tgt.route)?tgt.route[tgt.route.length-1]:null;
- const runEnd=runLast?[runLast[0],Math.max(runLast[1],yards)]:null;
+ const gain=[catchPt[0],(kind==='complete')?Math.max(catchPt[1],yards):yards];   // complete: YAC bis Yards; Lauf: genau Yards
+ const runEnd=(!isPass&&tgt)?[catchPt[0],yards]:null;
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
  const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/26);
@@ -557,7 +566,8 @@ function playAnim(svg,d,res){
      if(isPass){if(!caught)_advance(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}
      else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
      return;}
-   if(o.route)_advance(o,M(o.pos));                                       // andere Receiver laufen Routen
+   if(o.route){_advance(o,M(o.pos));
+     if(o.ri>=o.route.length&&!caught){o.y+=M(o.pos)*0.45;o.x+=(Math.sin((el+o.i)*2.2))*M(o.pos)*0.25;}}  // weiter freilaufen bis zum Wurf
   });
   // Ball / Wurf
   if(isPass&&kind!=='sack'){
@@ -573,7 +583,10 @@ function playAnim(svg,d,res){
    else if(carrier){tx=carrier.x;ty=carrier.y;}                          // Ballträger verfolgen (eigenes Tempo)
    else if(p.role==='rush'){tx=C+(p.x-C)*0.25;ty=qb.y+0.5;mx*=0.72;}     // Rush, von OL gebremst
    else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){tx=r.x+(p.x<r.x?-0.8:0.8);ty=r.y+0.7;}else{tx=p.x;ty=p.y;}}
-   else if(p.drop){tx=p.drop[0];ty=p.drop[1];}else{tx=p.x;ty=p.y;}
+   else if(p.drop){tx=p.drop[0];ty=p.drop[1];                              // Zone: zur Landmarke, dann auf nächsten Receiver in der Zone reagieren
+     let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});
+     if(bestR){tx=p.drop[0]+(bestR.x-p.drop[0])*0.45;ty=p.drop[1]+(bestR.y-p.drop[1])*0.30;}mx*=0.85;}
+   else{tx=p.x;ty=p.y;}
    _toward(p,tx,ty,mx);
   });
   // Sack: QB wird zurückgedrängt sobald Rusher nah
@@ -683,7 +696,8 @@ function renderMgr(v){
    '</div>';
  // Unter-Navigation
  const tabs=[['dash','Dashboard','grid'],['kader','Kader & Training','team'],['stats','Statistik','chart'],['transfer','Transfermarkt','swap'],['build','Verbesserungen','tool']];
- h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+navIcon(t[2])+'<span>'+t[1]+'</span></div>').join('')+'</div>';
+ const needs={dash:(v.phase!=='done'&&!v.week_done&&!v.week_trained),kader:v.skillpoints>0,stats:false,transfer:false,build:false};
+ h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+navIcon(t[2])+'<span>'+t[1]+'</span>'+(needs[t[0]]?'<span class="navbadge">!</span>':'')+'</div>').join('')+'</div>';
  h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
  if(!v.tutorial_seen && !window._tutShown){window._tutShown=true; openTutorial(0);}
@@ -697,12 +711,12 @@ function secDash(v){
  let h='';
  const active=v.phase!=='done'&&!v.week_done;
  // 1) Training zuerst — Pflicht vor dem Spiel
- if(active){h+='<div class="card"><div class="sec" style="margin-top:0">Schritt 1 · Training dieser Woche</div>';
+ if(active){h+='<div class="card stepcard"><div class="sec" style="margin-top:0"><span class="stepnum">1</span>Training dieser Woche'+(v.week_trained?'':' <span class="navbadge">!</span>')+'</div>';
    if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span><span class="mut">weiter zu Schritt 2</span></div>'+(v.game_bonus>0?'<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>':'');
    else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
    h+='</div>';}
  // 2) Spielbetrieb
- h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.phase==='done'?'Saison beendet':(active?'Schritt 2 · ':'')+(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
+ h+='<div class="card'+(active?' stepcard':'')+'" id="gamecard"><div class="sec" style="margin-top:0">'+(active?'<span class="stepnum">2</span>':'')+(v.phase==='done'?'Saison beendet':(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
  if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div><button onclick="newSeason()">Neue Saison starten</button> ';}
  else if(v.week_done){
    h+='<div class="reco win"><span>Woche ausgewertet'+(v.is_bye?' (Bye Week)':'')+'.</span><span class="mut">bereit für die nächste Woche</span></div>'+
