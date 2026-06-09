@@ -695,15 +695,25 @@ function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 2
  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">'+(I[k]||I.team)+'</svg>';}
 function secDash(v){
  let h='';
- // Spielbetrieb (Hauptaktion zuerst)
- h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):(v.phase==='done'?'Saison beendet':'Woche '+(v.week+1))))+'</div>';
+ const active=v.phase!=='done'&&!v.week_done;
+ // 1) Training zuerst — Pflicht vor dem Spiel
+ if(active){h+='<div class="card"><div class="sec" style="margin-top:0">Schritt 1 · Training dieser Woche</div>';
+   if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span><span class="mut">weiter zu Schritt 2</span></div>'+(v.game_bonus>0?'<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>':'');
+   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
+   h+='</div>';}
+ // 2) Spielbetrieb
+ h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.phase==='done'?'Saison beendet':(active?'Schritt 2 · ':'')+(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
  if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div><button onclick="newSeason()">Neue Saison starten</button> ';}
  else if(v.week_done){
    h+='<div class="reco win"><span>Woche ausgewertet'+(v.is_bye?' (Bye Week)':'')+'.</span><span class="mut">bereit für die nächste Woche</span></div>'+
      '<button onclick="nextWeek()">Nächste Woche ▶</button> ';
    if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Spiel ansehen</button> ';
  }
- else if(v.is_bye){h+='<div class="reco"><span><b>Bye Week</b> — diese Woche kein Spiel</span><span class="mut">ideal zum Trainieren</span></div>'+
+ else if(!v.week_trained){
+   h+='<div class="reco"><span class="mut">Erst das Training dieser Woche absolvieren (Schritt 1).</span></div>'+
+     '<button disabled>'+(v.is_bye?'Woche abschließen':'Selbst spielen')+'</button>'+(v.is_bye?'':' <button class="ghost" disabled>Simulieren</button>');
+ }
+ else if(v.is_bye){h+='<div class="reco"><span><b>Bye Week</b> — diese Woche kein Spiel</span><span class="mut">Training erledigt — Woche abschließen</span></div>'+
    '<button onclick="simWeek()">Woche abschließen</button> ';}
  else{
    if(v.next)h+='<div class="reco"><span><span class="cdot" style="background:'+esc(v.next.color||'#ef5350')+'"></span>'+
@@ -715,11 +725,6 @@ function secDash(v){
  }
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
- // Training — nur wenn diese Woche noch möglich
- if(v.phase!=='done'&&!v.week_done){h+='<div class="card"><div class="sec" style="margin-top:0">Training dieser Woche</div>';
-   if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span><span class="mut">nächste Woche wieder</span></div>'+(v.game_bonus>0?'<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>':'');
-   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
-   h+='</div>';}
  // Saison-Ziele (kompakt)
  if(v.goals&&v.goals.length){h+='<div class="card" id="goalcard"><div class="sec" style="margin-top:0">Saison-Ziele</div>'+
    v.goals.map(g=>{const prog=g.key==='wins'?' ('+g.progress+'/'+g.target+')':'';return '<div class="reco mini'+(g.done?' win':'')+'"><span>'+(g.done?'✓ ':'')+esc(g.label)+prog+'</span><span class="mut">'+(g.done?'erfüllt':'+'+g.reward+' Mio')+'</span></div>';}).join('')+'</div>';}

@@ -187,6 +187,7 @@ def test_franchise_full_season(tmp_path):
         if st.get("week_done"):
             F.next_week(cfg, st)
         else:
+            F.do_training(cfg, st, "team")
             F.sim_week(cfg, st)
         guard += 1
     assert st["phase"] == "done" and st["champion"]
@@ -212,6 +213,7 @@ def test_franchise_web(tmp_path):
     assert v["team_name"] == "Test FC" and len(v["standings"]) == 6
     assert client.get("/api/fr/state").json()["exists"] is True
 
+    client.post("/api/fr/train_week", params={"kind": "team"})           # Training Pflicht vor Spiel
     r = client.post("/api/fr/sim_week").json()
     assert r["result"]["games"] and r["view"]["week_done"] is True
     nw = client.post("/api/fr/next_week").json()
@@ -252,6 +254,7 @@ def test_franchise_detailed_game(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=2)
+    F.do_training(cfg, st, "team")
     out = F.sim_week(cfg, st)
     g = out.get("user_game")
     assert g and g["plays"] and "Adler" in (g["home"], g["away"])
@@ -293,7 +296,11 @@ def test_franchise_season_goals(tmp_path):
     # Saison durchspielen -> mindestens das Sieg- oder Playoff-Ziel sollte fallen
     guard = 0
     while st["phase"] != "done" and guard < 80:
-        F.next_week(cfg, st) if st.get("week_done") else F.sim_week(cfg, st)
+        if st.get("week_done"):
+            F.next_week(cfg, st)
+        else:
+            F.do_training(cfg, st, "team")
+            F.sim_week(cfg, st)
         guard += 1
     assert any(g["done"] for g in st["goals"])
     # neue Saison -> Ziele neu (nicht erfüllt)
@@ -324,6 +331,7 @@ def test_franchise_game_sim_options(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=51)
+    F.do_training(cfg, st, "team")
     F.start_game(cfg, st)
     r = F.game_sim_drive(cfg, st)
     assert ("game" in r) or ("result" in r)                # weiter ODER schon vorbei
@@ -340,7 +348,7 @@ def test_franchise_player_season_career_stats(tmp_path):
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=71)
     for _ in range(3):
-        F.sim_week(cfg, st); F.next_week(cfg, st)
+        F.do_training(cfg, st, "team"); F.sim_week(cfg, st); F.next_week(cfg, st)
     team = st["teams"][0]
     assert any(p["season"]["games"] > 0 for p in team["roster"])
     assert all(p["career"]["games"] >= p["season"]["games"] for p in team["roster"])
@@ -357,6 +365,7 @@ def test_franchise_box_scores(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=21)
+    F.do_training(cfg, st, "team")
     g = F.sim_week(cfg, st)["user_game"]
     assert g["box"] and len(g["box"]) >= 4
     assert any(s["pass_yds"] or s["rush_yds"] or s["rec_yds"] for s in g["box"])   # Offense
@@ -377,6 +386,7 @@ def test_franchise_events_injuries(tmp_path):
     assert F.overall(team) <= ov0                               # verletzter Starter schwächt
     seen = set()
     for _ in range(8):
+        F.do_training(cfg, st, "team")
         for e in F.sim_week(cfg, st).get("events", []):
             seen.add(e["type"])
         F.next_week(cfg, st)
@@ -450,7 +460,8 @@ def test_franchise_roster_attributes_exp(tmp_path):
     assert F.alloc_auto(cfg, st, p["id"])["ok"]
     assert "starter" in F.depth_toggle(cfg, st, p["id"])
     assert F.set_focus(cfg, st, "QB")["focus"] == "QB"
-    # EXP durch eine Woche
+    # EXP durch Wochentraining (Pflicht) + Spiel
+    F.do_training(cfg, st, "team")
     F.sim_week(cfg, st)
     assert any(x["exp"] > 0 or x["pts"] > 0 for x in team["roster"])
     v = F.view(st)
@@ -463,6 +474,7 @@ def test_franchise_interactive_game(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=5)
+    F.do_training(cfg, st, "team")
     g = F.start_game(cfg, st)["game"]
     assert g["awaiting"] in ("offense", "defense") and g["options"]
     guard = 0
@@ -484,6 +496,7 @@ def test_franchise_game_web(tmp_path):
     from gridiron.web import create_app
     client = TestClient(create_app(_cfg(tmp_path)))
     client.post("/api/fr/new", params={"team": "FC", "teams": 6})
+    client.post("/api/fr/train_week", params={"kind": "team"})           # Training Pflicht vor Spiel
     g = client.post("/api/fr/game/start").json()["game"]
     assert g["options"]
     r = client.post("/api/fr/game/play", params={"choice": g["options"][0]["key"]}).json()
