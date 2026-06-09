@@ -10,6 +10,7 @@ gespeichert (eine Speicherdatei pro Server-Instanz).
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 from dataclasses import dataclass
@@ -23,9 +24,31 @@ from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS, play_outc
 GAME_DRIVES = 14                                          # Drives je Spiel (~7 Ballbesitze/Team)
 OFF_UNITS = {"QB": 0.34, "OL": 0.30, "WR": 0.20, "RB": 0.16}
 DEF_UNITS = {"DL": 0.40, "DB": 0.32, "LB": 0.28}
+ST_UNITS = ["K"]                                     # Special Teams (Kicker) – zählt nicht in Off/Def-Rating
 UNIT_LABELS = {"QB": "Quarterback", "OL": "O-Line", "WR": "Receiver", "RB": "Running Back",
-               "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary"}
-ALL_UNITS = list(OFF_UNITS) + list(DEF_UNITS)
+               "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary", "K": "Kicker"}
+ALL_UNITS = list(OFF_UNITS) + list(DEF_UNITS) + ST_UNITS
+
+
+def _unit_side(u: str) -> str:
+    return "Offense" if u in OFF_UNITS else "Defense" if u in DEF_UNITS else "Special"
+
+
+def kicker(team: dict) -> int:
+    return team.get("units", {}).get("K", 65)
+
+
+def fg_make_prob(ytz: float, krating: int) -> float:
+    """Trefferwahrscheinlichkeit eines Field Goals: Distanz + Kicker-Stärke."""
+    dist = ytz + 17.0                                # FG-Distanz (7 Yd Snap/Hold + 10 Yd Endzone)
+    mid = 50.0 + (krating - 50) * 0.32               # 50%-Distanz; guter Kicker trifft weiter
+    p = 1.0 / (1.0 + math.exp((dist - mid) / 7.0))
+    return max(0.02, min(0.99, p))
+
+
+def xp_make_prob(krating: int) -> float:
+    return max(0.80, min(0.995, 0.86 + (krating - 50) * 0.003))
+
 
 # KI-Teams mit Identität: Name, Kürzel, Primär-/Sekundärfarbe.
 TEAM_CATALOG = [
@@ -339,7 +362,10 @@ def _units_from_roster(roster: list[dict]) -> dict:
 
 def _sync_units(team: dict) -> None:
     if team.get("roster"):
-        team["units"] = _units_from_roster(team["roster"])
+        new = _units_from_roster(team["roster"])
+        for u in ST_UNITS:                               # Kicker/Special Teams nicht aus dem Kader ableiten
+            new[u] = team.get("units", {}).get(u, 65)
+        team["units"] = new
 
 
 def _gain_exp(p: dict, amount: int) -> None:
@@ -511,6 +537,9 @@ def _migrate(state: dict) -> None:
     for t in state.get("teams", []):
         for pl in t.get("roster", []):
             pl.setdefault("dev", "normal")
+        u = t.get("units")                               # Kicker-Rating ergänzen (Special Teams)
+        if isinstance(u, dict) and "K" not in u:
+            u["K"] = rng.randint(58, 74)
     if "scout_pts" not in state:
         state["scout_pts"] = 6
     if "prospects" not in state:
@@ -753,8 +782,10 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
                 plays.append(_pl(q, off["name"], "Interception!" if o["pass"] else "Fumble, Ball verloren!", absx, score, False))
                 break
             if td:
-                score[pos] += 7
-                plays.append(_pl(q, off["name"], "TOUCHDOWN! " + off["name"], 100 if attack_right else 0, score, True))
+                xp = 1 if rng.random() < xp_make_prob(kicker(off)) else 0   # Touchdown + Extra-Punkt
+                score[pos] += 6 + xp
+                plays.append(_pl(q, off["name"], "TOUCHDOWN! " + off["name"] + ("" if xp else " (Extra-Punkt daneben)"),
+                                 100 if attack_right else 0, score, True))
                 break
             ytz -= yards
             dist -= yards
@@ -765,11 +796,11 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
             else:
                 down += 1
             if down > 4:
-                if ytz <= 22 and rng.random() < 0.82:
+                if ytz <= 45 and rng.random() < fg_make_prob(ytz, kicker(off)):   # Field Goal je nach Kicker
                     score[pos] += 3
-                    plays.append(_pl(q, off["name"], "Field Goal gut (3)", absx, score, True))
+                    plays.append(_pl(q, off["name"], f"Field Goal gut aus {round(ytz + 17)} Yd (3)", absx, score, True))
                 else:
-                    plays.append(_pl(q, off["name"], "Punt" if ytz > 22 else "Field Goal daneben", absx, score, False))
+                    plays.append(_pl(q, off["name"], "Punt" if ytz > 45 else "Field Goal daneben", absx, score, False))
                 break
             plays.append(_pl(q, off["name"], label, absx, score, False))
         pos ^= 1
@@ -1334,7 +1365,7 @@ def view(state: dict) -> dict:
         "record": {"w": team["w"], "l": team["l"]},
         "ratings": {"off": offense(team), "def": defense(team), "ovr": overall(team)},
         "units": [{"key": u, "label": UNIT_LABELS[u], "level": team["units"][u],
-                   "cost": upgrade_cost(team["units"][u]), "side": "Offense" if u in OFF_UNITS else "Defense"}
+                   "cost": upgrade_cost(team["units"][u]), "side": _unit_side(u)}
                   for u in ALL_UNITS],
         "coaches": [_coach_view(team, r) for r in COACH_ROLES],
         "coach_market": {r: [{"idx": i, "name": c["name"], "rating": coach_rating(c),
@@ -1450,6 +1481,11 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     off, deff = teams[off_i], teams[def_i]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
 
+    if g.get("pat"):                                      # Extra-Punkt / 2-Punkte-Conversion offen
+        return _resolve_pat(cfg, state, g, off, deff, user_has_ball, choice)
+    if choice == "__FG__":                                # Nutzer entscheidet sich fürs Field Goal
+        return _attempt_fg(cfg, state, g, off, user_has_ball)
+
     if user_has_ball:
         if choice not in PASS_CONCEPTS and choice not in RUN_CONCEPTS:
             return {"error": "Unbekanntes Konzept."}
@@ -1480,10 +1516,19 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     if o["turnover"]:
         pass                                              # Ballverlust -> anderes Team
     elif g["ytz"] - yards <= 0:
-        g["score"][g["pos"]] += 7
+        g["score"][g["pos"]] += 6                         # TD = 6, danach Extra-Punkt/2-Punkte
         g["absx"] = 100.0 if attack_right else 0.0
         label = "TOUCHDOWN! " + off["name"]
         scored = True
+        if user_has_ball:
+            g["pat"] = {"pos": g["pos"]}                  # Nutzer wählt XP/2PT -> noch kein Wechsel
+            switch = False
+        else:                                             # KI: Extra-Punkt automatisch
+            if random.random() < xp_make_prob(kicker(off)):
+                g["score"][g["pos"]] += 1
+                label += " + Extra-Punkt"
+            else:
+                label += " (Extra-Punkt daneben)"
     else:
         g["ytz"] -= yards
         g["dist"] -= yards
@@ -1494,12 +1539,15 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         else:
             g["down"] += 1
             if g["down"] > 4:
-                if g["ytz"] <= 22 and random.random() < 0.82:
-                    g["score"][g["pos"]] += 3
-                    label = "Field Goal gut (3)"
-                    scored = True
+                if not user_has_ball and g["ytz"] <= 45:          # KI: Field Goal im Bereich
+                    if random.random() < fg_make_prob(g["ytz"], kicker(off)):
+                        g["score"][g["pos"]] += 3
+                        label = f"Field Goal gut aus {round(g['ytz'] + 17)} Yd (+3)"
+                        scored = True
+                    else:
+                        label = f"Field Goal daneben aus {round(g['ytz'] + 17)} Yd"
                 else:
-                    label = "4th Down vergeben" if g["ytz"] > 22 else "Field Goal daneben"
+                    label = "4th Down vergeben — Ballverlust"
             else:
                 switch = False
 
@@ -1508,18 +1556,74 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
                         "off": user_has_ball, "yards": yards})
 
     if switch:
-        g["pos"] ^= 1
-        g["drive"] += 1
-        g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
-        g["down"], g["dist"], g["ytz"] = 1, 10, 75.0
-        g["absx"] = 75.0 if g["pos"] == 0 else 25.0
-        if g["drive"] >= MAX_DRIVES:
-            g["over"] = True
+        _switch_possession(g)
 
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored,
                                  "kind": o["kind"], "concept": concept, "coverage": coverage,
                                  "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0)},
+            "game": _game_view(state)}
+
+
+def _switch_possession(g: dict) -> None:
+    """Ballwechsel: neuer Drive für das andere Team an der eigenen 25."""
+    g["pos"] ^= 1
+    g["drive"] += 1
+    g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
+    g["down"], g["dist"], g["ytz"] = 1, 10, 75.0
+    g["absx"] = 75.0 if g["pos"] == 0 else 25.0
+    if g["drive"] >= MAX_DRIVES:
+        g["over"] = True
+
+
+def _pat_log(g: dict, off: dict, label: str, user_off: bool) -> None:
+    g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
+                        "hs": g["score"][0], "as_": g["score"][1], "off": user_off, "yards": 0})
+
+
+def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
+                 user_off: bool, choice: str) -> dict:
+    """Extra-Punkt (Kick) oder 2-Punkte-Conversion nach einem Touchdown."""
+    pos = g.pop("pat")["pos"]
+    if choice == "__2PT__":
+        edge = 0.10 * (offense(off) - defense(deff))
+        if random.random() < max(0.30, min(0.66, 0.46 + edge * 0.04)):
+            g["score"][pos] += 2
+            label = "2-Punkte-Conversion gut! (+2)"
+        else:
+            label = "2-Punkte-Conversion gescheitert"
+    else:                                                 # Extra-Punkt-Kick
+        if random.random() < xp_make_prob(kicker(off)):
+            g["score"][pos] += 1
+            label = "Extra-Punkt gut (+1)"
+        else:
+            label = "Extra-Punkt daneben"
+    _pat_log(g, off, label, user_off)
+    _switch_possession(g)
+    save(cfg, state)
+    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": True, "kind": "pat",
+                                 "concept": None, "coverage": None, "user_off": user_off},
+            "game": _game_view(state)}
+
+
+def _attempt_fg(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) -> dict:
+    """Vom Nutzer gewählter Field-Goal-Versuch (Trefferchance = Distanz + Kicker)."""
+    ytz = g["ytz"]
+    if ytz > 55:
+        return {"error": "Zu weit für ein Field Goal."}
+    dist = round(ytz + 17)
+    if random.random() < fg_make_prob(ytz, kicker(off)):
+        g["score"][g["pos"]] += 3
+        label = f"Field Goal gut aus {dist} Yd (+3)"
+        scored = True
+    else:
+        label = f"Field Goal daneben aus {dist} Yd"
+        scored = False
+    _pat_log(g, off, label, user_off)
+    _switch_possession(g)
+    save(cfg, state)
+    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": scored, "kind": "fg",
+                                 "concept": None, "coverage": None, "user_off": user_off},
             "game": _game_view(state)}
 
 
@@ -1573,7 +1677,11 @@ def abort_game(cfg: Config, state: dict) -> dict:
 def _auto_choice(state: dict) -> str:
     """Sinnvolle automatische Spielzug-Wahl (für Sim-Buttons)."""
     g = state["active_game"]
+    if g.get("pat"):
+        return "__XP__"                                   # automatischer Extra-Punkt
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
+    if user_has_ball and g["down"] >= 4 and g["ytz"] <= 45:
+        return "__FG__"                                   # 4th Down in Reichweite -> Field Goal
     return _scheme_pick(state["teams"][0], off=user_has_ball)
 
 
@@ -1608,11 +1716,19 @@ def _game_view(state: dict) -> dict:
     teams = state["teams"]
     home, away = teams[g["hi"]], teams[g["ai"]]
     off_i = g["hi"] if g["pos"] == 0 else g["ai"]
+    off = teams[off_i]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
-    if user_has_ball:
+    pat = bool(g.get("pat"))
+    fg_dist = round(g["ytz"] + 17)
+    if pat:                                               # Extra-Punkt-Auswahl nach Touchdown
+        opts = [{"key": "__XP__", "label": f"Extra-Punkt (Kick, {round(xp_make_prob(kicker(off)) * 100)}%)", "type": "+1"},
+                {"key": "__2PT__", "label": "2-Punkte-Conversion", "type": "+2"}]
+    elif user_has_ball:
         opts = [{"key": k, "label": (PASS_CONCEPTS.get(k) or RUN_CONCEPTS[k])["label"],
                  "type": "Pass" if k in PASS_CONCEPTS else "Lauf"}
                 for k in OFF_SCHEMES.get(teams[0].get("off_scheme", "Ausgeglichen"), [])]
+        if g["ytz"] <= 50:                                # Field Goal im Bereich (ab ca. Mittellinie)
+            opts.append({"key": "__FG__", "label": f"Field Goal ({fg_dist} Yd, {round(fg_make_prob(g['ytz'], kicker(off)) * 100)}%)", "type": "Kick"})
     else:
         opts = [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in COVERAGES]
     return {
@@ -1623,7 +1739,8 @@ def _game_view(state: dict) -> dict:
         "down": g["down"], "dist": g["dist"], "ytz": round(g["ytz"]), "absx": round(g["absx"], 1),
         "drive": g["drive"], "max_drives": MAX_DRIVES, "over": g["over"],
         "possession": teams[off_i]["name"], "user_offense": user_has_ball,
-        "awaiting": "offense" if user_has_ball else "defense",
+        "awaiting": "pat" if pat else ("offense" if user_has_ball else "defense"),
+        "pat": pat, "kicker": kicker(teams[0]),
         "options": opts, "log": g["log"][:12],
         "user_is_home": g["user_is_home"],
     }

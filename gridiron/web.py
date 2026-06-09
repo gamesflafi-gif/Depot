@@ -954,10 +954,12 @@ function secBuild(v){
      mk.forEach(cd=>{h+='<div class="reco"><span>'+esc(cd.name)+' <span class="mut">'+cd.rating+' · '+cd.traits.map(t=>t.label[0]+t.val).join(' ')+'</span></span>'+
        '<button data-r="'+c.role+'" data-i="'+cd.idx+'" onclick="hireCoach(this.dataset.r,this.dataset.i)" '+(v.budget<cd.cost?'disabled':'')+'>Anheuern ('+cd.cost+' Mio)</button></div>';});}
    h+='</div>';});
- h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen</div>'+
+ const kU=(v.units||[]).find(u=>u.key==='K');
+ h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen &amp; Special Teams</div>'+
    up('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Wo',v.stadium.level,v.stadium.cost,v.stadium.level>=5,'+1')+
    up('equipment','Trainings-Equipment','+'+v.equipment.exp_week+' EXP/Wo',v.equipment.level,v.equipment.cost,v.equipment.level>=5,'+1')+
-   '<div class="note">Stadion bringt mehr Wocheneinnahmen, Equipment mehr Spieler-EXP. Trainer-Stärken heben Ratings und EXP der jeweiligen Gruppe.</div></div>';
+   (kU?up('K','Kicker','Field Goals &amp; Extra-Punkte · '+kU.level+' OVR',kU.level,kU.cost,kU.level>=95,'+2'):'')+
+   '<div class="note">Ein besserer Kicker trifft Field Goals aus größerer Distanz und Extra-Punkte sicherer. Stadion bringt Einnahmen, Equipment mehr Spieler-EXP.</div></div>';
  return h;
 }
 async function improveCoach(role){const r=await api('/api/fr/improve_coach?role='+encodeURIComponent(role),'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
@@ -1034,7 +1036,7 @@ function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const 
 function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();unlockBodyIfNone();}
 
 /* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
-let liveG=null;
+let liveG=null, playBusy=false;
 async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 function openGame(g){closeGame();liveG=g;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
@@ -1059,12 +1061,14 @@ function renderGame(g,play){
  if(play)h+='<div class="reco'+(play.scored?' win':'')+'"><span>'+esc(play.desc)+'</span><span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span></div>';
  if(g.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(g.away)+' '+g['as']+' : '+g.hs+' '+esc(g.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
- else{h+='<div class="posbanner '+(g.user_offense?'off':'def')+'">'+(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:')+'</div>'+
-   '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
-   '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()">Drive simulieren</button> <button class="ghost" onclick="simRest()">Spiel zu Ende simulieren</button></div>';}
+ else{const ban=g.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
+   h+='<div class="posbanner '+(g.user_offense||g.awaiting==='pat'?'off':'def')+'">'+ban+'</div>'+
+   '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
+   (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
+   '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
- if(play&&play.concept)animateGamePlay(play); else showFormation(g);
+ if(play&&play.concept)animateGamePlay(play); else {playBusy=false; showFormation(g);}   // ohne Animation (Kick/Wechsel): sofort wieder spielbar
 }
 function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
 async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
@@ -1075,12 +1079,12 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
- playAnim(svg,d,{kind:play.kind,yards:play.yards},()=>{const g=liveG;if(g&&!g.over)showFormation(g);});}    // danach: Aufstellung am neuen Spot
-async function gamePlay(choice){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+ playAnim(svg,d,{kind:play.kind,yards:play.yards},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
+async function gamePlay(choice){if(playBusy)return;playBusy=true;const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){playBusy=false;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
-async function simDrive(){const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
+async function simDrive(){if(playBusy)return;const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
  if(r.result){if(r.view)renderMgr(r.view);showGameResult(r.result);}else renderGame(r.game);}
-async function simRest(){const r=await api('/api/fr/game/sim_rest','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
+async function simRest(){if(playBusy)return;const r=await api('/api/fr/game/sim_rest','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 let _resBox=null;
 function showGameResult(res){closeGame();_resBox=res.box||[];const o=document.createElement('div');o.className='overlay';o.id='resultoverlay';
  o.addEventListener('click',e=>{if(e.target===o)closeResult();});
@@ -1094,7 +1098,7 @@ function toggleResBox(){const b=$('resbox');if(!b)return;if(b.innerHTML){b.inner
  else{b.innerHTML=boxSection({box:_resBox});$('resbtn').textContent='Statistik ausblenden';}}
 function closeResult(){const o=$('resultoverlay');if(o)o.remove();unlockBodyIfNone();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
-function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;unlockBodyIfNone();}
+function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;unlockBodyIfNone();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}

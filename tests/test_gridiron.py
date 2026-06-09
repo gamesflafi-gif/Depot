@@ -302,6 +302,48 @@ def test_college_scouting_and_draft(tmp_path):
     assert b["exp"] + b["pts"] * 100 > a["exp"] + a["pts"] * 100
 
 
+def test_kicker_fg_and_extra_point(tmp_path):
+    """Kicker-Rating, Field-Goal-Wahrscheinlichkeit, Extra-Punkt & 2-Punkte-Conversion."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    team = st["teams"][0]
+    assert 50 <= F.kicker(team) <= 95
+
+    # FG-Trefferchance: näher = besser, besserer Kicker = besser
+    assert F.fg_make_prob(15, 70) > F.fg_make_prob(45, 70)
+    assert F.fg_make_prob(40, 90) > F.fg_make_prob(40, 55)
+    assert F.xp_make_prob(90) > F.xp_make_prob(55)
+
+    F.do_training(cfg, st, "team")
+    F.start_game(cfg, st)
+    g = st["active_game"]
+    g["pos"] = 0 if g["user_is_home"] else 1              # Nutzer am Ball
+    # Field-Goal-Option taucht im Bereich auf
+    g["ytz"], g["down"] = 47, 4
+    assert any(o["key"] == "__FG__" for o in F._game_view(st)["options"])
+    r = F.game_play(cfg, st, "__FG__")
+    assert r["play"]["kind"] == "fg" and r["game"]["awaiting"] != "pat"
+
+    # Touchdown -> 6 Punkte + PAT-Auswahl, dann 2-Punkte-Conversion
+    g = st["active_game"]
+    g["pos"] = 0 if g["user_is_home"] else 1
+    pos = g["pos"]
+    g["ytz"], g["down"], g["dist"] = 2, 1, 2
+    for _ in range(15):
+        r = F.game_play(cfg, st, "Inside Zone")
+        if r["game"].get("awaiting") == "pat":
+            break
+        g = st["active_game"]; g["pos"] = pos; g["ytz"], g["down"], g["dist"] = 2, 1, 2
+    assert r["game"]["awaiting"] == "pat" and r["game"]["hs"] + r["game"]["as"] >= 6
+    keys = {o["key"] for o in r["game"]["options"]}
+    assert keys == {"__XP__", "__2PT__"}
+    before = r["game"]["hs"] + r["game"]["as"]
+    r2 = F.game_play(cfg, st, "__XP__")
+    assert r2["game"]["awaiting"] != "pat"               # nach PAT geht es normal weiter
+    assert r2["game"]["hs"] + r2["game"]["as"] >= before
+
+
 def test_franchise_detailed_game(tmp_path):
     """Nutzer-Spiel liefert ein vollständiges Play-by-Play für die Übertragung."""
     from gridiron import franchise as F
@@ -505,14 +547,17 @@ def test_franchise_roster_attributes_exp(tmp_path):
     assert p["attr"] and p["cap"] and "exp" in p and F.player_ovr(p) > 0
     for k in p["attr"]:
         assert p["cap"][k] >= p["attr"][k]                          # Cap nie unter Wert
-    assert team["units"] == F._units_from_roster(team["roster"])    # Units aus Kader
+    derived = F._units_from_roster(team["roster"])                  # Feld-Units aus Kader abgeleitet
+    assert {k: team["units"][k] for k in derived} == derived
+    assert 50 <= team["units"]["K"] <= 95                           # Kicker: eigenes Special-Teams-Rating (nicht aus Kader)
     # Skillpunkt verteilen hebt Attribut + Units
     p["pts"] = 1
     attr = next(k for k in p["attr"] if p["attr"][k] < p["cap"][k])
     before = p["attr"][attr]
     r = F.alloc(cfg, st, p["id"], attr)
     assert r["ok"] and p["attr"][attr] == before + 1
-    assert team["units"] == F._units_from_roster(team["roster"])
+    d2 = F._units_from_roster(team["roster"])
+    assert {k: team["units"][k] for k in d2} == d2 and "K" in team["units"]   # Kicker bleibt erhalten
     # Auto-verteilen, Starter-Toggle, Fokus
     p["pts"] = 4
     assert F.alloc_auto(cfg, st, p["id"])["ok"]
