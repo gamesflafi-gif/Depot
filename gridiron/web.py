@@ -103,6 +103,32 @@ _STYLE2 = """
  .reco.champ{border-color:#5a4f20;background:#23200f}
  .tag{display:inline-block;background:var(--warn);color:#1a1400;font-weight:800;font-size:11px;
    padding:3px 9px;border-radius:6px;letter-spacing:.04em}
+ .fieldwrap{margin:12px 0 8px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+ #field{display:block;width:100%;height:auto;background:#0c2a18}
+ .fieldlegend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;align-items:center}
+ .fieldlegend i.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+ .dot.off{background:#16c784} .dot.tgt{background:#ffd34d} .dot.def{background:#ef5350} .dot.saf{background:#e09b3d}
+ /* Broadcast (Manager) */
+ .bcast{background:linear-gradient(180deg,#0c2a18,#0a2114);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+ .scoreboard{display:flex;align-items:center;justify-content:space-between;background:#0a0f0d;border:1px solid var(--line);
+   border-radius:10px;padding:10px 16px;font-variant-numeric:tabular-nums}
+ .sb-team{font-weight:700;font-size:15px} .sb-score{font-size:30px;font-weight:800;letter-spacing:.02em}
+ .sb-mid{text-align:center;color:var(--mut);font-size:12px}
+ .fieldbar{position:relative;height:30px;margin:14px 2px;border-radius:6px;
+   background:repeating-linear-gradient(90deg,#11432a 0 9.7px,#0e3b25 9.7px 10px)}
+ .endz{position:absolute;top:0;bottom:0;width:10%;background:#0a2d1c;display:flex;align-items:center;justify-content:center;
+   font-size:9px;color:#3f7a5c;font-weight:700}
+ .endz.l{left:0;border-right:1px solid #1c5a3a} .endz.r{right:0;border-left:1px solid #1c5a3a}
+ .ball{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+   background:#ffd34d;box-shadow:0 0 8px rgba(255,211,77,.6);transition:left .6s ease}
+ .firstline{position:absolute;top:-3px;bottom:-3px;width:2px;background:#ffd34d;opacity:.55}
+ .commentary{max-height:230px;overflow-y:auto;margin-top:10px}
+ .cmt{padding:7px 11px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:9px}
+ .cmt .q{color:var(--mut);min-width:54px;font-variant-numeric:tabular-nums} .cmt.score{background:var(--accsoft)}
+ .cmt.score .t{color:#4be3a0;font-weight:600}
+ .overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+ .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
+ .modal h3{margin:0 0 4px;font-size:17px} .modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -160,6 +186,15 @@ _PAGE = """<!doctype html><html lang="de"><head>
    <div><label>Box (optional)</label><input id="sim_box" type="number" value="" placeholder="auto" style="width:90px"></div>
    <button onclick="runSim()">Simulieren</button>
   </div>
+ </div>
+ <div class="card" id="sim_fieldcard" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+   <div class="sec" style="margin:0">Spielzug</div>
+   <div><span id="field_title" class="mut"></span> &nbsp;<button class="ghost" id="replayBtn" onclick="replayPlay()">▶ Abspielen</button></div>
+  </div>
+  <div class="fieldwrap"><svg id="field" viewBox="0 0 533 360" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <div class="fieldlegend"><span><i class="dot off"></i>Offense</span><span><i class="dot tgt"></i>Anspielziel</span>
+   <span><i class="dot def"></i>Defense</span><span><i class="dot saf"></i>Safety (tief)</span></div>
  </div>
  <div id="sim_out"></div>
  <div class="grid" style="grid-template-columns:1fr 1fr">
@@ -305,8 +340,74 @@ async function runSim(){
    '<div class="vv">'+pct(b.pct)+'</div></div>';});
  h+='<div class="note">'+esc(r.note)+'</div></div>';
  $('sim_out').innerHTML=h;
- loadBest(cov); loadStop(c);
+ drawPlay(c,cov,r); loadBest(cov); loadStop(c);
 }
+
+/* ---------- Spielfeld & Animation ---------- */
+const SVGNS='http://www.w3.org/2000/svg';
+let lastDiag=null,lastRes=null,animReq=null;
+const mapX=x=>x*10, mapY=fy=>10+(26-fy)*10;
+function el(tag,a){const e=document.createElementNS(SVGNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function routeLen(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
+function posAlong(pts,frac){if(pts.length<2)return pts[0];const tot=routeLen(pts);let d=frac*tot;for(let i=1;i<pts.length;i++){const seg=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d<=seg||i===pts.length-1){const t=seg?d/seg:0;return [pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t];}d-=seg;}return pts[pts.length-1];}
+async function drawPlay(concept,coverage,res){
+ const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
+ if(d.error)return; lastDiag=d; lastRes=res;
+ $('sim_fieldcard').style.display='block';
+ $('field_title').textContent=concept+' vs '+coverage.replace(/ —.*/,'');
+ renderField(d); playAnim();
+}
+function renderField(d){
+ const svg=$('field'); svg.innerHTML='';
+ const ytg=parseInt($('sim_y').value)||10;
+ // Rasen + Yard-Linien
+ for(let fy=-5;fy<=25;fy+=5){const y=mapY(fy);
+  svg.appendChild(el('line',{x1:0,y1:y,x2:533,y2:y,stroke:'#1c5a3a','stroke-width':fy===0?0:1,opacity:.5}));
+  // Hash-Marks
+  [23.58,29.72].forEach(hx=>svg.appendChild(el('line',{x1:mapX(hx)-3,y1:y,x2:mapX(hx)+3,y2:y,stroke:'#2e7d52','stroke-width':1})));
+ }
+ svg.appendChild(el('line',{x1:0,y1:mapY(0),x2:533,y2:mapY(0),stroke:'#5fa8ff','stroke-width':2,opacity:.85}));
+ if(ytg<=25)svg.appendChild(el('line',{x1:0,y1:mapY(ytg),x2:533,y2:mapY(ytg),stroke:'#ffd34d','stroke-width':2,opacity:.7,'stroke-dasharray':'6 5'}));
+ // Routen (blass)
+ d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='M';o.route.forEach((pt,i)=>{p+=(i?' L':' ')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1);});
+  svg.appendChild(el('path',{d:p,fill:'none',stroke:o.target?'#ffd34d':(o.carry?'#ffd34d':'#16c784'),'stroke-width':o.target||o.carry?2:1.3,opacity:.35,'stroke-dasharray':'4 4'}));}});
+ // Spieler (Defense zuerst, dann Offense oben)
+ d.defense.forEach((p,i)=>addPlayer(svg,p,p.deep?'#e09b3d':'#ef5350','d_'+i));
+ d.offense.forEach((o,i)=>addPlayer(svg,o,o.target?'#ffd34d':(o.pos==='OL'?'#0f9e68':'#16c784'),'o'+i,o));
+ // Ball
+ const qb=d.offense.find(o=>o.pos==='QB');
+ svg.appendChild(el('circle',{id:'pball',cx:mapX(qb.x),cy:mapY(qb.y),r:3.5,fill:'#fff',opacity:0}));
+}
+function addPlayer(svg,p,color,id,o){
+ const g=el('g',{}); g.setAttribute('data-id',id);
+ const c=el('circle',{cx:mapX(p.x),cy:mapY(p.y),r:7,fill:color,stroke:'#06140d','stroke-width':1.4});
+ c.setAttribute('data-px',p.x); c.setAttribute('data-py',p.y); c.id='pl_'+id;
+ g.appendChild(c);
+ const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:mapX(p.x),y:mapY(p.y)+3,'text-anchor':'middle','font-size':7.5,fill:'#03130c','font-weight':700});t.textContent=lbl;t.id='tx_'+id;g.appendChild(t);}
+ svg.appendChild(g);
+}
+function moveP(id,x,y){const c=$('pl_'+id);if(!c)return;c.setAttribute('cx',mapX(x));c.setAttribute('cy',mapY(y));const t=$('tx_'+id);if(t){t.setAttribute('x',mapX(x));t.setAttribute('y',mapY(y)+3);}}
+function playAnim(){
+ if(!lastDiag)return; cancelAnimationFrame(animReq);
+ const d=lastDiag,T=2100,t0=performance.now();
+ const qb=d.offense.find(o=>o.pos==='QB');
+ const tgt=d.ball_target, isPass=d.kind==='pass', throwAt=.5;
+ const ball=$('pball');
+ function frame(now){const t=Math.min(1,(now-t0)/T);
+  d.offense.forEach((o,i)=>{if(o.route&&o.route.length>1){const pp=posAlong(o.route,t);moveP('o'+i,pp[0],pp[1]);}});
+  d.defense.forEach((p,i)=>{if(p.drop){moveP('d_'+i,p.x+(p.drop[0]-p.x)*t,p.y+(p.drop[1]-p.y)*t);}});
+  if(isPass&&ball){if(t>=throwAt){const tt=(t-throwAt)/(1-throwAt);ball.setAttribute('opacity',1);
+    ball.setAttribute('cx',mapX(qb.x+(tgt[0]-qb.x)*tt));ball.setAttribute('cy',mapY(qb.y+(tgt[1]-qb.y)*tt-Math.sin(tt*Math.PI)*1.2));}}
+  if(t<1)animReq=requestAnimationFrame(frame); else showResult();
+ }
+ animReq=requestAnimationFrame(frame);
+}
+function showResult(){const svg=$('field');if(!lastRes||!lastDiag)return;const tgt=lastDiag.ball_target;
+ const g=el('g',{}); const x=Math.min(Math.max(mapX(tgt[0]),40),493),y=Math.max(mapY(tgt[1])-14,16);
+ g.appendChild(el('rect',{x:x-26,y:y-13,width:52,height:20,rx:5,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':1.2}));
+ const t=el('text',{x:x,y:y+1,'text-anchor':'middle','font-size':11,fill:'#ffd34d','font-weight':800});
+ t.textContent=(lastRes.mean_yards>=0?'+':'')+lastRes.mean_yards.toFixed(1)+' Yds'; g.appendChild(t); svg.appendChild(g);}
+function replayPlay(){renderField(lastDiag);playAnim();}
 async function loadBest(cov){
  const r=await (await fetch('/api/sim/best?coverage='+encodeURIComponent(cov)+'&'+simSit('sim_'))).json();
  $('sim_best').innerHTML=r.items.map(x=>'<div class="reco"><span><b>'+esc(x.concept)+'</b> <span class="mut">'+
@@ -375,6 +476,7 @@ function renderMgr(v){
    v.playoff.pairs.map(p=>esc(p[0])+' vs '+esc(p[1])).join(' · ')+'</span></div>';}
  if(v.phase!=='done')h+='<button onclick="simWeek()">Woche simulieren</button> ';
  else h+='<button onclick="newSeason()">Neue Saison</button> ';
+ if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Letztes Spiel ansehen</button> ';
  h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
@@ -410,9 +512,52 @@ function renderResult(res,me){
    '<span class="mut">'+(mine?(won?'Sieg':'Niederlage'):esc(g.winner))+'</span></div>';});
  return h+'</div>';
 }
-async function simWeek(){const r=await api('/api/fr/sim_week','POST');if(r.view)renderMgr(r.view);}
+async function simWeek(){const r=await api('/api/fr/sim_week','POST');if(r.view)renderMgr(r.view);
+ if(r.result&&r.result.user_game)openBroadcast(r.result.user_game);}
 async function newSeason(){renderMgr(await api('/api/fr/new_season','POST'));}
 async function resetFr(){if(confirm('Franchise wirklich löschen?')){await api('/api/fr/reset','POST');loadMgr();}}
+async function watchLast(){const r=await api('/api/fr/last_game');if(r.game)openBroadcast(r.game);}
+
+/* ---------- Spiel-Übertragung ---------- */
+let bcTimer=null,bcGame=null;
+function openBroadcast(g){
+ closeBroadcast(); bcGame=g;
+ const o=document.createElement('div');o.className='overlay';o.id='overlay';
+ o.innerHTML='<div class="modal"><div class="modalhead"><h3>Spiel-Übertragung</h3>'+
+  '<button class="ghost" onclick="closeBroadcast()">Schließen</button></div>'+
+  '<div class="bcast"><div class="scoreboard">'+
+   '<div><div class="sb-team">'+esc(g.away)+'</div><div class="sb-score" id="bc_as">0</div></div>'+
+   '<div class="sb-mid"><div id="bc_q">Q1</div><div>Endstand '+g['as']+'–'+g.hs+'</div></div>'+
+   '<div style="text-align:right"><div class="sb-team">'+esc(g.home)+'</div><div class="sb-score" id="bc_hs">0</div></div>'+
+  '</div>'+
+  '<div class="fieldbar"><div class="endz l">'+esc(g.away.slice(0,3).toUpperCase())+'</div>'+
+   '<div class="endz r">'+esc(g.home.slice(0,3).toUpperCase())+'</div>'+
+   '<div class="ball" id="bc_ball" style="left:50%"></div></div>'+
+  '</div>'+
+  '<div><button id="bc_skip" class="ghost" onclick="skipBroadcast()">Überspringen</button></div>'+
+  '<div class="commentary" id="bc_feed"></div></div>';
+ document.body.appendChild(o);
+ o.addEventListener('click',e=>{if(e.target===o)closeBroadcast();});
+ bcPlay(g);
+}
+function bcBallLeft(x){return (10+x*0.8)+'%';}
+function bcPlay(g){
+ let i=0; const feed=$('bc_feed');
+ bcTimer=setInterval(()=>{
+  if(i>=g.plays.length){clearInterval(bcTimer);bcTimer=null;return;}
+  const p=g.plays[i++];
+  $('bc_ball').style.left=bcBallLeft(p.x);
+  $('bc_hs').textContent=p.hs; $('bc_as').textContent=p.as; $('bc_q').textContent='Q'+p.q;
+  const c=document.createElement('div');c.className='cmt'+(p.score?' score':'');
+  c.innerHTML='<span class="q">Q'+p.q+'</span><span class="t">'+esc(p.desc)+'</span>';
+  feed.insertBefore(c,feed.firstChild);
+ },180);
+}
+function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const g=bcGame;if(!g)return;
+ $('bc_hs').textContent=g.hs;$('bc_as').textContent=g['as'];$('bc_ball').style.left=bcBallLeft(g.plays.length?g.plays[g.plays.length-1].x:50);
+ const feed=$('bc_feed');feed.innerHTML='';g.plays.slice().reverse().forEach(p=>{const c=document.createElement('div');
+  c.className='cmt'+(p.score?' score':'');c.innerHTML='<span class="q">Q'+p.q+'</span><span class="t">'+esc(p.desc)+'</span>';feed.appendChild(c);});}
+function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setPb(){const r=await api('/api/fr/playbook?concept='+encodeURIComponent($('pb_c').value)+'&coverage='+encodeURIComponent($('pb_cov').value),'POST');if(r.view)renderMgr(r.view);}
 init();
@@ -564,6 +709,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         from gridiron.simulator import matrix
         return matrix(cfg, _sit(down, ydstogo, yardline, personnel, box))
 
+    @app.get("/api/sim/diagram")
+    def sim_diagram(concept: str, coverage: str):
+        from gridiron.playviz import diagram
+        try:
+            return diagram(concept, coverage)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
     # ---- Franchise / Team-Manager -------------------------------------- #
     def _fr_load_or_404():
         from gridiron import franchise as F
@@ -625,6 +778,12 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             return err
         res = F.set_playbook(cfg, st, concept or None, coverage or None)
         return {"result": res, "view": F.view(st)}
+
+    @app.get("/api/fr/last_game")
+    def fr_last_game():
+        from gridiron import franchise as F
+        st = F.load(cfg)
+        return {"game": (st.get("last_user_game") if st else None)}
 
     @app.post("/api/fr/reset")
     def fr_reset():
