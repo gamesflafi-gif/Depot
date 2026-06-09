@@ -655,23 +655,23 @@ def _idx(teams: list[dict], name: str) -> int:
 # Woche / Saison fortschreiben
 # --------------------------------------------------------------------------- #
 def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
-    """Spielt die aktuelle Woche. user_result: selbst gespieltes Nutzer-Spiel
-    (wird gewertet statt simuliert)."""
+    """Wertet die aktuelle Woche aus (Spiele + Event), schreitet aber NICHT
+    automatisch fort — das geschieht erst über next_week()."""
     if state["phase"] == "done":
         return {"error": "Saison beendet — starte eine neue Saison."}
+    if state.get("week_done"):
+        return {"error": "Diese Woche ist bereits ausgewertet — bitte zur nächsten Woche gehen."}
     rng = random.Random()
     teams = state["teams"]
 
     user_game = None
     if state["phase"] == "regular":
         wk = state["week"]
-        pairs = state["schedule"][wk]
         games = []
-        for hi, ai in pairs:
+        for hi, ai in state["schedule"][wk]:
             if user_result and (hi == 0 or ai == 0):
-                r = user_result
-                _apply(teams[hi], teams[ai], r)
-                games.append(_strip(r))
+                _apply(teams[hi], teams[ai], user_result)
+                games.append(_strip(user_result))
             else:
                 r, pbp = _decide(teams[hi], teams[ai], rng)
                 _apply(teams[hi], teams[ai], r)
@@ -680,22 +680,37 @@ def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
                     user_game = pbp
         state["results"].append({"week": wk + 1, "games": games})
         _earn(state, games)
-        state["week"] += 1
-        if state["week"] >= len(state["schedule"]):
-            _start_playoffs(state)
         out = {"phase": "regular", "week": wk + 1, "games": games}
     else:
-        out = _sim_playoff_round(state, rng, user_result)
+        out = _resolve_playoff(state, rng, user_result)
         user_game = out.pop("_user_game", None)
 
     out["events"] = _process_events(state, rng)
     if user_game:
         state["last_user_game"] = user_game
         out["user_game"] = user_game
-    state["week_trained"] = False                         # neue Woche: Training wieder möglich
-    state["teams"][0]["game_bonus"] = 0                   # Film-Bonus verbraucht
+    state["week_done"] = True                              # Woche ausgewertet, wartet auf Bestätigung
     save(cfg, state)
     return out
+
+
+def next_week(cfg: Config, state: dict) -> dict:
+    """Schreitet zur nächsten Woche fort (nur nach Auswertung)."""
+    if state["phase"] == "done":
+        return {"error": "Saison beendet."}
+    if not state.get("week_done"):
+        return {"error": "Erst das Spiel der Woche abschließen."}
+    if state["phase"] == "regular":
+        state["week"] += 1
+        if state["week"] >= len(state["schedule"]):
+            _start_playoffs(state)
+    else:
+        _advance_playoff(state)
+    state["week_done"] = False
+    state["week_trained"] = False
+    state["teams"][0]["game_bonus"] = 0
+    save(cfg, state)
+    return {"ok": True, "view": view(state)}
 
 
 def _strip(r: dict) -> dict:
@@ -857,7 +872,8 @@ def _start_playoffs(state: dict) -> None:
                         "final": None}
 
 
-def _sim_playoff_round(state: dict, rng: random.Random, user_result: dict | None = None) -> dict:
+def _resolve_playoff(state: dict, rng: random.Random, user_result: dict | None = None) -> dict:
+    """Wertet die aktuelle Playoff-Runde aus (Bracket-Fortschritt erst in next_week)."""
     teams = state["teams"]
     po = state["playoff"]
     user = teams[0]["name"]
@@ -870,19 +886,25 @@ def _sim_playoff_round(state: dict, rng: random.Random, user_result: dict | None
         games.append(_strip(r))
         if pbp:
             user_game = pbp
-    if po["round"] == "Halbfinale":
-        winners = [g["winner"] for g in games]
+    state["results"].append({"week": po["round"], "games": games})
+    state["_po_pending"] = {"round": po["round"], "winners": [g["winner"] for g in games]}
+    return {"phase": "playoffs", "round": po["round"], "games": games, "_user_game": user_game}
+
+
+def _advance_playoff(state: dict) -> None:
+    pend = state.pop("_po_pending", None)
+    po = state["playoff"]
+    if not pend:
+        return
+    if pend["round"] == "Halbfinale":
+        w = pend["winners"]
         po["round"] = "Finale"
-        po["pairs"] = [(winners[0], winners[1])]
-        state["results"].append({"week": "Halbfinale", "games": games})
-        return {"phase": "playoffs", "round": "Halbfinale", "games": games, "_user_game": user_game}
-    # Finale
-    champ = games[0]["winner"]
-    state["champion"] = champ
-    state["phase"] = "done"
-    state["results"].append({"week": "Finale", "games": games})
-    state["history"].append({"season": state["season"], "champion": champ})
-    return {"phase": "done", "round": "Finale", "games": games, "champion": champ, "_user_game": user_game}
+        po["pairs"] = [(w[0], w[1])]
+    else:                                                 # Finale -> Meister
+        champ = pend["winners"][0]
+        state["champion"] = champ
+        state["phase"] = "done"
+        state["history"].append({"season": state["season"], "champion": champ})
 
 
 def new_season(cfg: Config, state: dict) -> dict:
@@ -927,6 +949,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["last_user_game"] = None
     state["active_game"] = None
     state["week_trained"] = False
+    state["week_done"] = False
     state["teams"][0]["game_bonus"] = 0
     state["schedule"] = _season_schedule(len(state["teams"]), rng)
     state["budget"] += 20                                 # Saisonbudget
@@ -1155,6 +1178,7 @@ def view(state: dict) -> dict:
             team.get("roster", []),
             key=lambda p: (list(ROSTER_SLOTS).index(p["pos"]), not p["starter"], -player_ovr(p)))],
         "active_game": bool(state.get("active_game")),
+        "week_done": bool(state.get("week_done")),
         "week_trained": bool(state.get("week_trained")),
         "trainings": TRAININGS,
         "game_bonus": team.get("game_bonus", 0),
