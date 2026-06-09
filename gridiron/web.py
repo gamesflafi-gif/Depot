@@ -22,8 +22,12 @@ _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
    --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
  *{box-sizing:border-box}
+ html{overflow-x:hidden;overscroll-behavior:none}
  body{margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;
-   font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+   font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+   /* Seite lässt sich nur vertikal scrollen – kein seitliches Verschieben/Wackeln */
+   overflow-x:hidden;overscroll-behavior:none;width:100%;max-width:100%;position:relative;touch-action:pan-y}
+ img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
  .top{background:rgba(10,14,13,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
  .topin{max-width:1040px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
@@ -85,9 +89,9 @@ _STYLE = """
   .wrap{padding:14px 12px 30px} .big{font-size:21px} .card{padding:14px}
   .controls{gap:10px}
   /* Tabs & Sub-Navigation: einzeilig, horizontal wischbar */
-  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
   .tabs::-webkit-scrollbar{display:none} .tab{white-space:nowrap;padding:11px 13px}
-  .subnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .subnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
   .subnav::-webkit-scrollbar{display:none} .subnav .s{flex:0 0 auto;white-space:nowrap;font-size:13px;padding:9px 13px}
   /* Team-Banner: Pills/Buttons unter den Namen */
   .teamhdr{flex-wrap:wrap;gap:10px} .teamhdr .crest{width:46px;height:46px;font-size:15px}
@@ -135,7 +139,7 @@ _STYLE2 = """
  .heat td.val{color:#06140d;font-weight:700;border-radius:5px;min-width:46px;font-variant-numeric:tabular-nums}
  .tbl td,.tbl th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right}
  .tbl td.cn,.tbl th.cn{text-align:left} .tbl tr.me td{background:var(--accsoft)}
- .scroll{overflow-x:auto} .note{color:var(--mut);font-size:13px;margin-top:8px}
+ .scroll{overflow-x:auto;touch-action:pan-x} .note{color:var(--mut);font-size:13px;margin-top:8px}
  .reco{padding:11px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;margin:7px 0;font-size:14px;
    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
  .reco>span:first-child{min-width:0}
@@ -222,7 +226,7 @@ _STYLE2 = """
  .ball{position:absolute;top:50%;width:15px;height:15px;margin:-8px 0 0 -8px;border-radius:50%;
    background:radial-gradient(circle at 35% 30%,#ffe486,#e0a813);border:1.5px solid #5e4500;
    box-shadow:0 0 12px rgba(255,211,77,.75);transition:left .17s linear;z-index:2}
- .commentary{max-height:230px;overflow-y:auto;margin-top:10px;border:1px solid var(--line);border-radius:9px}
+ .commentary{max-height:230px;overflow-y:auto;margin-top:10px;border:1px solid var(--line);border-radius:9px;touch-action:pan-y;overscroll-behavior:contain}
  .cmt{padding:8px 11px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:10px;align-items:center}
  .cmt:last-child{border-bottom:0}.cmt .q{color:var(--mut);min-width:26px;font-size:11px;font-variant-numeric:tabular-nums}
  .cmt.big{background:var(--accsoft)}
@@ -235,7 +239,7 @@ _STYLE2 = """
  .o-warn{background:#e9b949}.o-bad{background:#ef5350;color:#fff}
  body.noscroll{overflow:hidden}
  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overscroll-behavior:contain}
- .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
+ .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px;touch-action:pan-y;overscroll-behavior:contain}
  .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
  .livedot{width:8px;height:8px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
  .modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
