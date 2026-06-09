@@ -51,10 +51,18 @@ _STYLE = """
    box-shadow:0 1px 2px rgba(0,0,0,.25)}
  .big{font-size:25px;font-weight:800;letter-spacing:-.01em}
  .row{display:flex;gap:24px;flex-wrap:wrap}
- .kpi{flex:1;min-width:100px}
- .kpi .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
- .kpi .v{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px}
- .sec{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 10px;font-weight:700}
+ .kpi{flex:1;min-width:96px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+ .kpi .l{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+ .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px}
+ .sec{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--fg);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 11px;font-weight:800}
+ .sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--acc);flex:none}
+ /* Positions-Farben & OVR-Tiers (Game-Look) */
+ .posb{display:inline-block;min-width:32px;text-align:center;font-weight:800;font-size:11px;padding:3px 6px;border-radius:5px;color:#06140d;letter-spacing:.02em}
+ .p-QB{background:#f5a524}.p-RB{background:#16c784}.p-WR{background:#3b96ff;color:#fff}.p-OL{background:#b9923a}
+ .p-DL{background:#ef5350;color:#fff}.p-LB{background:#9b6be3;color:#fff}.p-DB{background:#13b7c9;color:#04121f}
+ .ovrb{font-weight:800;font-variant-numeric:tabular-nums;border-radius:8px;padding:5px 9px;min-width:38px;text-align:center;display:inline-block;font-size:15px}
+ .ovr-elite{background:linear-gradient(135deg,#f3d27a,#caa23f);color:#231a00}.ovr-good{background:#16c784;color:#04140c}
+ .ovr-ok{background:#1f6f53;color:#dffaef}.ovr-avg{background:#2a3530;color:#cfe}.ovr-low{background:#3a2a20;color:#eaa877}
  table{width:100%;border-collapse:collapse;font-size:14px}
  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line)}
  th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
@@ -168,8 +176,12 @@ _STYLE2 = """
  .optbtn:hover{border-color:var(--acc)} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
- .subnav .s{padding:9px 15px;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--mut)}
- .subnav .s:hover{color:var(--fg)} .subnav .s.on{background:var(--accsoft);color:var(--acc);border-color:#1c5a40}
+ .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:5px}
+ .subnav .s{flex:1;text-align:center;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13.5px;color:var(--mut);white-space:nowrap}
+ .subnav .s:hover{color:var(--fg);background:var(--panel2)} .subnav .s.on{background:var(--acc);color:#04140c}
+ .tbanner{border-radius:14px;padding:18px 20px;margin:0 0 14px;position:relative;overflow:hidden;border:1px solid var(--line);
+   background:linear-gradient(120deg,var(--tc) -10%,#0e1513 60%)}
+ .tbanner .crest{box-shadow:0 2px 10px rgba(0,0,0,.4)}
  .ovrbar{height:5px;background:var(--bg);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:5px;width:170px;max-width:42vw}
  .ovrfill{height:100%;background:var(--acc)}
  .ovrnum{font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
@@ -384,6 +396,9 @@ async function initSim(){
 }
 function kpi(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';}
 function segCol(cls){return {ok:'#16c784',ok2:'#0e9f6a',mid:'#3a4a44',warn:'#e9b949',bad:'#ef5350'}[cls]||'#3a4a44';}
+function posBadge(p){return '<span class="posb p-'+p+'">'+p+'</span>';}
+function ovrTier(o){return o>=88?'elite':o>=80?'good':o>=72?'ok':o>=62?'avg':'low';}
+function ovrBadge(o){return '<span class="ovrb ovr-'+ovrTier(o)+'">'+o+'</span>';}
 async function runSim(){
  const c=$('sim_c').value,cov=$('sim_cov').value;
  const qs='concept='+encodeURIComponent(c)+'&coverage='+encodeURIComponent(cov)+'&'+simSit('sim_');
@@ -557,14 +572,14 @@ function mgrGo(t){mgrTab=t;renderMgr(lastView);}
 function renderMgr(v){
  lastView=v;
  const phaseLabel={regular:'Reguläre Saison',playoffs:(v.playoff?v.playoff.round:'Playoffs'),done:'Saison beendet'}[v.phase];
- let h='<div class="card"><div class="teamhdr">'+
+ let h='<div class="tbanner" style="--tc:'+esc(v.color||'#16c784')+'"><div class="teamhdr">'+
    '<div class="crest" style="background:'+esc(v.color||'#16c784')+'">'+esc(v.abbr||'')+'</div>'+
-   '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
+   '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut" style="color:#dfe7e3">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
    '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('Punkte '+v.skillpoints)+'</div></div>'+
    '<div class="grid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
-   kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>';
- if(v.champion)h+='<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>';
- h+='</div>';
+   kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>'+
+   (v.champion?'<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>':'')+
+   '</div>';
  // Unter-Navigation
  const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['stats','Statistik'],['transfer','Transfermarkt'],['build','Verbesserungen']];
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+t[1]+'</div>').join('')+'</div>';
@@ -611,11 +626,11 @@ function secKader(v){
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos);if(!ps.length)return;
-     h+='<div class="mut" style="font-weight:700;letter-spacing:.04em;margin:10px 0 2px">'+pos+'</div>';
+     h+='<div style="margin:12px 0 4px">'+posBadge(pos)+' <span class="mut" style="font-weight:700">'+pos+'</span></div>';
      ps.forEach(p=>{const bar=Math.round(p.ovr/Math.max(p.pot,1)*100);
        h+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
-        '<span class="ovrnum">'+p.ovr+'</span>'+
-        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':'')+(p.inj>0?' <span class="tag" style="background:#3a1d1d;color:#ff8a8a">VERLETZT '+p.inj+'W</span>':'')+
+        ovrBadge(p.ovr)+
+        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#16c784;color:#04140c">START</span>':'')+(p.inj>0?' <span class="tag" style="background:#3a1d1d;color:#ff8a8a">VERLETZT '+p.inj+'W</span>':'')+
         '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+(p.season&&p.season.games?' · '+p.season.games+' Sp.':'')+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
         (p.pts>0?'<span class="ptbadge">'+p.pts+' P</span>':'<span class="mut" style="font-size:12px">'+p.exp+'/100</span>')+'</div>';});
    });
@@ -630,7 +645,8 @@ function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)=
  o.innerHTML='<div class="modal" id="playermodal"></div>';renderPlayer(p);
 }
 function renderPlayer(p){
- let h='<div class="modalhead"><h3>'+esc(p.name)+' <span class="mut" style="font-weight:600">'+p.pos+' · '+p.ovr+' OVR'+(p.starter?' · Starter':'')+(p.inj>0?' · <span style="color:#ff8a8a">verletzt '+p.inj+'W</span>':'')+'</span></h3>'+
+ let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+
+   '<span class="mut" style="font-weight:600;font-size:13px">'+(p.starter?'Starter':'Bank')+(p.inj>0?' · verletzt '+p.inj+'W':'')+'</span></h3>'+
    '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
    '<div class="grid" style="grid-template-columns:repeat(4,1fr)">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
  h+='<div class="pcols">';
@@ -679,7 +695,7 @@ function secTransfer(v){
    const ps=v.market_players.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];
-     h+='<div class="reco"><span><span class="ovrnum">'+p.ovr+'</span> <b>'+esc(p.name)+'</b> <span class="mut">'+p.pos+' · Alter '+p.age+' · Pot '+p.pot+'</span></span>'+
+     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+'<span><b>'+esc(p.name)+'</b> <span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'</span></span></span>'+
        '<button data-i="'+p.id+'" onclick="signP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Verpflichten ('+p.cost+' Mio)')+'</button></div>';});
    h+='</div>';});
  return h;
@@ -687,7 +703,7 @@ function secTransfer(v){
 function secStats(v){
  const R=v.roster;
  const leader=(key,fmt)=>{let best=null;R.forEach(p=>{if(!best||p.season[key]>best.season[key])best=p;});
-   return best&&best.season[key]>0?'<div class="reco"><span><b>'+esc(best.name)+'</b> <span class="mut">'+best.pos+'</span></span><span>'+fmt(best.season)+'</span></div>':'';};
+   return best&&best.season[key]>0?'<div class="reco"><span style="display:flex;align-items:center;gap:9px">'+posBadge(best.pos)+'<b>'+esc(best.name)+'</b></span><span>'+fmt(best.season)+'</span></div>':'';};
  let h='<div class="card"><div class="sec" style="margin-top:0">Saison-Bestenliste (dein Team)</div>'+
    (leader('pass_yds',s=>s.pass_yds+' Pass-Yds, '+s.pass_td+' TD')||'')+
    (leader('rush_yds',s=>s.rush_yds+' Rush-Yds ('+s.rush_att+' Läufe)')||'')+
@@ -700,7 +716,7 @@ function secStats(v){
  const played=R.filter(p=>p.season.games>0).sort((a,b)=>b.season.games-a.season.games||playerImpact(b)-playerImpact(a));
  if(played.length){h+='<div class="card scroll"><div class="sec" style="margin-top:0">Saison-Statistik</div>'+
    '<table class="tbl"><tr><th class="cn">Spieler</th><th>Sp</th><th>Pass</th><th>Rush</th><th>Rec</th><th>Tkl</th><th>Sck</th><th>INT</th><th>TD</th></tr>'+
-   played.map(p=>'<tr><td class="cn">'+esc(p.name)+' <span class="mut">'+p.pos+'</span></td><td>'+p.season.games+'</td>'+
+   played.map(p=>'<tr><td class="cn">'+posBadge(p.pos)+' '+esc(p.name)+'</td><td>'+p.season.games+'</td>'+
      '<td>'+p.season.pass_yds+'</td><td>'+p.season.rush_yds+'</td><td>'+p.season.rec_yds+'</td>'+
      '<td>'+p.season.tkl+'</td><td>'+p.season.sack+'</td><td>'+p.season.intc+'</td><td>'+p.season.td+'</td></tr>').join('')+
    '</table></div>';}
