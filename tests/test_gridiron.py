@@ -308,6 +308,25 @@ def test_franchise_events_injuries(tmp_path):
     assert "inj" in F.view(st)["roster"][0]
 
 
+def test_franchise_transfers_and_draft(tmp_path):
+    """Transfermarkt: entlassen, verpflichten; Saisonwechsel mit Ruhestand + neuer Klasse."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=41)
+    st["budget"] = 300
+    assert len(st["market_players"]) >= 10
+    wr = next(p for p in st["teams"][0]["roster"] if p["pos"] == "WR")
+    assert F.cut_player(cfg, st, wr["id"])["ok"]
+    assert all(p["id"] != wr["id"] for p in st["teams"][0]["roster"])
+    fa = next(p for p in st["market_players"] if p["pos"] == "WR")
+    assert F.sign_player(cfg, st, fa["id"])["ok"]
+    assert any(p["id"] == fa["id"] for p in st["teams"][0]["roster"])
+    F.new_season(cfg, st)
+    assert len(st["market_players"]) >= 10 and st["events"]
+    v = F.view(st)
+    assert v["market_players"] and v["slots"]
+
+
 def test_franchise_coaches_and_facilities(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)

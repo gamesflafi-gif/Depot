@@ -565,9 +565,9 @@ function renderMgr(v){
  if(v.champion)h+='<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>';
  h+='</div>';
  // Unter-Navigation
- const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['build','Verbesserungen']];
+ const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['transfer','Transfermarkt'],['build','Verbesserungen']];
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+t[1]+'</div>').join('')+'</div>';
- h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):secDash(v));
+ h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):secDash(v));
  $('mgr_out').innerHTML=h;
 }
 function secDash(v){
@@ -643,7 +643,8 @@ function renderPlayer(p){
  h+='</div></div>';
  h+='<div style="margin-top:12px">'+
    (p.pts>0?'<button onclick="autoAlloc()">Auto-verteilen ('+p.pts+')</button> ':'')+
-   '<button class="ghost" onclick="toggleStarter()">'+(p.starter?'Aus Startelf nehmen':'In Startelf setzen')+'</button></div>'+
+   '<button class="ghost" onclick="toggleStarter()">'+(p.starter?'Aus Startelf nehmen':'In Startelf setzen')+'</button> '+
+   '<button class="ghost" data-i="'+p.id+'" onclick="cutP(this.dataset.i)">Entlassen</button></div>'+
    '<div class="note">Weiße Linie = Potenzial-Limit des Attributs. Skillpunkte bekommst du über EXP.</div>';
  $('playermodal').innerHTML=h;
 }
@@ -663,6 +664,21 @@ let _curPid=null;
 function curPlayer(){return _curPid;}
 function afterPlayer(r){if(r.view){lastView=r.view;renderMgr(r.view);const p=r.view.roster.find(x=>String(x.id)===String(_curPid));if(p)renderPlayer(p);}}
 function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;}
+function secTransfer(v){
+ const cnt={};v.roster.forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);
+ let h='<div class="card"><div class="sec" style="margin-top:0">Transfermarkt — Draft &amp; Free Agents</div>'+
+   '<div class="note">Budget: '+v.budget+' Mio. Verpflichte Spieler (Rookies haben hohes Potenzial). Position voll? Erst im Kader jemanden entlassen.</div></div>';
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+   const ps=v.market_players.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
+   h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
+   ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];
+     h+='<div class="reco"><span><span class="ovrnum">'+p.ovr+'</span> <b>'+esc(p.name)+'</b> <span class="mut">'+p.pos+' · Alter '+p.age+' · Pot '+p.pot+'</span></span>'+
+       '<button data-i="'+p.id+'" onclick="signP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Verpflichten ('+p.cost+' Mio)')+'</button></div>';});
+   h+='</div>';});
+ return h;
+}
+async function signP(id){const r=await api('/api/fr/sign?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
+async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const r=await api('/api/fr/cut?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view){lastView=r.view;closePlayer();renderMgr(r.view);}}
 function secBuild(v){
  const up=(key,label,sub,level,cost,maxed,plus)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
    '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+plus+' ('+cost+' Mio)</button></div>';
@@ -1046,6 +1062,22 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return {"result": F.set_focus(cfg, st, group or None), "view": F.view(st)}
+
+    @app.post("/api/fr/sign")
+    def fr_sign(pid: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.sign_player(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/cut")
+    def fr_cut(pid: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.cut_player(cfg, st, pid), "view": F.view(st)}
 
     @app.post("/api/fr/hire_coach")
     def fr_hire_coach(role: str, idx: int):
