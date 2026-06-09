@@ -566,9 +566,9 @@ function renderMgr(v){
  if(v.champion)h+='<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>';
  h+='</div>';
  // Unter-Navigation
- const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['transfer','Transfermarkt'],['build','Verbesserungen']];
+ const tabs=[['dash','Dashboard'],['kader','Kader & Training'],['stats','Statistik'],['transfer','Transfermarkt'],['build','Verbesserungen']];
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+t[1]+'</div>').join('')+'</div>';
- h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):secDash(v));
+ h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
 }
 function secDash(v){
@@ -616,7 +616,7 @@ function secKader(v){
        h+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
         '<span class="ovrnum">'+p.ovr+'</span>'+
         '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':'')+(p.inj>0?' <span class="tag" style="background:#3a1d1d;color:#ff8a8a">VERLETZT '+p.inj+'W</span>':'')+
-        '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
+        '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+(p.season&&p.season.games?' · '+p.season.games+' Sp.':'')+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
         (p.pts>0?'<span class="ptbadge">'+p.pts+' P</span>':'<span class="mut" style="font-size:12px">'+p.exp+'/100</span>')+'</div>';});
    });
    h+='</div>';});
@@ -644,6 +644,10 @@ function renderPlayer(p){
      '<span class="aval">'+a.val+'</span>'+
      '<button data-k="'+a.key+'" onclick="allocAttr(this.dataset.k)" '+((p.pts<=0||full)?'disabled':'')+'>+</button></div>';});
  h+='</div></div>';
+ const sl=statLine(p.season)||'noch keine Einsätze', cl=statLine(p.career)||'—';
+ h+='<div class="sec">Statistik</div>'+
+   '<div class="reco"><span class="mut">Saison ('+p.season.games+' Sp.)</span><span style="text-align:right">'+esc(sl)+'</span></div>'+
+   '<div class="reco"><span class="mut">Karriere ('+p.career.games+' Sp.)</span><span style="text-align:right">'+esc(cl)+'</span></div>';
  h+='<div style="margin-top:12px">'+
    (p.pts>0?'<button onclick="autoAlloc()">Auto-verteilen ('+p.pts+')</button> ':'')+
    '<button class="ghost" onclick="toggleStarter()">'+(p.starter?'Aus Startelf nehmen':'In Startelf setzen')+'</button> '+
@@ -680,6 +684,32 @@ function secTransfer(v){
    h+='</div>';});
  return h;
 }
+function secStats(v){
+ const R=v.roster;
+ const leader=(key,fmt)=>{let best=null;R.forEach(p=>{if(!best||p.season[key]>best.season[key])best=p;});
+   return best&&best.season[key]>0?'<div class="reco"><span><b>'+esc(best.name)+'</b> <span class="mut">'+best.pos+'</span></span><span>'+fmt(best.season)+'</span></div>':'';};
+ let h='<div class="card"><div class="sec" style="margin-top:0">Saison-Bestenliste (dein Team)</div>'+
+   (leader('pass_yds',s=>s.pass_yds+' Pass-Yds, '+s.pass_td+' TD')||'')+
+   (leader('rush_yds',s=>s.rush_yds+' Rush-Yds ('+s.rush_att+' Läufe)')||'')+
+   (leader('rec_yds',s=>s.rec+' Fänge, '+s.rec_yds+' Yds')||'')+
+   (leader('tkl',s=>s.tkl+' Tackles')||'')+
+   (leader('sack',s=>s.sack+' Sacks')||'')+
+   (leader('intc',s=>s.intc+' Interceptions')||'')+
+   '<div class="note">Werte aus gewerteten Spielen dieser Saison.</div></div>';
+ // Saison-Statistiktabelle (Spieler mit Einsätzen)
+ const played=R.filter(p=>p.season.games>0).sort((a,b)=>b.season.games-a.season.games||playerImpact(b)-playerImpact(a));
+ if(played.length){h+='<div class="card scroll"><div class="sec" style="margin-top:0">Saison-Statistik</div>'+
+   '<table class="tbl"><tr><th class="cn">Spieler</th><th>Sp</th><th>Pass</th><th>Rush</th><th>Rec</th><th>Tkl</th><th>Sck</th><th>INT</th><th>TD</th></tr>'+
+   played.map(p=>'<tr><td class="cn">'+esc(p.name)+' <span class="mut">'+p.pos+'</span></td><td>'+p.season.games+'</td>'+
+     '<td>'+p.season.pass_yds+'</td><td>'+p.season.rush_yds+'</td><td>'+p.season.rec_yds+'</td>'+
+     '<td>'+p.season.tkl+'</td><td>'+p.season.sack+'</td><td>'+p.season.intc+'</td><td>'+p.season.td+'</td></tr>').join('')+
+   '</table></div>';}
+ // Meister-Historie
+ if(v.history&&v.history.length){h+='<div class="card"><div class="sec" style="margin-top:0">Meister-Historie</div>'+
+   v.history.map(x=>'<div class="reco"><span>Saison '+x.season+'</span><span class="mut">'+esc(x.champion)+'</span></div>').join('')+'</div>';}
+ return h;
+}
+function playerImpact(p){const s=p.season;return s.pass_yds/20+s.rush_yds/12+s.rec_yds/12+s.tkl+s.sack*3+s.intc*5+s.td*4;}
 async function signP(id){const r=await api('/api/fr/sign?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const r=await api('/api/fr/cut?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view){lastView=r.view;closePlayer();renderMgr(r.view);}}
 function secBuild(v){

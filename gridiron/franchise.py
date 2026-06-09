@@ -20,6 +20,7 @@ from gridiron.config import Config
 from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS, play_outcome, simulate
 
 # Einheiten (Roster-Gruppen) und ihre Gewichte für Offense-/Defense-Stärke.
+GAME_DRIVES = 14                                          # Drives je Spiel (~7 Ballbesitze/Team)
 OFF_UNITS = {"QB": 0.34, "OL": 0.30, "WR": 0.20, "RB": 0.16}
 DEF_UNITS = {"DL": 0.40, "DB": 0.32, "LB": 0.28}
 UNIT_LABELS = {"QB": "Quarterback", "OL": "O-Line", "WR": "Receiver", "RB": "Running Back",
@@ -102,6 +103,30 @@ def player_pot(p: dict) -> int:
     return round(sum(p["cap"][k] * w[k] for k in w))
 
 
+# Statistik-Schema (Saison + Karriere je Spieler)
+STAT_KEYS = ["pass_yds", "pass_td", "rush_att", "rush_yds", "rec", "rec_yds",
+             "td", "tkl", "sack", "intc"]
+
+
+def _blank_stats() -> dict:
+    d = {k: 0 for k in STAT_KEYS}
+    d["games"] = 0
+    return d
+
+
+def _accumulate(rid: dict, box: dict) -> None:
+    """Addiert die Box-Score-Werte eines Spiels in Saison- und Karrierestatistik."""
+    for pid, s in box.items():
+        p = rid.get(pid)
+        if not p:
+            continue
+        for tgt in ("season", "career"):
+            d = p.setdefault(tgt, _blank_stats())
+            for k in STAT_KEYS:
+                d[k] = d.get(k, 0) + s.get(k, 0)
+            d["games"] = d.get("games", 0) + 1
+
+
 def _coach_view(team: dict, role: str) -> dict:
     c = team.get("coaches", {}).get(role) or _gen_coach(role, 60, random.Random(0))
     return {"role": role, "label": COACH_ROLES[role], "name": c["name"],
@@ -115,7 +140,8 @@ def _player_view(p: dict) -> dict:
             "exp": p.get("exp", 0), "pts": p.get("pts", 0), "inj": p.get("inj", 0),
             "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
             "attrs": [{"key": k, "label": ATTR_LABELS[k], "val": p["attr"][k], "cap": p["cap"][k]}
-                      for k in POS_ATTRS[p["pos"]]]}
+                      for k in POS_ATTRS[p["pos"]]],
+            "season": p.get("season", _blank_stats()), "career": p.get("career", _blank_stats())}
 
 
 def _unique_name(rng: random.Random, used: set | None) -> str:
@@ -140,7 +166,8 @@ def _gen_player(pid: int, pos: str, base: int, rng: random.Random,
         attr[k] = a
         cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
     return {"id": pid, "name": _unique_name(rng, used), "pos": pos, "age": age, "starter": starter,
-            "attr": attr, "cap": cap, "exp": 0, "pts": 0, "inj": 0}
+            "attr": attr, "cap": cap, "exp": 0, "pts": 0, "inj": 0,
+            "season": _blank_stats(), "career": _blank_stats()}
 
 
 def _gen_roster(base: int, rng: random.Random) -> list[dict]:
@@ -526,12 +553,12 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
     user_side = 0 if home.get("user") else (1 if away.get("user") else None)
     box: dict = {}
     pos = 0 if rng.random() < 0.5 else 1
-    for drive in range(22):
+    for drive in range(GAME_DRIVES):
         off, deff = teams[pos], teams[1 - pos]
         attack_right = (pos == 0)
         absx = 25.0 if attack_right else 75.0
         ytz, down, dist = 75.0, 1, 10
-        q = min(4, drive // 6 + 1)
+        q = min(4, drive // (GAME_DRIVES // 4) + 1)
         oc_pool = OFF_SCHEMES.get(off.get("off_scheme", "Ausgeglichen"), list(PASS_CONCEPTS))
         dc_pool = DEF_SCHEMES.get(deff.get("def_scheme", "Ausgeglichen"), list(COVERAGES))
         edge = 0.10 * (offense(off) - defense(deff))     # Stärke-Bias auf die Yards
@@ -574,12 +601,13 @@ def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
     while sh == sa:
         sh += 3 if rng.random() < 0.5 else 0
         sa += 3 if sh == sa else 0
-    # Leistungs-EXP auf das Nutzer-Team
+    # Leistungs-EXP + Statistik auf das Nutzer-Team
     if user_side is not None:
         rid = {p["id"]: p for p in teams[user_side].get("roster", [])}
         for pid, s in box.items():
             if pid in rid:
                 _gain_exp(rid[pid], _box_exp(s))
+        _accumulate(rid, box)
     box_lines = sorted(box.values(), key=_box_exp, reverse=True)
     return {"home": home["name"], "away": away["name"], "hs": sh, "as": sa,
             "winner": home["name"] if sh > sa else away["name"], "plays": plays,
@@ -810,6 +838,7 @@ def new_season(cfg: Config, state: dict) -> dict:
             for p in list(t["roster"]):
                 p["age"] += 1
                 p["inj"] = 0                              # Verletzungen heilen über die Pause
+                p["season"] = _blank_stats()              # Saisonstatistik zurücksetzen (Karriere bleibt)
                 if p["age"] >= 35 or (p["age"] >= 33 and rng.random() < 0.5):
                     t["roster"].remove(p)
                     retired.append(p["name"])
@@ -1084,7 +1113,7 @@ def view(state: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # Interaktiver Spielmodus (selbst Plays callen)
 # --------------------------------------------------------------------------- #
-MAX_DRIVES = 12
+MAX_DRIVES = GAME_DRIVES
 _RNG = np.random.default_rng()
 
 
@@ -1244,6 +1273,7 @@ def finish_game(cfg: Config, state: dict) -> dict:
     for pid, s in box.items():
         if pid in rid:
             _gain_exp(rid[pid], _box_exp(s))
+    _accumulate(rid, box)
     box_lines = [b for b in sorted(box.values(), key=_box_exp, reverse=True) if _box_exp(b) > 0][:10]
     state["active_game"] = None
     out = sim_week(cfg, state, user_result=result)

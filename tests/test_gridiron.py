@@ -290,6 +290,24 @@ def test_franchise_game_sim_options(tmp_path):
     assert fin["view"]["week"] == 1 and not F.load(cfg).get("active_game")
 
 
+def test_franchise_player_season_career_stats(tmp_path):
+    """Spieler sammeln Saison- & Karrierestatistik; Saison-Reset behält Karriere."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=71)
+    for _ in range(3):
+        F.sim_week(cfg, st)
+    team = st["teams"][0]
+    assert any(p["season"]["games"] > 0 for p in team["roster"])
+    assert all(p["career"]["games"] >= p["season"]["games"] for p in team["roster"])
+    pr = F.view(st)["roster"][0]
+    assert "season" in pr and "career" in pr and "games" in pr["season"]
+    career_yds = sum(p["career"]["rush_yds"] for p in team["roster"])
+    F.new_season(cfg, st)
+    assert all(p["season"]["games"] == 0 for p in st["teams"][0]["roster"])
+    assert sum(p["career"]["rush_yds"] for p in st["teams"][0]["roster"]) == career_yds
+
+
 def test_franchise_box_scores(tmp_path):
     """Simuliertes Nutzer-Spiel erzeugt Box-Scores und vergibt Leistungs-EXP."""
     from gridiron import franchise as F
