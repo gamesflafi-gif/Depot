@@ -169,6 +169,18 @@ _STYLE2 = """
  .fig.pop{animation:pop .4s ease}@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.6)}100%{transform:scale(1)}}
  .fig.down{animation:tackle .5s ease forwards}@keyframes tackle{0%{transform:rotate(0) scale(1)}55%{transform:rotate(38deg) scale(1.05)}100%{transform:rotate(72deg) scale(.82);opacity:.78}}
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
+ /* Touchdown-Jubel: 10 verschiedene Tänze/Bewegungen */
+ .fig.cel{filter:drop-shadow(0 0 4px rgba(255,211,77,.9))}
+ .fig.cel1{animation:cel1 .5s ease-in-out infinite}@keyframes cel1{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+ .fig.cel2{animation:cel2 .7s linear infinite}@keyframes cel2{to{transform:rotate(360deg)}}
+ .fig.cel3{animation:cel3 .35s ease-in-out infinite}@keyframes cel3{0%,100%{transform:rotate(-16deg)}50%{transform:rotate(16deg)}}
+ .fig.cel4{animation:cel4 .6s ease-in-out infinite}@keyframes cel4{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.7) translateY(3px)}}
+ .fig.cel5{animation:cel5 .45s ease-in-out infinite}@keyframes cel5{0%,100%{transform:translateX(-5px) rotate(-8deg)}50%{transform:translateX(5px) rotate(8deg)}}
+ .fig.cel6{animation:cel6 .5s ease-in-out infinite}@keyframes cel6{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
+ .fig.cel7{animation:cel7 .8s ease-in-out infinite}@keyframes cel7{0%{transform:rotate(0) translateY(0)}40%{transform:rotate(-200deg) translateY(-8px)}100%{transform:rotate(-360deg) translateY(0)}}
+ .fig.cel8{animation:cel8 .55s ease-in-out infinite}@keyframes cel8{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(25deg) scale(1.2)}}
+ .fig.cel9{animation:cel9 .4s ease-in-out infinite}@keyframes cel9{0%,100%{transform:translate(-5px,0)}25%{transform:translate(0,-5px)}50%{transform:translate(5px,0)}75%{transform:translate(0,-5px)}}
+ .fig.cel10{animation:cel10 .6s ease-in-out infinite}@keyframes cel10{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-9px) rotate(8deg)}60%{transform:translateY(2px) rotate(-6deg)}}
  .pulse{animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
  .fieldlegend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;align-items:center}
  .fieldlegend i.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
@@ -192,6 +204,9 @@ _STYLE2 = """
  .tvteam .nm{font-weight:700;font-size:15px}
  .tvpts{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;min-width:50px;text-align:center}
  .tvmid{text-align:center;min-width:60px}.tvmid .qn{font-weight:800;font-size:16px}.tvmid .sub{color:var(--mut);font-size:11px}
+ .tvmid .clk{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#cdeede}
+ .pclock{display:inline-block;font-weight:800;font-variant-numeric:tabular-nums;background:var(--tile);border:1px solid var(--line);border-radius:8px;padding:4px 11px;font-size:13px;margin:2px 0 7px}
+ .pclock.urgent{color:#ef5350;border-color:#ef5350;animation:pulse 1s infinite}
  .tvfield{display:flex;height:78px;margin:14px 0 4px;border-radius:10px;overflow:hidden;border:1px solid #06140d}
  .tvfield .ez{width:30px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:11px;
    writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:.1em;text-shadow:0 1px 2px rgba(0,0,0,.6)}
@@ -574,6 +589,7 @@ function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;g.setAttribute('tra
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
+function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','spin');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
 function curPos(P,id){return _ppos[P+id]||null;}
 const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5,DB:9.4,S:8.9};
 function _spd(p){return SPD[p]||8;}
@@ -583,19 +599,20 @@ function playAnim(svg,d,res,onDone){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
  res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
  const yards=(res.yards!=null?res.yards:(res.mean_yards!=null?res.mean_yards:0));
+ const td=!!res.td, vy=(td&&yards>24)?24:yards;   // bei Touchdown sichtbar in der Endzone enden, nicht getackelt
  const isPass=(kind!=='run'),ball=$(P+'_pball'),C=26.65;
  const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry}));
  const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop}));
  const qb=O.find(o=>o.pos==='QB'),tgt=O.find(o=>o.target||o.carry),ols=O.filter(o=>o.pos==='OL');
  // Ballträger-Route auf den tatsächlichen Raumgewinn kürzen (Completion: Fang dann YAC; Lauf: bis Yards, auch negativ)
  if((kind==='complete'||kind==='run')&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1];
-   const cy=(kind==='complete')?Math.min(rY,Math.max(1,yards)):Math.min(rY,yards);
+   const cy=(kind==='complete')?Math.min(rY,Math.max(1,vy)):Math.min(rY,vy);
    const out=[r[0]];for(let k=1;k<r.length;k++){const a=r[k-1],b=r[k];
      if(b[1]<=cy+0.01){out.push(b);}else{const f=Math.max(0,Math.min(1,(cy-a[1])/((b[1]-a[1])||1)));out.push([a[0]+(b[0]-a[0])*f,cy]);break;}}
    tgt.route=out;}
  const catchPt=(tgt&&tgt.route)?tgt.route[tgt.route.length-1]:(d.ball_target||[qb.x,qb.y]);
- const gain=[catchPt[0],(kind==='complete')?Math.max(catchPt[1],yards):yards];   // complete: YAC bis Yards; Lauf: genau Yards
- const runEnd=(!isPass&&tgt)?[catchPt[0],yards]:null;
+ const gain=[catchPt[0],(kind==='complete')?Math.max(catchPt[1],vy):vy];   // complete: YAC bis Yards; Lauf: genau Yards
+ const runEnd=(!isPass&&tgt)?[catchPt[0],vy]:null;
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
  const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/26);
@@ -669,20 +686,24 @@ function playAnim(svg,d,res,onDone){
   const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0);
   if(!done)_anim[P]=requestAnimationFrame(frame);
-  else{if(kind==='sack')downFig(P,'o'+qb.i);else if(carrier&&kind!=='incomplete')downFig(P,'o'+carrier.i);  // Tackle: Ballträger geht zu Boden
-    showResult(svg,{kind,yards,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,yards]:catchPt))});
-    if(onDone)setTimeout(onDone,1100);}                  // danach Aufstellung am neuen Spot zeigen
+  else{
+    if(td&&carrier)celebrate(P,'o'+carrier.i);                                          // TD: durchgelaufen -> Jubel statt Tackle
+    else if(kind==='sack')downFig(P,'o'+qb.i);
+    else if(carrier&&kind!=='incomplete')downFig(P,'o'+carrier.i);                      // Tackle: Ballträger geht zu Boden
+    showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
+    if(onDone)setTimeout(onDone,td?2000:1100);}                                          // beim TD länger für den Jubel
  }
  _anim[P]=requestAnimationFrame(frame);
 }
 function showResult(svg,res){
- const label=res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
- const col=(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
- const pt=res.pt||[26,5],px=mapX(pt[0]),py=mapY(pt[1]),x=Math.min(Math.max(px,50),484),y=Math.max(py-16,16);
+ const td=res.td;
+ const label=td?'TOUCHDOWN! 🎉':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
+ const col=td?'#19e08f':(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
+ const pt=res.pt||[26,5],px=mapX(pt[0]),py=mapY(pt[1]),w=td?108:72,x=Math.min(Math.max(px,54),480),y=Math.max(py-16,16);
  const g=el('g',{});
- if(res.kind!=='incomplete'){g.appendChild(el('circle',{cx:px,cy:py,r:14,fill:'none',stroke:'#fff',opacity:.22,'stroke-width':2}));}  // Tackle-/Endpunkt
- g.appendChild(el('rect',{x:x-36,y:y-13,width:72,height:21,rx:6,fill:'#0a0f0d',stroke:col,'stroke-width':1.3}));
- const tx=el('text',{x:x,y:y+2,'text-anchor':'middle','font-size':11,fill:col,'font-weight':800});tx.textContent=label;g.appendChild(tx);svg.appendChild(g);
+ if(res.kind!=='incomplete'&&!td){g.appendChild(el('circle',{cx:px,cy:py,r:14,fill:'none',stroke:'#fff',opacity:.22,'stroke-width':2}));}  // Tackle-/Endpunkt (beim TD kein Tackle)
+ g.appendChild(el('rect',{x:x-w/2,y:y-13,width:w,height:22,rx:6,fill:'#0a0f0d',stroke:col,'stroke-width':td?1.8:1.3}));
+ const tx=el('text',{x:x,y:y+2,'text-anchor':'middle','font-size':td?12.5:11,fill:col,'font-weight':800});tx.textContent=label;g.appendChild(tx);svg.appendChild(g);
 }
 function replayPlay(){renderField($('field'),lastDiag,parseInt($('sim_y').value)||10);playAnim($('field'),lastDiag,{kind:(lastDiag&&lastDiag.kind==='run')?'run':'complete',yards:lastRes?lastRes.mean_yards:0});}
 async function loadBest(cov){
@@ -1057,20 +1078,37 @@ function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGam
 
 /* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
 let liveG=null, playBusy=false;
+/* Spieluhr: 1 Min Echtzeit pro Viertel (4), 15 s zum Play-Callen */
+let gameQ=1, gameClock=60, playClock=15, clockIv=null;
+function fmtClock(s){s=Math.max(0,s);return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}
+function startClock(){if(!clockIv)clockIv=setInterval(clockTick,1000);}
+function stopClock(){if(clockIv){clearInterval(clockIv);clockIv=null;}}
+function updateClockUI(){const q=$('gq');if(q)q.textContent='Q'+gameQ;const c=$('clk');if(c)c.textContent=fmtClock(gameClock);
+ const p=$('pclk');if(p){p.textContent='⏱ '+Math.max(0,playClock)+'s';p.className='pclock'+(playClock<=5?' urgent':'');}}
+function clockTick(){
+ if(!liveG||liveG.over||playBusy)return;             // pausiert bei Animation/Spielende
+ playClock--; gameClock--;
+ if(gameClock<=0){gameQ++; gameClock=60; if(gameQ>4){stopClock(); endGameByClock(); return;}}
+ if(playClock<=0)autoPlay();                          // Zeit fürs Play-Call abgelaufen -> Auto-Call
+ updateClockUI();
+}
+function autoPlay(){if(!liveG||playBusy)return;const o=liveG.options||[];if(!o.length)return;gamePlay(o[Math.floor(Math.random()*o.length)].key);}
+async function endGameByClock(){const r=await api('/api/fr/game/end','POST');if(r&&r.error)return;if(r.view)renderMgr(r.view);if(r.result)showGameResult(r.result);}
 async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
-function openGame(g){closeGame();liveG=g;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
- o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();renderGame(g);}
+function openGame(g){closeGame();liveG=g;gameQ=1;gameClock=60;playClock=15;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
+ o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();renderGame(g);if(!g.over)startClock();}
 function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div class="yl" style="left:'+p+'%"></div>';
  const lab=(p===50?'50':(p<50?p:100-p));t+='<div class="yn" style="left:'+p+'%">'+lab+'</div><div class="yn b" style="left:'+p+'%">'+lab+'</div>';});
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
 function renderGame(g,play){
+ if(!g.over)playClock=15;                                    // jeder neue Snap: Play-Clock zurücksetzen
  let h='<div class="modalhead"><h3><span class="livedot"></span> Dein Spiel</h3>'+
    '<button class="ghost" onclick="abortGame()">Verlassen</button></div>'+
    '<div class="tvscore">'+
      '<div class="tvteam">'+teamLogo(g.aabbr,g.acolor,'lg')+'<span class="nm">'+esc(g.away)+'</span></div>'+
      '<div class="tvpts">'+g['as']+'</div>'+
-     '<div class="tvmid"><div class="qn">Q'+g.q+'</div><div class="sub">Drive '+g.drive+'/'+g.max_drives+'</div></div>'+
+     '<div class="tvmid"><div class="qn" id="gq">Q'+gameQ+'</div><div class="sub clk" id="clk">'+fmtClock(gameClock)+'</div></div>'+
      '<div class="tvpts">'+g.hs+'</div>'+
      '<div class="tvteam r"><span class="nm">'+esc(g.home)+'</span>'+teamLogo(g.habbr,g.hcolor,'lg')+'</div>'+
    '</div>'+
@@ -1083,6 +1121,7 @@ function renderGame(g,play){
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
  else{const ban=g.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
    h+='<div class="posbanner '+(g.user_offense||g.awaiting==='pat'?'off':'def')+'">'+ban+'</div>'+
+   '<div class="pclock'+(playClock<=5?' urgent':'')+'" id="pclk">⏱ '+playClock+'s</div>'+
    '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
@@ -1101,7 +1140,7 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Animation startet am Spot vor dem Snap
- playAnim(svg,d,{kind:play.kind,yards:play.yards},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
+ playAnim(svg,d,{kind:play.kind,yards:play.yards,td:play.td},()=>{playBusy=false;if(liveG)renderGame(liveG);});}   // Ball liegt -> Aufstellung am neuen Spot, Buttons wieder frei
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
  g.appendChild(el('rect',{x:x-72,y:y-19,width:144,height:34,rx:8,fill:'#0a0f0d',stroke:made?'#19e08f':'#ef5350','stroke-width':2}));
@@ -1161,7 +1200,7 @@ function toggleResBox(){const b=$('resbox');if(!b)return;if(b.innerHTML){b.inner
  else{b.innerHTML=boxSection({box:_resBox});$('resbtn').textContent='Statistik ausblenden';}}
 function closeResult(){const o=$('resultoverlay');if(o)o.remove();unlockBodyIfNone();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
-function closeGame(){const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;unlockBodyIfNone();}
+function closeGame(){stopClock();const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;unlockBodyIfNone();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
@@ -1564,6 +1603,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return F.finish_game(cfg, st)
+
+    @app.post("/api/fr/game/end")
+    def fr_game_end():
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.end_game(cfg, st)
 
     @app.post("/api/fr/game/sim_drive")
     def fr_game_sim_drive():

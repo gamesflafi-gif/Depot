@@ -349,6 +349,18 @@ def test_kicker_fg_and_extra_point(tmp_path):
     assert r2["game"]["hs"] + r2["game"]["as"] >= before
 
 
+def test_end_game_by_clock(tmp_path):
+    """Spieluhr abgelaufen -> Spiel wird vorzeitig beendet und gewertet."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=12)
+    F.do_training(cfg, st, "team")
+    F.start_game(cfg, st)
+    res = F.end_game(cfg, st)
+    assert res.get("result") and "winner" in res["result"]
+    assert st.get("active_game") is None            # Spiel abgeschlossen
+
+
 def test_random_playcalls_and_philly(tmp_path):
     """Eigene Plays: 4 zufällige Offense-Calls, 4 Coverages; Philly Special genau 1×."""
     from gridiron import franchise as F

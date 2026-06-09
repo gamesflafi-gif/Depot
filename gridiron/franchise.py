@@ -1614,7 +1614,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
 
     _new_decision_options(state)                          # Optionen für den nächsten Snap
     save(cfg, state)
-    return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored,
+    return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored, "td": is_td,
                                  "kind": o["kind"], "concept": concept, "coverage": coverage,
                                  "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0)},
             "game": _game_view(state)}
@@ -1694,6 +1694,16 @@ def _play_label(concept: str, o: dict, yards: int) -> str:
     if o["kind"] == "complete":
         return f"{concept}: Fang über {yards}" if not o["turnover"] else "Fumble nach Fang!"
     return f"{concept}: Lauf {'+' if yards >= 0 else ''}{yards}" if not o["turnover"] else "Fumble!"
+
+
+def end_game(cfg: Config, state: dict) -> dict:
+    """Beendet das laufende Spiel (z. B. wenn die Spieluhr abläuft) und wertet es."""
+    g = state.get("active_game")
+    if not g:
+        return {"error": "Kein Spiel aktiv."}
+    g["over"] = True
+    save(cfg, state)
+    return finish_game(cfg, state)
 
 
 def finish_game(cfg: Config, state: dict) -> dict:
