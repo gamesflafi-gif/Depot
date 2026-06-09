@@ -116,7 +116,7 @@ def _coach_view(team: dict, role: str) -> dict:
 def _player_view(p: dict) -> dict:
     return {"id": p["id"], "name": p["name"], "pos": p["pos"], "age": p["age"],
             "starter": p["starter"], "ovr": player_ovr(p), "pot": player_pot(p),
-            "exp": p.get("exp", 0), "pts": p.get("pts", 0),
+            "exp": p.get("exp", 0), "pts": p.get("pts", 0), "inj": p.get("inj", 0),
             "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
             "attrs": [{"key": k, "label": ATTR_LABELS[k], "val": p["attr"][k], "cap": p["cap"][k]}
                       for k in POS_ATTRS[p["pos"]]]}
@@ -135,15 +135,23 @@ def _gen_roster(base: int, rng: random.Random) -> list[dict]:
                 attr[k] = a
                 cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
             roster.append({"id": pid, "name": _name(rng), "pos": grp, "age": age,
-                           "starter": starter, "attr": attr, "cap": cap, "exp": 0, "pts": 0})
+                           "starter": starter, "attr": attr, "cap": cap, "exp": 0,
+                           "pts": 0, "inj": 0})
             pid += 1
     return roster
 
 
 def _units_from_roster(roster: list[dict]) -> dict:
-    by: dict[str, list[tuple[int, int]]] = {}
+    by: dict[str, list[tuple[int, int]]] = {g: [] for g in ROSTER_SLOTS}
     for p in roster:
-        by.setdefault(p["pos"], []).append((player_ovr(p), 2 if p["starter"] else 1))
+        if p.get("inj", 0) > 0:                          # verletzt -> nicht verfügbar
+            continue
+        by[p["pos"]].append((player_ovr(p), 2 if p["starter"] else 1))
+    # Falls eine Gruppe komplett ausfällt: Notbesetzung (verletzte zählen schwach)
+    for g in by:
+        if not by[g]:
+            inj = [(max(40, player_ovr(p) - 6), 1) for p in roster if p["pos"] == g]
+            by[g] = inj or [(55, 1)]
     out = {}
     for g, lst in by.items():
         wsum = sum(w for _, w in lst)
@@ -540,6 +548,7 @@ def sim_week(cfg: Config, state: dict, user_result: dict | None = None) -> dict:
         out = _sim_playoff_round(state, rng, user_result)
         user_game = out.pop("_user_game", None)
 
+    out["events"] = _process_events(state, rng)
     if user_game:
         state["last_user_game"] = user_game
         out["user_game"] = user_game
@@ -583,6 +592,55 @@ def _earn(state: dict, games: list[dict]) -> None:
 
 def _side(pos: str) -> str:
     return "Offense" if pos in OFF_UNITS else "Defense"
+
+
+def _process_events(state: dict, rng: random.Random) -> list[dict]:
+    """Verletzungen heilen + ein zufälliges Event pro Woche (Nutzer-Team)."""
+    team = state["teams"][0]
+    roster = team.get("roster", [])
+    if not roster:
+        return []
+    msgs: list[dict] = []
+    for p in roster:
+        if p.get("inj", 0) > 0:
+            p["inj"] -= 1
+            if p["inj"] == 0:
+                msgs.append({"type": "ok", "text": f"{p['name']} ist wieder fit und einsatzbereit."})
+    if rng.random() < 0.6:
+        ev = rng.choices(["injury", "breakout", "camp", "mentor", "slump"],
+                         weights=[28, 20, 18, 18, 16])[0]
+        if ev == "injury":
+            healthy = [p for p in roster if p.get("inj", 0) == 0 and p["starter"]] or \
+                      [p for p in roster if p.get("inj", 0) == 0]
+            if healthy:
+                p = rng.choice(healthy)
+                p["inj"] = rng.randint(1, 4)
+                msgs.append({"type": "bad", "text": f"Verletzung: {p['name']} ({p['pos']}) fällt {p['inj']} Woche(n) aus."})
+        elif ev == "breakout":
+            young = [p for p in roster if p["age"] <= 25 and player_ovr(p) < player_pot(p)]
+            if young:
+                p = rng.choice(young)
+                p["pts"] += 1
+                msgs.append({"type": "ok", "text": f"Breakout: {p['name']} macht einen Sprung (+1 Skillpunkt)."})
+        elif ev == "camp":
+            for p in roster:
+                _gain_exp(p, 15)
+            msgs.append({"type": "ok", "text": "Trainingslager: das ganze Team sammelt EXP."})
+        elif ev == "mentor":
+            young = sorted(roster, key=lambda p: p["age"])[:1]
+            if young:
+                p = young[0]
+                under = [k for k in p["attr"] if p["attr"][k] < p["cap"][k]]
+                if under:
+                    p["attr"][rng.choice(under)] += 1
+                    msgs.append({"type": "ok", "text": f"Mentor: ein Veteran pusht {p['name']} (+1 Attribut)."})
+        else:  # slump
+            p = rng.choice(roster)
+            p["exp"] = max(0, p["exp"] - 30)
+            msgs.append({"type": "bad", "text": f"Formtief: {p['name']} verliert etwas Trainingsfortschritt."})
+    state["events"] = msgs
+    _sync_units(team)
+    return msgs
 
 
 def standings(state: dict) -> list[dict]:
@@ -647,6 +705,7 @@ def new_season(cfg: Config, state: dict) -> dict:
         elif t.get("roster"):                            # Nutzer-Kader altert & entwickelt sich
             for p in t["roster"]:
                 p["age"] += 1
+                p["inj"] = 0                              # Verletzungen heilen über die Pause
                 ks = list(p["attr"])
                 if p["age"] >= 30 and rng.random() < 0.5:              # Veteranen-Abbau
                     k = rng.choice(ks)
@@ -665,6 +724,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["results"] = []
     state["last_user_game"] = None
     state["active_game"] = None
+    state["events"] = []
     state["schedule"] = _round_robin(len(state["teams"]))
     state["budget"] += 20                                 # Saisonbudget
     state["coach_market"] = _gen_market(random.Random())  # neuer Trainermarkt
@@ -838,6 +898,7 @@ def view(state: dict) -> dict:
         "skillpoints": sum(p.get("pts", 0) for p in team.get("roster", [])),
         "roster": [_player_view(p) for p in team.get("roster", [])],
         "active_game": bool(state.get("active_game")),
+        "events": state.get("events", []),
         "scheme": {"off": team.get("off_scheme", "Ausgeglichen"),
                    "def": team.get("def_scheme", "Ausgeglichen")},
         "off_schemes": {k: OFF_SCHEMES[k] for k in OFF_SCHEMES},

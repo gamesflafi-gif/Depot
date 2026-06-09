@@ -585,6 +585,8 @@ function secDash(v){
  h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
+ if(v.events&&v.events.length){h+='<div class="card"><div class="sec" style="margin-top:0">Neuigkeiten der Woche</div>'+
+   v.events.map(e=>'<div class="reco '+(e.type==='bad'?'loss':(e.type==='ok'?'win':''))+'"><span>'+esc(e.text)+'</span></div>').join('')+'</div>';}
  const offk=Object.keys(v.off_schemes),defk=Object.keys(v.def_schemes);
  h+='<div class="card"><div class="sec" style="margin-top:0">Team-Schema</div><div class="controls">'+
    '<div><label>Offense-Schema</label><select id="sc_off">'+offk.map(k=>'<option'+(k===v.scheme.off?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
@@ -612,7 +614,7 @@ function secKader(v){
      ps.forEach(p=>{const bar=Math.round(p.ovr/Math.max(p.pot,1)*100);
        h+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
         '<span class="ovrnum">'+p.ovr+'</span>'+
-        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':'')+
+        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':'')+(p.inj>0?' <span class="tag" style="background:#3a1d1d;color:#ff8a8a">VERLETZT '+p.inj+'W</span>':'')+
         '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
         (p.pts>0?'<span class="ptbadge">'+p.pts+' P</span>':'<span class="mut" style="font-size:12px">'+p.exp+'/100</span>')+'</div>';});
    });
@@ -626,7 +628,7 @@ function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)=
  o.innerHTML='<div class="modal" id="playermodal"></div>';renderPlayer(p);
 }
 function renderPlayer(p){
- let h='<div class="modalhead"><h3>'+esc(p.name)+' <span class="mut" style="font-weight:600">'+p.pos+' · '+p.ovr+' OVR'+(p.starter?' · Starter':'')+'</span></h3>'+
+ let h='<div class="modalhead"><h3>'+esc(p.name)+' <span class="mut" style="font-weight:600">'+p.pos+' · '+p.ovr+' OVR'+(p.starter?' · Starter':'')+(p.inj>0?' · <span style="color:#ff8a8a">verletzt '+p.inj+'W</span>':'')+'</span></h3>'+
    '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
    '<div class="grid" style="grid-template-columns:repeat(4,1fr)">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
  h+='<div class="pcols">';

@@ -277,6 +277,25 @@ def test_simulator_outcomes_and_sampler():
     assert {"complete", "incomplete"} & kinds
 
 
+def test_franchise_events_injuries(tmp_path):
+    """Verletzungen senken das Rating; Wochen erzeugen Events."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=11)
+    team = st["teams"][0]
+    ov0 = F.overall(team)
+    q = next(p for p in team["roster"] if p["pos"] == "QB" and p["starter"])
+    q["inj"] = 2
+    F._sync_units(team)
+    assert F.overall(team) <= ov0                               # verletzter Starter schwächt
+    seen = set()
+    for _ in range(8):
+        for e in F.sim_week(cfg, st).get("events", []):
+            seen.add(e["type"])
+    assert seen                                                 # Events sind aufgetreten
+    assert "inj" in F.view(st)["roster"][0]
+
+
 def test_franchise_coaches_and_facilities(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
