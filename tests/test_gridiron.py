@@ -218,6 +218,45 @@ def test_franchise_web(tmp_path):
     assert client.get("/api/fr/state").json()["exists"] is False
 
 
+def test_playviz_diagram():
+    from gridiron.playviz import diagram
+    import pytest
+    d = diagram("Four Verts", "Cover 3")
+    assert d["kind"] == "pass" and len(d["offense"]) == 11 and len(d["defense"]) == 11
+    assert any(o.get("target") for o in d["offense"]) and d["ball_target"]
+    # alle Koordinaten im Feld
+    for o in d["offense"]:
+        assert 0 <= o["x"] <= d["width"]
+    r = diagram("Power", "Cover 1")
+    assert r["kind"] == "run"
+    carrier = [o for o in r["offense"] if o.get("carry")]
+    assert len(carrier) == 1 and len(carrier[0]["route"]) >= 2
+    with pytest.raises(ValueError):
+        diagram("Nope", "Cover 3")
+
+
+def test_franchise_detailed_game(tmp_path):
+    """Nutzer-Spiel liefert ein vollständiges Play-by-Play für die Übertragung."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=2)
+    out = F.sim_week(cfg, st)
+    g = out.get("user_game")
+    assert g and g["plays"] and "Adler" in (g["home"], g["away"])
+    assert g["hs"] != g["as"]                                   # kein Unentschieden
+    assert any(p["score"] for p in g["plays"])                  # es wurde gepunktet
+    for p in g["plays"]:
+        assert 0 <= p["x"] <= 100 and p["q"] in (1, 2, 3, 4)
+    assert F.view(st)["has_last_game"]
+    # Endpoint-Form
+    from fastapi.testclient import TestClient
+    from gridiron.web import create_app
+    client = TestClient(create_app(cfg))
+    assert client.get("/api/fr/last_game").json()["game"]["hs"] == g["hs"]
+    dia = client.get("/api/sim/diagram", params={"concept": "Mesh", "coverage": "Cover 2"}).json()
+    assert len(dia["offense"]) == 11
+
+
 def test_web_predict_without_model(tmp_path):
     """Ohne trainiertes Modell antwortet /api/predict sauber mit 503."""
     from fastapi.testclient import TestClient

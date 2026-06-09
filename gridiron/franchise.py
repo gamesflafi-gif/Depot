@@ -153,6 +153,81 @@ def simulate_game(home: dict, away: dict, rng: random.Random) -> dict:
             "winner": home["name"] if sh > sa else away["name"]}
 
 
+_PASS_DESC = ["Pass über die Mitte", "Pass nach außen", "tiefer Wurf",
+              "Quick-Pass", "Pass in die Flat", "Pass über die Naht"]
+_RUN_DESC = ["Lauf innen", "Lauf nach außen", "Draw", "Cutback", "Power-Lauf"]
+
+
+def simulate_game_detailed(home: dict, away: dict, rng: random.Random) -> dict:
+    """Spiel als Play-by-Play (für die visuelle Übertragung). Score bleibt an
+    Team-Stärke + Matchup gekoppelt, damit es zur Liga passt."""
+    score = [0, 0]                                       # [home, away]
+    plays: list[dict] = []
+    teams = [home, away]
+    pos = 0 if rng.random() < 0.5 else 1
+    for drive in range(22):
+        off, deff = teams[pos], teams[1 - pos]
+        attack_right = (pos == 0)
+        absx = 25.0 if attack_right else 75.0           # absolute Feldposition 0..100
+        ytz, down, dist = 75.0, 1, 10                   # bis Endzone, Down, Distanz
+        q = min(4, drive // 6 + 1)
+        mean = max(2.0, min(8.5, 5.0 + 0.11 * (offense(off) - defense(deff))
+                            + 1.5 * _epa(off["concept"], deff["coverage"])))
+        for _ in range(14):
+            is_pass = rng.random() < 0.57
+            # Turnover?
+            if rng.random() < 0.028:
+                desc = "Interception!" if is_pass else "Fumble, Ball verloren!"
+                plays.append(_pl(q, off["name"], desc, absx, score, False))
+                break
+            gain = round(rng.gauss(mean if not is_pass else mean + 0.6, 6))
+            ytz -= gain
+            absx = min(100, max(0, absx + (gain if attack_right else -gain)))
+            if ytz <= 0:                                # Touchdown
+                score[pos] += 7
+                plays.append(_pl(q, off["name"], "TOUCHDOWN! " + off["name"],
+                                 100 if attack_right else 0, score, True))
+                break
+            dist -= gain
+            label = (rng.choice(_PASS_DESC) if is_pass else rng.choice(_RUN_DESC))
+            label += f", {'+' if gain >= 0 else ''}{gain}"
+            if dist <= 0:
+                down, dist = 1, 10
+                label += " — First Down"
+            else:
+                down += 1
+            if down > 4:
+                if ytz <= 22 and rng.random() < 0.82:   # Field-Goal-Versuch
+                    score[pos] += 3
+                    plays.append(_pl(q, off["name"], "Field Goal gut (3)", absx, score, True))
+                else:
+                    plays.append(_pl(q, off["name"], "Punt" if ytz > 22 else "Field Goal daneben", absx, score, False))
+                break
+            plays.append(_pl(q, off["name"], label, absx, score, False))
+        pos ^= 1
+    sh, sa = score[0], score[1]
+    while sh == sa:
+        if rng.random() < 0.5:
+            sh += 3
+        else:
+            sa += 3
+    return {"home": home["name"], "away": away["name"], "hs": sh, "as": sa,
+            "winner": home["name"] if sh > sa else away["name"], "plays": plays}
+
+
+def _pl(q: int, team: str, desc: str, absx: float, score: list[int], scored: bool) -> dict:
+    return {"q": q, "team": team, "desc": desc, "x": round(absx, 1),
+            "hs": score[0], "as": score[1], "score": scored}
+
+
+def _decide(home: dict, away: dict, rng: random.Random):
+    """Spiel entscheiden. Ist ein Nutzer-Team beteiligt -> Play-by-Play."""
+    if home["user"] or away["user"]:
+        g = simulate_game_detailed(home, away, rng)
+        return g, g
+    return simulate_game(home, away, rng), None
+
+
 def _apply(home: dict, away: dict, r: dict) -> None:
     home["pf"] += r["hs"]; home["pa"] += r["as"]
     away["pf"] += r["as"]; away["pa"] += r["hs"]
@@ -175,14 +250,17 @@ def sim_week(cfg: Config, state: dict) -> dict:
     rng = random.Random()
     teams = state["teams"]
 
+    user_game = None
     if state["phase"] == "regular":
         wk = state["week"]
         pairs = state["schedule"][wk]
         games = []
         for hi, ai in pairs:
-            r = simulate_game(teams[hi], teams[ai], rng)
+            r, pbp = _decide(teams[hi], teams[ai], rng)
             _apply(teams[hi], teams[ai], r)
-            games.append(r)
+            games.append(_strip(r))
+            if pbp:
+                user_game = pbp
         state["results"].append({"week": wk + 1, "games": games})
         _earn(state, games)
         state["week"] += 1
@@ -191,9 +269,18 @@ def sim_week(cfg: Config, state: dict) -> dict:
         out = {"phase": "regular", "week": wk + 1, "games": games}
     else:
         out = _sim_playoff_round(state, rng)
+        user_game = out.pop("_user_game", None)
 
+    if user_game:
+        state["last_user_game"] = user_game
+        out["user_game"] = user_game
     save(cfg, state)
     return out
+
+
+def _strip(r: dict) -> dict:
+    """Spielergebnis ohne das große Play-by-Play (für die Ergebnisliste)."""
+    return {k: r[k] for k in ("home", "away", "hs", "as", "winner")}
 
 
 def _earn(state: dict, games: list[dict]) -> None:
@@ -226,23 +313,25 @@ def _start_playoffs(state: dict) -> None:
 def _sim_playoff_round(state: dict, rng: random.Random) -> dict:
     teams = state["teams"]
     po = state["playoff"]
-    games = []
+    games, user_game = [], None
     for hn, an in po["pairs"]:
-        r = simulate_game(teams[_idx(teams, hn)], teams[_idx(teams, an)], rng)
-        games.append(r)
+        r, pbp = _decide(teams[_idx(teams, hn)], teams[_idx(teams, an)], rng)
+        games.append(_strip(r))
+        if pbp:
+            user_game = pbp
     if po["round"] == "Halbfinale":
         winners = [g["winner"] for g in games]
         po["round"] = "Finale"
         po["pairs"] = [(winners[0], winners[1])]
         state["results"].append({"week": "Halbfinale", "games": games})
-        return {"phase": "playoffs", "round": "Halbfinale", "games": games}
+        return {"phase": "playoffs", "round": "Halbfinale", "games": games, "_user_game": user_game}
     # Finale
     champ = games[0]["winner"]
     state["champion"] = champ
     state["phase"] = "done"
     state["results"].append({"week": "Finale", "games": games})
     state["history"].append({"season": state["season"], "champion": champ})
-    return {"phase": "done", "round": "Finale", "games": games, "champion": champ}
+    return {"phase": "done", "round": "Finale", "games": games, "champion": champ, "_user_game": user_game}
 
 
 def new_season(cfg: Config, state: dict) -> dict:
@@ -261,6 +350,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["playoff"] = None
     state["champion"] = None
     state["results"] = []
+    state["last_user_game"] = None
     state["schedule"] = _round_robin(len(state["teams"]))
     state["budget"] += 20                                 # Saisonbudget
     save(cfg, state)
@@ -338,4 +428,5 @@ def view(state: dict) -> dict:
         "last_result": last,
         "n_weeks": len(state["schedule"]),
         "history": state["history"],
+        "has_last_game": bool(state.get("last_user_game")),
     }
