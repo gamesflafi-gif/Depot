@@ -60,24 +60,88 @@ def _name(rng: random.Random) -> str:
     return f"{rng.choice(_FIRST)} {rng.choice(_LAST)}"
 
 
+# Kader: Slots & Starter je Positionsgruppe (nur das Nutzer-Team führt echte Spieler).
+ROSTER_SLOTS = {"QB": 2, "RB": 3, "WR": 4, "OL": 5, "DL": 4, "LB": 4, "DB": 4}
+STARTERS = {"QB": 1, "RB": 1, "WR": 2, "OL": 5, "DL": 4, "LB": 3, "DB": 3}
+
+# Attribute je Position (Schlüssel -> Gewicht fürs OVR).
+POS_ATTRS = {
+    "QB": {"ACC": .35, "ARM": .25, "AWR": .25, "MOB": .15},
+    "RB": {"SPD": .30, "AGI": .25, "PWR": .25, "CTH": .20},
+    "WR": {"SPD": .30, "RTE": .30, "CTH": .30, "JMP": .10},
+    "OL": {"PBK": .35, "RBK": .35, "STR": .20, "AWR": .10},
+    "DL": {"PRSH": .35, "RDEF": .35, "STR": .20, "MOB": .10},
+    "LB": {"TKL": .30, "COV": .30, "SPD": .25, "AWR": .15},
+    "DB": {"COV": .40, "SPD": .30, "BALL": .20, "TKL": .10},
+}
+ATTR_LABELS = {"ACC": "Genauigkeit", "ARM": "Wurfkraft", "AWR": "Übersicht", "MOB": "Mobilität",
+               "SPD": "Speed", "AGI": "Agilität", "PWR": "Power", "CTH": "Hände", "RTE": "Route",
+               "JMP": "Sprungkraft", "PBK": "Pass-Schutz", "RBK": "Run-Block", "STR": "Stärke",
+               "PRSH": "Pass-Rush", "RDEF": "Run-Stop", "TKL": "Tackling", "COV": "Coverage",
+               "BALL": "Ball-Skills"}
+POS_LABELS = {"QB": "Quarterback", "RB": "Running Back", "WR": "Receiver", "OL": "O-Line",
+              "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary"}
+
+_FIRST = ["Marcus", "Tyler", "Jalen", "Deon", "Chris", "Andre", "Malik", "Cody",
+          "Jordan", "Xavier", "Trey", "Devin", "Isaiah", "Brandon", "Kyle", "Drew",
+          "Cam", "Aaron", "Josh", "Mason", "Elias", "Noah", "Leon", "Finn", "Theo",
+          "Luca", "Jonas", "Nico", "Ben", "Tim", "Erik", "Paul", "Max", "Liam"]
+_LAST = ["Brooks", "Carter", "Hayes", "Reed", "Coleman", "Foster", "Greer", "Mason",
+         "Wells", "Pierce", "Dalton", "Boyd", "Frye", "Nash", "Sutton", "Vance",
+         "Lang", "Webb", "Kraft", "Bauer", "Stein", "Wolff", "Roth", "Frank",
+         "Berg", "Hahn", "Voss", "Lorenz", "Schwarz", "Kern", "Busch", "Engel"]
+
+
+def _name(rng: random.Random) -> str:
+    return f"{rng.choice(_FIRST)} {rng.choice(_LAST)}"
+
+
+def player_ovr(p: dict) -> int:
+    w = POS_ATTRS[p["pos"]]
+    return round(sum(p["attr"][k] * w[k] for k in w))
+
+
+def player_pot(p: dict) -> int:
+    w = POS_ATTRS[p["pos"]]
+    return round(sum(p["cap"][k] * w[k] for k in w))
+
+
+def _player_view(p: dict) -> dict:
+    return {"id": p["id"], "name": p["name"], "pos": p["pos"], "age": p["age"],
+            "starter": p["starter"], "ovr": player_ovr(p), "pot": player_pot(p),
+            "exp": p.get("exp", 0), "pts": p.get("pts", 0),
+            "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
+            "attrs": [{"key": k, "label": ATTR_LABELS[k], "val": p["attr"][k], "cap": p["cap"][k]}
+                      for k in POS_ATTRS[p["pos"]]]}
+
+
 def _gen_roster(base: int, rng: random.Random) -> list[dict]:
     roster, pid = [], 0
     for grp, cnt in ROSTER_SLOTS.items():
+        attrs = list(POS_ATTRS[grp])
         for i in range(cnt):
-            ovr = max(48, min(94, base + rng.randint(-7, 6) + (4 if i == 0 else 0)))
+            starter = i < STARTERS[grp]
             age = rng.randint(21, 33)
-            pot = min(99, max(ovr, ovr + rng.randint(0, 13) - max(0, age - 25)))
-            roster.append({"id": pid, "name": _name(rng), "pos": grp, "ovr": ovr,
-                           "age": age, "pot": pot, "starter": i == 0})
+            attr, cap = {}, {}
+            for k in attrs:
+                a = max(48, min(74, round(rng.gauss(base + 1, 4)) + (2 if starter else 0)))
+                attr[k] = a
+                cap[k] = min(99, max(a, a + rng.randint(2, 16) - max(0, age - 28)))
+            roster.append({"id": pid, "name": _name(rng), "pos": grp, "age": age,
+                           "starter": starter, "attr": attr, "cap": cap, "exp": 0, "pts": 0})
             pid += 1
     return roster
 
 
 def _units_from_roster(roster: list[dict]) -> dict:
-    by: dict[str, list[int]] = {}
+    by: dict[str, list[tuple[int, int]]] = {}
     for p in roster:
-        by.setdefault(p["pos"], []).append(p["ovr"])
-    return {g: round(sum(v) / len(v)) for g, v in by.items()}
+        by.setdefault(p["pos"], []).append((player_ovr(p), 2 if p["starter"] else 1))
+    out = {}
+    for g, lst in by.items():
+        wsum = sum(w for _, w in lst)
+        out[g] = round(sum(o * w for o, w in lst) / wsum) if wsum else 60
+    return out
 
 
 def _sync_units(team: dict) -> None:
@@ -85,9 +149,58 @@ def _sync_units(team: dict) -> None:
         team["units"] = _units_from_roster(team["roster"])
 
 
-def train_cost(player: dict, equipment: int) -> int:
-    c = max(2, (player["ovr"] - 58) // 3 + 3) + (2 if player["age"] > 30 else 0)
-    return max(1, c - (equipment - 1))
+def _gain_exp(p: dict, amount: int) -> None:
+    p["exp"] += amount
+    while p["exp"] >= 100:
+        p["exp"] -= 100
+        p["pts"] += 1
+
+
+def allocate_point(team: dict, pid: int, attr: str) -> dict:
+    p = next((x for x in team.get("roster", []) if x["id"] == pid), None)
+    if not p:
+        return {"error": "Spieler nicht gefunden."}
+    if attr not in p["attr"]:
+        return {"error": "Attribut passt nicht zur Position."}
+    if p["pts"] <= 0:
+        return {"error": "Keine Skillpunkte verfügbar."}
+    if p["attr"][attr] >= p["cap"][attr]:
+        return {"error": "Attribut ist am Potenzial-Limit."}
+    p["attr"][attr] += 1
+    p["pts"] -= 1
+    _sync_units(team)
+    return {"ok": True, "attr": attr, "value": p["attr"][attr], "pts": p["pts"]}
+
+
+def auto_allocate(team: dict, pid: int) -> dict:
+    p = next((x for x in team.get("roster", []) if x["id"] == pid), None)
+    if not p:
+        return {"error": "Spieler nicht gefunden."}
+    w = POS_ATTRS[p["pos"]]
+    spent = 0
+    while p["pts"] > 0:
+        cands = [k for k in w if p["attr"][k] < p["cap"][k]]
+        if not cands:
+            break
+        best = max(cands, key=lambda k: (w[k], -p["attr"][k]))
+        p["attr"][best] += 1
+        p["pts"] -= 1
+        spent += 1
+    _sync_units(team)
+    return {"ok": True, "spent": spent, "pts": p["pts"]}
+
+
+def set_starter(team: dict, pid: int) -> dict:
+    p = next((x for x in team.get("roster", []) if x["id"] == pid), None)
+    if not p:
+        return {"error": "Spieler nicht gefunden."}
+    limit = STARTERS[p["pos"]]
+    starters = [x for x in team["roster"] if x["pos"] == p["pos"] and x["starter"]]
+    if not p["starter"] and len(starters) >= limit:
+        return {"error": f"Maximal {limit} Starter auf {p['pos']} — erst einen entfernen."}
+    p["starter"] = not p["starter"]
+    _sync_units(team)
+    return {"ok": True, "starter": p["starter"]}
 
 
 def _abbr(name: str) -> str:
@@ -219,23 +332,23 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
                   seed: int | None = None) -> dict:
     n_teams = max(4, n_teams - (n_teams % 2))             # gerade, >=4
     rng = random.Random(seed)
-    user_base = {"leicht": 76, "normal": 70, "schwer": 66}.get(difficulty, 70)
     nm = team_name.strip()[:24] or "Mein Team"
     ucolor = color if color in USER_COLORS else USER_COLORS[0]
-    user_team = _new_team(nm, _abbr(nm), ucolor, "#0c1a12", user_base, rng, user=True)
-    user_team["roster"] = _gen_roster(user_base, rng)     # nur Nutzer-Team hat echte Spieler
-    user_team["tp"] = 12                                   # Trainingspunkte
-    user_team["equipment"] = 1                             # Trainings-Equipment
-    _sync_units(user_team)
+    user_team = _new_team(nm, _abbr(nm), ucolor, "#0c1a12", 60, rng, user=True)
+    user_team["roster"] = _gen_roster(60, rng)            # Start: ~60-OVR-Kader
+    user_team["equipment"] = 1                            # Trainings-Equipment (EXP/Woche)
+    _sync_units(user_team)                                # Units aus dem Kader ableiten
     teams = [user_team]
+    # KI-Stärke je Schwierigkeit (Nutzer startet bei 60 und wächst durch Training)
+    ai_lo, ai_hi = {"leicht": (58, 68), "normal": (62, 74), "schwer": (68, 80)}.get(difficulty, (62, 74))
     for cname, cabbr, c1, c2 in rng.sample(TEAM_CATALOG, n_teams - 1):
-        teams.append(_new_team(cname, cabbr, c1, c2, rng.randint(64, 80), rng))
+        teams.append(_new_team(cname, cabbr, c1, c2, rng.randint(ai_lo, ai_hi), rng))
     state = {
         "team_name": teams[0]["name"], "season": 1, "week": 0,
         "phase": "regular", "budget": 60, "difficulty": difficulty,
         "teams": teams, "schedule": _round_robin(n_teams),
         "results": [], "log": [], "history": [], "playoff": None,
-        "champion": None,
+        "champion": None, "training_focus": None,
     }
     save(cfg, state)
     return state
@@ -413,11 +526,25 @@ def _earn(state: dict, games: list[dict]) -> None:
     team = state["teams"][0]
     user = team["name"]
     g = next((x for x in games if user in (x["home"], x["away"])), None)
+    won = bool(g and g["winner"] == user)
     income = 6 + 2 * (team.get("stadium", 1) - 1)            # Stadion bringt Mehreinnahmen
     if g:
-        income += 10 if g["winner"] == user else 3
+        income += 10 if won else 3
     state["budget"] += income
-    team["tp"] = team.get("tp", 0) + 4 + 2 * team.get("equipment", 1)   # Trainingspunkte
+    # Spieler-EXP: Basis-Training (Equipment hebt), Trainings-Fokus, Spiele (Starter), Sieg.
+    focus = state.get("training_focus")
+    base = 10 + 3 * team.get("equipment", 1)
+    for p in team.get("roster", []):
+        gain = base
+        if focus and (p["pos"] == focus or _side(p["pos"]) == focus):
+            gain += 12
+        if p["starter"]:
+            gain += 6 + (4 if won else 0)
+        _gain_exp(p, gain)
+
+
+def _side(pos: str) -> str:
+    return "Offense" if pos in OFF_UNITS else "Defense"
 
 
 def standings(state: dict) -> list[dict]:
@@ -482,10 +609,15 @@ def new_season(cfg: Config, state: dict) -> dict:
         elif t.get("roster"):                            # Nutzer-Kader altert & entwickelt sich
             for p in t["roster"]:
                 p["age"] += 1
-                if p["age"] >= 30 and rng.random() < 0.45:
-                    p["ovr"] = max(45, p["ovr"] - rng.randint(1, 2))   # Veteranen-Abbau
-                elif p["ovr"] < p["pot"] and rng.random() < 0.5:
-                    p["ovr"] += 1                                       # junge Entwicklung
+                ks = list(p["attr"])
+                if p["age"] >= 30 and rng.random() < 0.5:              # Veteranen-Abbau
+                    k = rng.choice(ks)
+                    p["attr"][k] = max(40, p["attr"][k] - rng.randint(1, 2))
+                    p["cap"][k] = max(p["attr"][k], p["cap"][k] - 1)
+                elif p["age"] <= 25 and rng.random() < 0.6:           # junge Entwicklung
+                    under = [k for k in ks if p["attr"][k] < p["cap"][k]]
+                    if under:
+                        p["attr"][rng.choice(under)] += 1
             _sync_units(t)
     state["season"] += 1
     state["week"] = 0
@@ -541,32 +673,32 @@ def upgrade_unit(cfg: Config, state: dict, key: str) -> dict:
     return {"ok": True, "unit": key, "level": store[key], "cost": cost, "budget": state["budget"]}
 
 
-def train_player(cfg: Config, state: dict, pid: int) -> dict:
-    """Trainiert einen Spieler (+1 OVR) gegen Trainingspunkte."""
-    team = state["teams"][0]
-    p = next((x for x in team.get("roster", []) if x["id"] == pid), None)
-    if not p:
-        return {"error": "Spieler nicht gefunden."}
-    if p["ovr"] >= p["pot"]:
-        return {"error": f"{p['name']} hat sein Potenzial ({p['pot']}) erreicht."}
-    cost = train_cost(p, team.get("equipment", 1))
-    if team.get("tp", 0) < cost:
-        return {"error": f"Zu wenig Trainingspunkte (brauchst {cost}, hast {team.get('tp', 0)})."}
-    p["ovr"] += 1
-    team["tp"] -= cost
-    _sync_units(team)
+def alloc(cfg: Config, state: dict, pid: int, attr: str) -> dict:
+    res = allocate_point(state["teams"][0], pid, attr)
+    if res.get("ok"):
+        save(cfg, state)
+    return res
+
+
+def alloc_auto(cfg: Config, state: dict, pid: int) -> dict:
+    res = auto_allocate(state["teams"][0], pid)
+    if res.get("ok"):
+        save(cfg, state)
+    return res
+
+
+def depth_toggle(cfg: Config, state: dict, pid: int) -> dict:
+    res = set_starter(state["teams"][0], pid)
+    if res.get("ok"):
+        save(cfg, state)
+    return res
+
+
+def set_focus(cfg: Config, state: dict, group: str | None) -> dict:
+    valid = list(POS_LABELS) + ["Offense", "Defense"]
+    state["training_focus"] = group if group in valid else None
     save(cfg, state)
-    return {"ok": True, "player": p["name"], "ovr": p["ovr"], "tp": team["tp"], "cost": cost}
-
-
-def train_unit(cfg: Config, state: dict, group: str) -> dict:
-    """Gruppen-Training: trainiert den schwächsten steigerbaren Spieler einer Gruppe."""
-    team = state["teams"][0]
-    cands = [p for p in team.get("roster", []) if p["pos"] == group and p["ovr"] < p["pot"]]
-    if not cands:
-        return {"error": "Keine steigerbaren Spieler in dieser Gruppe."}
-    target = min(cands, key=lambda p: p["ovr"])
-    return train_player(cfg, state, target["id"])
+    return {"ok": True, "focus": state["training_focus"]}
 
 
 def set_scheme(cfg: Config, state: dict, off_scheme: str | None, def_scheme: str | None) -> dict:
@@ -620,14 +752,11 @@ def view(state: dict) -> dict:
                     "income": 6 + 2 * (team.get("stadium", 1) - 1)},
         "equipment": {"level": team.get("equipment", 1),
                       "cost": 15 + (team.get("equipment", 1) - 1) * 12,
-                      "tp_week": 4 + 2 * team.get("equipment", 1)},
-        "tp": team.get("tp", 0),
-        "roster": [{"id": p["id"], "name": p["name"], "pos": p["pos"], "ovr": p["ovr"],
-                    "age": p["age"], "pot": p["pot"], "starter": p["starter"],
-                    "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
-                    "cost": train_cost(p, team.get("equipment", 1)),
-                    "maxed": p["ovr"] >= p["pot"]}
-                   for p in team.get("roster", [])],
+                      "exp_week": 10 + 3 * team.get("equipment", 1)},
+        "training_focus": state.get("training_focus"),
+        "focus_options": [{"key": k, "label": POS_LABELS[k]} for k in POS_LABELS],
+        "skillpoints": sum(p.get("pts", 0) for p in team.get("roster", [])),
+        "roster": [_player_view(p) for p in team.get("roster", [])],
         "active_game": bool(state.get("active_game")),
         "scheme": {"off": team.get("off_scheme", "Ausgeglichen"),
                    "def": team.get("def_scheme", "Ausgeglichen")},

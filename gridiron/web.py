@@ -172,6 +172,18 @@ _STYLE2 = """
  .ovrbar{height:5px;background:var(--bg);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:5px;width:170px;max-width:42vw}
  .ovrfill{height:100%;background:var(--acc)}
  .ovrnum{font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
+ .prow{display:flex;align-items:center;gap:12px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;margin:6px 0;cursor:pointer;transition:border-color .12s}
+ .prow:hover{border-color:var(--acc)} .prow .ovrnum{min-width:30px;text-align:center}
+ .prow .pname{flex:1;font-weight:600} .ptbadge{background:var(--acc);color:#04140c;font-weight:800;font-size:12px;padding:3px 9px;border-radius:7px}
+ .pcols{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:12px}
+ .radarwrap{flex:none} .attrs{flex:1;min-width:240px}
+ .arow{display:flex;align-items:center;gap:10px;margin:7px 0}
+ .arow .alab{width:96px;font-size:13px;color:var(--mut)}
+ .arow .abar{position:relative;flex:1;height:9px;background:var(--bg);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+ .arow .afill{position:absolute;inset:0 auto 0 0;background:var(--acc)}
+ .arow .acap{position:absolute;top:-2px;bottom:-2px;width:2px;background:#dfe7e3;opacity:.8}
+ .arow .aval{width:26px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+ .arow button{padding:4px 11px;border-radius:7px;font-size:15px;line-height:1}
 """
 
 _PAGE = """<!doctype html><html lang="de"><head>
@@ -545,7 +557,7 @@ function renderMgr(v){
  let h='<div class="card"><div class="teamhdr">'+
    '<div class="crest" style="background:'+esc(v.color||'#16c784')+'">'+esc(v.abbr||'')+'</div>'+
    '<div><div class="big">'+esc(v.team_name)+'</div><div class="mut">Saison '+v.season+' · '+esc(phaseLabel)+'</div></div>'+
-   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('TP '+v.tp)+'</div></div>'+
+   '<div style="margin-left:auto;text-align:right">'+pill('Bilanz '+v.record.w+'–'+v.record.l)+' '+pill('Budget '+v.budget+' Mio')+' '+pill('Punkte '+v.skillpoints)+'</div></div>'+
    '<div class="grid" style="margin-top:14px">'+kpi('Overall',v.ratings.ovr)+kpi('Offense',v.ratings.off)+kpi('Defense',v.ratings.def)+
    kpi('Woche',v.phase==='regular'?(v.week+1)+' / '+v.n_weeks:'—')+'</div>';
  if(v.champion)h+='<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>';
@@ -583,23 +595,70 @@ function secDash(v){
  return h+'</table></div>';
 }
 function secKader(v){
+ const foc=v.training_focus||'';
  let h='<div class="card"><div class="sec" style="margin-top:0">Trainingszentrum</div>'+
-   '<div class="grid">'+kpi('Trainingspunkte',v.tp)+kpi('Equipment','St. '+v.equipment.level)+kpi('TP / Woche','+'+v.equipment.tp_week)+kpi('Kadergröße',v.roster.length)+'</div>'+
-   '<div class="note">Trainiere Spieler, um ihr OVR Richtung Potenzial zu steigern. Besseres Trainings-Equipment (Bereich „Verbesserungen") bringt mehr Trainingspunkte pro Woche.</div></div>';
+   '<div class="grid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('EXP / Woche','+'+v.equipment.exp_week)+kpi('Kadergröße',v.roster.length)+'</div>'+
+   '<div class="controls" style="margin-top:12px"><div><label>Trainings-Fokus (Woche)</label>'+
+   '<select id="foc"><option value="">kein Fokus</option>'+v.focus_options.map(o=>'<option value="'+o.key+'"'+(o.key===foc?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select></div>'+
+   '<button onclick="setFocus()">Fokus setzen</button></div>'+
+   '<div class="note">Spieler sammeln jede Woche EXP (Training, Fokus-Gruppe extra, Starter + Siege mehr). Je 100 EXP = 1 Skillpunkt. Klick einen Spieler an, um Punkte zu verteilen.</div></div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos);if(!ps.length)return;
-     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 2px"><span class="mut" style="font-weight:700;letter-spacing:.04em">'+pos+'</span>'+
-        '<button class="ghost" data-g="'+pos+'" onclick="trainGroup(this.dataset.g)">Schwächsten trainieren</button></div>';
-     ps.forEach(p=>{const bar=Math.round(p.ovr/p.pot*100);
-       h+='<div class="reco"><span>'+(p.starter?'<b>'+esc(p.name)+'</b> <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':esc(p.name))+
-        ' <span class="mut">Alter '+p.age+'</span><div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span>'+
-        '<span style="display:flex;align-items:center;gap:10px"><span class="ovrnum">'+p.ovr+'<span class="mut" style="font-size:11px"> / '+p.pot+'</span></span>'+
-        '<button data-i="'+p.id+'" onclick="trainP(this.dataset.i)" '+((v.tp<p.cost||p.maxed)?'disabled':'')+'>'+(p.maxed?'max':'+1 ('+p.cost+' TP)')+'</button></span></div>';});
+     h+='<div class="mut" style="font-weight:700;letter-spacing:.04em;margin:10px 0 2px">'+pos+'</div>';
+     ps.forEach(p=>{const bar=Math.round(p.ovr/Math.max(p.pot,1)*100);
+       h+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
+        '<span class="ovrnum">'+p.ovr+'</span>'+
+        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#2c3a34;color:#cfe">START</span>':'')+
+        '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
+        (p.pts>0?'<span class="ptbadge">'+p.pts+' P</span>':'<span class="mut" style="font-size:12px">'+p.exp+'/100</span>')+'</div>';});
    });
    h+='</div>';});
  return h;
 }
+async function setFocus(){const r=await api('/api/fr/focus?group='+encodeURIComponent($('foc').value),'POST');if(r.view)renderMgr(r.view);}
+function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)===String(id));if(!p)return;
+ let o=$('playeroverlay');if(!o){o=document.createElement('div');o.className='overlay';o.id='playeroverlay';
+   o.addEventListener('click',e=>{if(e.target===o)closePlayer();});document.body.appendChild(o);}
+ o.innerHTML='<div class="modal" id="playermodal"></div>';renderPlayer(p);
+}
+function renderPlayer(p){
+ let h='<div class="modalhead"><h3>'+esc(p.name)+' <span class="mut" style="font-weight:600">'+p.pos+' · '+p.ovr+' OVR'+(p.starter?' · Starter':'')+'</span></h3>'+
+   '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
+   '<div class="grid" style="grid-template-columns:repeat(4,1fr)">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
+ h+='<div class="pcols">';
+ // Radar
+ h+='<div class="radarwrap">'+radarSVG(p.attrs)+'</div>';
+ // Attribut-Balken mit +
+ h+='<div class="attrs">';
+ p.attrs.forEach(a=>{const pc=Math.round(a.val/99*100),cap=Math.round(a.cap/99*100);const full=a.val>=a.cap;
+   h+='<div class="arow"><span class="alab">'+esc(a.label)+'</span>'+
+     '<span class="abar"><span class="afill" style="width:'+pc+'%"></span><span class="acap" style="left:'+cap+'%"></span></span>'+
+     '<span class="aval">'+a.val+'</span>'+
+     '<button data-k="'+a.key+'" onclick="allocAttr(this.dataset.k)" '+((p.pts<=0||full)?'disabled':'')+'>+</button></div>';});
+ h+='</div></div>';
+ h+='<div style="margin-top:12px">'+
+   (p.pts>0?'<button onclick="autoAlloc()">Auto-verteilen ('+p.pts+')</button> ':'')+
+   '<button class="ghost" onclick="toggleStarter()">'+(p.starter?'Aus Startelf nehmen':'In Startelf setzen')+'</button></div>'+
+   '<div class="note">Weiße Linie = Potenzial-Limit des Attributs. Skillpunkte bekommst du über EXP.</div>';
+ $('playermodal').innerHTML=h;
+}
+function radarSVG(attrs){const n=attrs.length,cx=85,cy=85,R=62;let pts='',axes='';
+ for(let i=0;i<n;i++){const ang=-Math.PI/2+i*2*Math.PI/n;const rr=R*Math.max(.12,attrs[i].val/99);
+   const x=cx+Math.cos(ang)*rr,y=cy+Math.sin(ang)*rr;pts+=x.toFixed(1)+','+y.toFixed(1)+' ';
+   const ex=cx+Math.cos(ang)*R,ey=cy+Math.sin(ang)*R;
+   axes+='<line x1="'+cx+'" y1="'+cy+'" x2="'+ex.toFixed(1)+'" y2="'+ey.toFixed(1)+'" stroke="#26352e"/>'+
+     '<text x="'+(cx+Math.cos(ang)*(R+10)).toFixed(1)+'" y="'+(cy+Math.sin(ang)*(R+10)+3).toFixed(1)+'" font-size="8" fill="#8d9d97" text-anchor="middle">'+esc(attrs[i].key)+'</text>';}
+ return '<svg viewBox="0 0 170 170" width="170" height="170">'+
+   '<polygon points="'+pts.trim()+'" fill="rgba(22,199,132,.25)" stroke="#16c784" stroke-width="2"/>'+axes+'</svg>';
+}
+async function allocAttr(k){const p=curPlayer();const r=await api('/api/fr/alloc?pid='+p+'&attr='+k,'POST');if(r.result&&r.result.error)alert(r.result.error);afterPlayer(r);}
+async function autoAlloc(){const r=await api('/api/fr/alloc_auto?pid='+curPlayer(),'POST');afterPlayer(r);}
+async function toggleStarter(){const r=await api('/api/fr/starter?pid='+curPlayer(),'POST');if(r.result&&r.result.error)alert(r.result.error);afterPlayer(r);}
+let _curPid=null;
+function curPlayer(){return _curPid;}
+function afterPlayer(r){if(r.view){lastView=r.view;renderMgr(r.view);const p=r.view.roster.find(x=>String(x.id)===String(_curPid));if(p)renderPlayer(p);}}
+function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;}
 function secBuild(v){
  const up=(key,label,sub,level,cost,maxed,plus)=>'<div class="reco"><span><b>'+esc(label)+'</b> '+(sub?'<span class="mut">'+esc(sub)+'</span> ':'')+'— Stufe '+level+'</span>'+
    '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+plus+' ('+cost+' Mio)</button></div>';
@@ -609,12 +668,10 @@ function secBuild(v){
    '<div class="note">OC hebt die Offense, DC die Defense, Head Coach beides.</div></div>';
  h+='<div class="card"><div class="sec" style="margin-top:0">Anlagen</div>'+
    up('stadium','Stadion','Einnahmen +'+v.stadium.income+'/Wo',v.stadium.level,v.stadium.cost,v.stadium.level>=5,'+1')+
-   up('equipment','Trainings-Equipment','+'+v.equipment.tp_week+' TP/Wo',v.equipment.level,v.equipment.cost,v.equipment.level>=5,'+1')+
-   '<div class="note">Stadion bringt mehr Wocheneinnahmen, Equipment mehr Trainingspunkte.</div></div>';
+   up('equipment','Trainings-Equipment','+'+v.equipment.exp_week+' EXP/Wo',v.equipment.level,v.equipment.cost,v.equipment.level>=5,'+1')+
+   '<div class="note">Stadion bringt mehr Wocheneinnahmen, Equipment mehr Spieler-EXP pro Woche.</div></div>';
  return h+'</div>';
 }
-async function trainP(id){const r=await api('/api/fr/train?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
-async function trainGroup(g){const r=await api('/api/fr/train_unit?group='+g,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 function renderResult(res,me){
  if(!res||!res.games)return '';
  let h='<div style="margin-top:12px"><div class="sec">Ergebnisse '+(typeof res.week==='number'?'Woche '+res.week:esc(res.week))+'</div>';
@@ -923,21 +980,37 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         res = F.upgrade_unit(cfg, st, unit)
         return {"result": res, "view": F.view(st)}
 
-    @app.post("/api/fr/train")
-    def fr_train(pid: int):
+    @app.post("/api/fr/alloc")
+    def fr_alloc(pid: int, attr: str):
         from gridiron import franchise as F
         st, err = _fr_load_or_404()
         if err:
             return err
-        return {"result": F.train_player(cfg, st, pid), "view": F.view(st)}
+        return {"result": F.alloc(cfg, st, pid, attr), "view": F.view(st)}
 
-    @app.post("/api/fr/train_unit")
-    def fr_train_unit(group: str):
+    @app.post("/api/fr/alloc_auto")
+    def fr_alloc_auto(pid: int):
         from gridiron import franchise as F
         st, err = _fr_load_or_404()
         if err:
             return err
-        return {"result": F.train_unit(cfg, st, group), "view": F.view(st)}
+        return {"result": F.alloc_auto(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/starter")
+    def fr_starter(pid: int):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.depth_toggle(cfg, st, pid), "view": F.view(st)}
+
+    @app.post("/api/fr/focus")
+    def fr_focus(group: str = ""):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return {"result": F.set_focus(cfg, st, group or None), "view": F.view(st)}
 
     @app.post("/api/fr/scheme")
     def fr_scheme(off: str = "", deff: str = ""):

@@ -291,25 +291,35 @@ def test_franchise_upgrades_staff_stadium(tmp_path):
     assert F.upgrade_unit(cfg, st, "quatsch").get("error")
 
 
-def test_franchise_roster_training(tmp_path):
-    """Kader mit Spielern, Training hebt OVR, Units bleiben konsistent."""
+def test_franchise_roster_attributes_exp(tmp_path):
+    """Kader mit Attributen, EXP->Skillpunkte, Verteilung hebt Attribut & OVR."""
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=7)
     team = st["teams"][0]
     assert len(team["roster"]) == sum(F.ROSTER_SLOTS.values())
-    assert team["units"] == F._units_from_roster(team["roster"])   # synchron
-    team["tp"] = 99
-    p = next(x for x in team["roster"] if x["ovr"] < x["pot"])
-    before = p["ovr"]
-    res = F.train_player(cfg, st, p["id"])
-    assert res["ok"] and p["ovr"] == before + 1
-    assert team["units"] == F._units_from_roster(team["roster"])   # nach Training synchron
-    # Equipment + Stadion sind Budget-Verbesserungen
-    st["budget"] = 200
-    assert F.upgrade_unit(cfg, st, "equipment")["ok"]
+    p = team["roster"][0]
+    assert p["attr"] and p["cap"] and "exp" in p and F.player_ovr(p) > 0
+    for k in p["attr"]:
+        assert p["cap"][k] >= p["attr"][k]                          # Cap nie unter Wert
+    assert team["units"] == F._units_from_roster(team["roster"])    # Units aus Kader
+    # Skillpunkt verteilen hebt Attribut + Units
+    p["pts"] = 1
+    attr = next(k for k in p["attr"] if p["attr"][k] < p["cap"][k])
+    before = p["attr"][attr]
+    r = F.alloc(cfg, st, p["id"], attr)
+    assert r["ok"] and p["attr"][attr] == before + 1
+    assert team["units"] == F._units_from_roster(team["roster"])
+    # Auto-verteilen, Starter-Toggle, Fokus
+    p["pts"] = 4
+    assert F.alloc_auto(cfg, st, p["id"])["ok"]
+    assert "starter" in F.depth_toggle(cfg, st, p["id"])
+    assert F.set_focus(cfg, st, "QB")["focus"] == "QB"
+    # EXP durch eine Woche
+    F.sim_week(cfg, st)
+    assert any(x["exp"] > 0 or x["pts"] > 0 for x in team["roster"])
     v = F.view(st)
-    assert v["roster"] and v["tp"] and v["equipment"]["level"] == 2
+    assert v["roster"][0]["attrs"] and "skillpoints" in v
 
 
 def test_franchise_interactive_game(tmp_path):
