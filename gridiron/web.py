@@ -131,6 +131,7 @@ _STYLE2 = """
    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
  .reco>span:first-child{min-width:0}
  .reco b{font-weight:700} .reco.win{border-color:#1c5a40} .reco.loss{border-color:#5a2a20}
+ .reco.mini{padding:8px 12px;font-size:13px;margin:5px 0}
  .reco.champ{border-color:#5a4f20;background:#23200f}
  .tag{display:inline-block;background:var(--warn);color:#1a1400;font-weight:800;font-size:11px;
    padding:3px 9px;border-radius:6px;letter-spacing:.04em}
@@ -694,20 +695,8 @@ function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 2
  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">'+(I[k]||I.team)+'</svg>';}
 function secDash(v){
  let h='';
- // Training dieser Woche (nur solange Woche nicht ausgewertet)
- if(v.phase!=='done'){h+='<div class="card"><div class="sec" style="margin-top:0">Training dieser Woche</div>';
-   if(v.week_done)h+='<div class="reco"><span class="mut">Woche ausgewertet — Training nächste Woche.</span></div>';
-   else if(v.week_trained)h+='<div class="reco win"><span>Training erledigt</span><span class="mut">nächste Woche wieder verfügbar</span></div>';
-   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
-   if(v.game_bonus>0)h+='<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>';
-   h+='</div>';}
- // Saison-Ziele
- if(v.goals&&v.goals.length){h+='<div class="card" id="goalcard"><div class="sec" style="margin-top:0">Saison-Ziele</div>';
-   v.goals.forEach(g=>{const prog=g.key==='wins'?' ('+g.progress+'/'+g.target+')':'';
-     h+='<div class="reco'+(g.done?' win':'')+'"><span>'+(g.done?'✓ ':'')+esc(g.label)+prog+'</span><span class="mut">'+(g.done?'erfüllt':'+'+g.reward+' Mio')+'</span></div>';});
-   h+='</div>';}
- // Spielbetrieb
- h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':'Spielbetrieb')+'</div>';
+ // Spielbetrieb (Hauptaktion zuerst)
+ h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):(v.phase==='done'?'Saison beendet':'Woche '+(v.week+1))))+'</div>';
  if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div><button onclick="newSeason()">Neue Saison starten</button> ';}
  else if(v.week_done){
    h+='<div class="reco win"><span>Woche ausgewertet'+(v.is_bye?' (Bye Week)':'')+'.</span><span class="mut">bereit für die nächste Woche</span></div>'+
@@ -724,11 +713,19 @@ function secDash(v){
    if(v.active_game)h+='<button onclick="resumeGame()">Spiel fortsetzen</button> ';
    else h+='<button onclick="startGame()">Selbst spielen</button> <button class="ghost" onclick="simWeek()">Simulieren</button> ';
  }
- h+='<button class="ghost" onclick="resetFr()">Zurücksetzen</button>';
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
- if(v.events&&v.events.length){h+='<div class="card"><div class="sec" style="margin-top:0">Neuigkeiten der Woche</div>'+
-   v.events.map(e=>'<div class="reco '+(e.type==='bad'?'loss':(e.type==='ok'?'win':''))+'"><span>'+esc(e.text)+'</span></div>').join('')+'</div>';}
+ // Training — nur wenn diese Woche noch möglich
+ if(v.phase!=='done'&&!v.week_done){h+='<div class="card"><div class="sec" style="margin-top:0">Training dieser Woche</div>';
+   if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span><span class="mut">nächste Woche wieder</span></div>'+(v.game_bonus>0?'<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>':'');
+   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
+   h+='</div>';}
+ // Saison-Ziele (kompakt)
+ if(v.goals&&v.goals.length){h+='<div class="card" id="goalcard"><div class="sec" style="margin-top:0">Saison-Ziele</div>'+
+   v.goals.map(g=>{const prog=g.key==='wins'?' ('+g.progress+'/'+g.target+')':'';return '<div class="reco mini'+(g.done?' win':'')+'"><span>'+(g.done?'✓ ':'')+esc(g.label)+prog+'</span><span class="mut">'+(g.done?'erfüllt':'+'+g.reward+' Mio')+'</span></div>';}).join('')+'</div>';}
+ // Neuigkeiten (kompakt)
+ if(v.events&&v.events.length){h+='<div class="card"><div class="sec" style="margin-top:0">Neuigkeiten</div>'+
+   v.events.map(e=>'<div class="reco mini '+(e.type==='bad'?'loss':(e.type==='ok'?'win':''))+'"><span>'+esc(e.text)+'</span></div>').join('')+'</div>';}
  const offk=Object.keys(v.off_schemes),defk=Object.keys(v.def_schemes);
  h+='<div class="card"><div class="sec" style="margin-top:0">Team-Schema</div><div class="controls">'+
    '<div><label>Offense-Schema</label><select id="sc_off">'+offk.map(k=>'<option'+(k===v.scheme.off?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
@@ -739,7 +736,9 @@ function secDash(v){
    '<th class="cn">#</th><th class="cn">Team</th><th>S</th><th>N</th><th>Diff</th><th>OVR</th></tr>';
  v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn"><span class="cdot" style="background:'+esc(t.color||'#16c784')+'"></span>'+esc(t.name)+
    '</td><td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.ovr+'</td></tr>';});
- return h+'</table></div>';
+ h+='</table></div>';
+ h+='<div style="text-align:center;margin:16px 0 4px"><button class="ghost" onclick="resetFr()" style="opacity:.7;font-size:13px">Franchise zurücksetzen</button></div>';
+ return h;
 }
 function secKader(v){
  let h='<div class="card"><div class="sec" style="margin-top:0">Kader-Übersicht</div>'+
