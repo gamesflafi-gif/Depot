@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v24-routerun"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v25-rules"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -280,6 +280,7 @@ _STYLE2 = """
  .pbadge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;min-width:30px;text-align:center;flex:none}
  .pb-td{background:#16c784;color:#04140c}.pb-fg{background:#5fa8ff;color:#04121f}
  .pb-fd{background:#2c3a34;color:#d6efe4}.pb-to{background:#ef5350;color:#240606}.pb-pl{background:#1a221e;color:var(--mut)}
+ .pb-fl{background:#e9b949;color:#241c00}
  .obar{display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid var(--line);margin-top:2px}
  .oseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#06140d;min-width:0}
  .o-ok{background:#16c784}.o-ok2{background:#0e9f6a;color:#eafff5}.o-mid{background:#3a4a44;color:#d6efe4}
@@ -647,6 +648,14 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  }
  s+='<line x1="0" y1="'+mapY(0)+'" x2="533" y2="'+mapY(0)+'" stroke="#5fa8ff" stroke-width="2.5" opacity="0.9"/>';
  if(ytg<=24)s+='<line x1="0" y1="'+mapY(ytg)+'" x2="533" y2="'+mapY(ytg)+'" stroke="#ffd34d" stroke-width="2" opacity="0.7" stroke-dasharray="7 5"/>';
+ // Aus-Bereiche (dunkler) + weiße Seitenlinien (Feldbreite 53,3 Yd fest)
+ s+='<rect x="0" y="0" width="12" height="360" fill="#06110a" opacity="0.6"/><rect x="521" y="0" width="12" height="360" fill="#06110a" opacity="0.6"/>'+
+   '<line x1="12" y1="0" x2="12" y2="360" stroke="#eef6f0" stroke-width="3" opacity="0.92"/><line x1="521" y1="0" x2="521" y2="360" stroke="#eef6f0" stroke-width="3" opacity="0.92"/>';
+ // Pylonen an den Endzonen-Ecken + Endlinie hinten
+ if(fpos!=null&&fpos<=26){const gy=mapY(Math.min(fpos,26)),by=mapY(Math.min(fpos,26)+10);
+   [12,521].forEach(px=>{s+='<rect x="'+(px-2.5)+'" y="'+(gy-3)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';
+     if(by>0)s+='<rect x="'+(px-2.5)+'" y="'+(by-3)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';});
+   if(by>0)s+='<line x1="12" y1="'+by+'" x2="521" y2="'+by+'" stroke="#eef6f0" stroke-width="2" opacity="0.7"/>';}
  if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  svg.innerHTML=s;
@@ -754,7 +763,7 @@ function playAnim(svg,d,res,onDone){
  const gain=[catchPt[0],(kind==='complete')?Math.max(catchPt[1],vy):vy];   // complete: YAC bis Yards; Lauf: genau Yards
  const runEnd=(!isPass&&tgt)?[catchPt[0],vy]:null;
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
- const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0;
+ const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/26);
  function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;const acc=Math.min(1,0.4+el*1.5);const M=p=>_spd(p)*dt*acc;  // Beschleunigung vom Snap weg
   const carrier=(kind==='complete'&&caught)?tgt:(!isPass?tgt:null);
@@ -816,6 +825,11 @@ function playAnim(svg,d,res,onDone){
       if(dist<mind&&dist>1e-4){const push=mind-dist,ux=dx/dist,uy=dy/dist;
         if(kind==='sack'&&o.pos==='OL'&&p.role==='rush'){o.x-=ux*push;o.y-=uy*push;}  // Sack: Rusher setzt sich durch
         else{p.x+=ux*push;p.y+=uy*push;}}});});                                        // sonst: Verteidiger wird geblockt
+  // Out of bounds: Ballträger an der Seitenlinie -> Play tot am Spot (wie im echten Football)
+  const LO=1.2,HI=52.1;
+  if(carrier){if(carrier.x<LO){carrier.x=LO;oob=true;}else if(carrier.x>HI){carrier.x=HI;oob=true;}}
+  O.forEach(o=>{o.x=Math.max(0.2,Math.min(53.1,o.x));});   // niemand rendert im Aus außerhalb des Feldes
+  D.forEach(p=>{p.x=Math.max(0.2,Math.min(53.1,p.x));});
   // schreiben
   O.forEach(o=>moveP(P,'o'+o.i,o.x,o.y));
   D.forEach(p=>moveP(P,'d_'+p.i,p.x,p.y));
@@ -831,7 +845,7 @@ function playAnim(svg,d,res,onDone){
   // Ende: erst wenn der Raumgewinn erreicht ist (Verteidiger treffen dort ein = Tackle), Pass aufgelöst, Sack oder Timeout
   const atGain=carrier&&((kind==='complete'&&Math.hypot(carrier.x-gain[0],carrier.y-gain[1])<0.6)||(!isPass&&runEnd&&Math.hypot(carrier.x-runEnd[0],carrier.y-runEnd[1])<0.6));
   const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
-    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0);
+    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0) || (oob&&!td&&el>0.8&&(caught||!isPass));
   if(!done)_anim[P]=requestAnimationFrame(frame);
   else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
     celebrate(P,'o'+carrier.i);
@@ -1398,7 +1412,8 @@ async function watchLast(){const r=await api('/api/fr/last_game');if(r.game)open
 let bcTimer=null,bcGame=null;
 const AC=g=>g.acolor||'#ef5350', HC=g=>g.hcolor||'#16c784', AB=g=>g.aabbr||g.away.slice(0,3).toUpperCase(), HB=g=>g.habbr||g.home.slice(0,3).toUpperCase();
 function pbadge(desc){let c='pb-pl',t='PLAY';
- if(/TOUCHDOWN/.test(desc)){c='pb-td';t='TD';}else if(/Field Goal gut/.test(desc)){c='pb-fg';t='FG';}
+ if(/🚩|Strafe|Holding|False Start|Offside|Interference|Face Mask|Roughing|Encroachment|Delay of Game|Formation|Neutral Zone|Unnecessary/.test(desc)){c='pb-fl';t='FLAG';}
+ else if(/TOUCHDOWN/.test(desc)){c='pb-td';t='TD';}else if(/Field Goal gut/.test(desc)){c='pb-fg';t='FG';}
  else if(/First Down/.test(desc)){c='pb-fd';t='1ST';}else if(/Interception|Fumble/.test(desc)){c='pb-to';t='TO';}
  return '<span class="pbadge '+c+'">'+t+'</span>';}
 function cmtRow(p){const big=/TOUCHDOWN|Field Goal gut|Interception|Fumble/.test(p.desc);

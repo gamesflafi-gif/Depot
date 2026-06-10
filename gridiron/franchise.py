@@ -1765,6 +1765,87 @@ def _scheme_pick(team: dict, off: bool) -> str:
     return random.choice(pool)
 
 
+# --- Strafen (echte Football-Regeln) -------------------------------------------------
+# (Name, Seite, Yards, automatisches First Down, Vor-Snap (kein Play), Spot-Foul, Gewicht)
+_PENALTIES = [
+    ("False Start", "off", 5, False, True, False, 10),
+    ("Delay of Game", "off", 5, False, True, False, 4),
+    ("Illegal Formation", "off", 5, False, True, False, 3),
+    ("Holding (Offense)", "off", 10, False, False, False, 9),
+    ("Illegal Block in the Back", "off", 10, False, False, False, 5),
+    ("Offensive Pass Interference", "off", 10, False, False, False, 3),
+    ("Offside (Defense)", "def", 5, False, True, False, 8),
+    ("Encroachment", "def", 5, False, True, False, 3),
+    ("Neutral Zone Infraction", "def", 5, False, True, False, 3),
+    ("Defensive Holding", "def", 5, True, False, False, 5),
+    ("Defensive Pass Interference", "def", 0, True, False, True, 6),
+    ("Face Mask", "def", 15, True, False, False, 4),
+    ("Roughing the Passer", "def", 15, True, False, False, 3),
+    ("Unnecessary Roughness", "def", 15, True, False, False, 3),
+]
+
+
+def _roll_penalty(rng, rate: float = 0.13):
+    """Wirft mit kleiner Wahrscheinlichkeit eine Strafe (gewichtet)."""
+    if rng.random() >= rate:
+        return None
+    tot = sum(p[6] for p in _PENALTIES)
+    r = rng.random() * tot
+    acc = 0.0
+    for name, side, yds, af, pre, spot, w in _PENALTIES:
+        acc += w
+        if r <= acc:
+            return {"name": name, "side": side, "yards": yds,
+                    "auto_first": af, "pre_snap": pre, "spot": spot}
+    return None
+
+
+def _apply_penalty(g: dict, pen: dict, o: dict, yards: int,
+                   attack_right: bool, off: dict, user_off: bool) -> bool:
+    """Wendet eine Strafe an. True = angenommen (ersetzt das Play), False = abgelehnt (Play zählt)."""
+    off_pen = (pen["side"] == "off")
+    is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
+    accept = True
+    if pen["pre_snap"]:
+        accept = True                                   # Vor-Snap-Foul: immer geahndet, kein Snap
+    elif off_pen:
+        if o["turnover"] or yards < -pen["yards"]:       # Verteidigung lehnt ab, wenn das Play ohnehin schlecht lief
+            accept = False
+    else:
+        gain_first = yards >= g["dist"]
+        pen_gain = (min(int(g["ytz"]) - 1, 18) if pen["spot"] else pen["yards"])
+        if is_td or (gain_first and yards >= pen_gain and not pen["auto_first"]):
+            accept = False                               # Offense lehnt ab, wenn das Play mehr brachte
+    if not accept:
+        return False
+    ytz = float(g["ytz"]); dist = float(g["dist"]); down = g["down"]
+    if off_pen:
+        ytz = ytz + (100.0 - ytz) / 2 if ytz + pen["yards"] > 99 else ytz + pen["yards"]  # Half-the-distance zur eigenen Goalline
+        dist = dist + pen["yards"]
+        label = f"🚩 {pen['name']} gegen {off['name']} — {pen['yards']} Yd zurück, Wiederholung {down}. Down"
+    else:
+        gained = (min(int(ytz) - 1, 18) if pen["spot"] else pen["yards"])
+        if ytz - gained < 1:                             # Half-the-distance zur gegnerischen Goalline
+            gained = max(1, int(ytz // 2))
+        ytz = max(1.0, ytz - gained)
+        if pen["auto_first"]:
+            down, dist = 1, 10.0
+            label = f"🚩 {pen['name']} (Verteidigung) — +{gained} Yd, automatisches First Down"
+        else:
+            dist = dist - gained
+            extra = ""
+            if dist <= 0:
+                down, dist, extra = 1, 10.0, " — First Down"
+            label = f"🚩 {pen['name']} (Verteidigung) — +{gained} Yd{extra}"
+    g["ytz"] = round(ytz, 1)
+    g["dist"] = round(max(1.0, dist), 1)
+    g["down"] = down
+    g["absx"] = round((100.0 - g["ytz"]) if attack_right else g["ytz"], 1)
+    g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
+                        "hs": g["score"][0], "as_": g["score"][1], "off": user_off, "yards": 0})
+    return True
+
+
 def game_play(cfg: Config, state: dict, choice: str) -> dict:
     g = state.get("active_game")
     if not g or g["over"]:
@@ -1803,6 +1884,16 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
                          {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
+    # Strafen (nur normale Snaps – nicht bei Trick-Plays/FG/PAT)
+    pen = None if philly else _roll_penalty(random)
+    if pen and _apply_penalty(g, pen, o, yards, attack_right, off, user_has_ball):
+        pen_desc = g["log"][0]["desc"]
+        _new_decision_options(state)
+        save(cfg, state)
+        return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
+                                     "kind": "penalty", "penalty": True, "user_off": user_has_ball,
+                                     "ytz0": round(ytz0), "dist0": round(dist0)},
+                "game": _game_view(state)}
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
     # Box-Score (Nutzer-Team)
     urost = teams[0].get("roster")
