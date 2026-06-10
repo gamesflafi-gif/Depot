@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v27-mobile"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v28-world"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -118,6 +118,8 @@ _STYLE = """
   /* Anlagen-Hub: Karte größer nutzen, Ausbau-Button bricht sauber um */
   .hubcard{padding:12px} .hubcard .note{font-size:12px;margin-bottom:4px} .complex{margin-top:8px}
   .facpanel{flex-wrap:wrap;gap:8px;padding:11px 12px} .facpanel>div:last-child{text-align:left;width:100%} .facpanel>div:last-child button{width:100%}
+  .worldwrap{width:100vw} .worldview{height:46vh;min-height:240px} .expgrid{grid-template-columns:1fr}
+  .devnm{font-size:12px} .devst{display:none}
  }
 """
 
@@ -184,6 +186,26 @@ _STYLE2 = """
  .flagw{transform-box:fill-box;transform-origin:left center}
  .facpanel{display:flex;align-items:center;gap:12px;background:var(--tile);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:10px}
  .facpanel .fpn{font-weight:800;font-size:15px}
+ /* Vereinswelt-Vorschau + Pop-up */
+ .citypreview{position:relative;cursor:pointer;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:12px;transition:border-color .15s}
+ .citypreview:hover{border-color:var(--acc)} .citypreview .complex{margin-top:0;border:0;pointer-events:none}
+ .cpbadge{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(8,16,11,.82);border:1px solid var(--acc);color:#eaf6ef;font-weight:800;font-size:13px;padding:8px 16px;border-radius:999px;backdrop-filter:blur(3px);pointer-events:none}
+ .worldwrap{max-width:760px;width:96vw}
+ .worldview{position:relative;height:54vh;min-height:300px;overflow:hidden;background:#0a120c;border:1px solid var(--line);border-radius:12px;margin-top:6px;touch-action:none;cursor:grab}
+ .worldview:active{cursor:grabbing} .worldcanvas{position:absolute;top:0;left:0;width:100%;transform-origin:0 0;will-change:transform} .worldcanvas .complex{margin-top:0;border:0}
+ .worldzoom{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+ .worldzoom button{width:38px;height:38px;padding:0;font-size:20px;font-weight:800;border-radius:10px}
+ .worldhint{position:absolute;left:10px;bottom:12px;font-size:11px;color:#9fb0a8;background:rgba(8,16,11,.6);padding:4px 9px;border-radius:8px;pointer-events:none}
+ .expgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .exprow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--tile)}
+ .exprow.on{border-color:#1c5a40;background:#10231a} .expic{font-size:16px} .expnm{display:flex;flex-direction:column} .expnm small{color:var(--mut);font-size:11.5px}
+ .devlist{display:flex;flex-direction:column;gap:2px}
+ .devrow{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--tile)}
+ .devrow.me{border-color:#1c5a40;background:#10231a} .devrk{width:18px;text-align:center;font-weight:800;color:var(--mut)}
+ .devnm{flex:1;display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px} .devbarwrap{height:6px;border-radius:3px;background:#0c1410;overflow:hidden} .devbar{display:block;height:100%}
+ .devov{font-weight:800;font-size:15px;text-align:center} .devov small{display:block;font-size:9px;color:var(--mut);font-weight:600}
+ .devst{color:#e9b949;font-size:12px;letter-spacing:1px} .ghost.mini{padding:6px 10px;font-size:12px}
+ .devdet:empty{display:none} .scoutbox{padding:9px 11px;margin:2px 0 6px;border:1px dashed var(--line);border-radius:9px;background:#0e150f;font-size:13px}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
  .awrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin:8px 0;background:var(--tile)}
  .awlabel{font-size:11px;font-weight:800;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
@@ -453,7 +475,7 @@ function unlockBodyIfNone(){if(!document.querySelector('.overlay'))document.body
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
-function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay','awoverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
+function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay','awoverlay','worldoverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
  stopClock();liveG=null;playBusy=false;document.body.classList.remove('noscroll');}   // nichts darf den Bildschirm blockieren
 function tab(s){closeAllOverlays();                                                     // beim Tab-Wechsel offene Overlays/Sperren lösen
  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
@@ -1327,7 +1349,7 @@ function _facLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=f.name,w=Math.max(60
    '<rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="30" rx="8" fill="#0a130d" fill-opacity=".82" stroke="'+(sel?(_ACC[f.k]||'#19e08f'):'#ffffff')+'" stroke-opacity="'+(sel?'.9':'.1')+'"/>'+
    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+17).toFixed(1)+'" text-anchor="middle" font-size="12.5" font-weight="800" fill="#eef4ef" style="paint-order:stroke" stroke="#06140d" stroke-width="2.8">'+esc(nm)+'</text>'+
    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+29).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="700" fill="'+(sel?(_ACC[f.k]||'#9ad17a'):'#a6b6ad')+'">'+(f.rating?f.rating+' OVR':'Stufe '+f.lvl)+'</text></g>';}
-function _complexSVG(v){
+function _complexSVG(v,opts){const world=!!(opts&&opts.world);
  // Boden mit Verlauf + Plaza-Wege + Parkplatz
  let s='<defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1810"/><stop offset="1" stop-color="#0a120c"/></linearGradient><radialGradient id="ggrass" cx="0.5" cy="0.42" r="0.7"><stop offset="0" stop-color="#1c4029"/><stop offset="1" stop-color="#143020"/></radialGradient></defs>'+
    '<rect x="0" y="0" width="600" height="380" fill="url(#gsky)"/>'+
@@ -1360,20 +1382,96 @@ function _complexSVG(v){
  push(5.8+2.6,_isoPerson(5.8,2.6,'#e9b949','walky 8s ease-in-out infinite'));
  push(3.4+5.85,_isoPerson(3.4,5.9,'#e25b5b','walky 9s ease-in-out infinite 1s'));
  push(4.9+5.85,_isoPerson(4.9,5.9,'#9ad17a','walkx 8s ease-in-out infinite .5s'));
+ // Welt-Ansicht: Bauplätze für freischaltbare Erweiterungen
+ let lockLabels='';
+ if(world){const lf=_lockedFacs(v);lf.forEach(f=>push(f.gx+f.gy+f.d,_isoLockedPlot(f)));
+   lockLabels=lf.map(_lockedLabel).join('');}
  dr.sort((a,b)=>a[0]-b[0]);
  // Labels zuletzt, von hinten nach vorne, immer über den Gebäuden
  const labels=list.slice().sort((a,b)=>(a.gy+a.d)-(b.gy+b.d)).map(_facLabel).join('');
- return '<svg class="complex" viewBox="92 30 460 300" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+labels+'</svg>';}
+ const vb=world?'0 0 600 384':'92 30 460 300';
+ return '<svg class="complex'+(world?' worldsvg':'')+'" viewBox="'+vb+'" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+labels+lockLabels+'</svg>';}
+// Freischaltbare Erweiterungen (Bauplätze) – Status aus den vorhandenen Anlagen-Stufen
+function _lockedFacs(v){const F=v.facilities||{};
+ const eq=(v.equipment&&v.equipment.level)||1,sc=(F.scouting_fac&&F.scouting_fac.level)||1,me=(F.medical&&F.medical.level)||1,st=(v.stadium&&v.stadium.level)||1;
+ return [
+  {key:'indoor',name:'Indoor-Halle',gx:0.7,gy:5.45,w:1.5,d:1.05,reqL:4,reqcur:eq,reqname:'Trainingsgelände',unlocked:eq>=4},
+  {key:'analytics',name:'Analyse-Labor',gx:2.55,gy:6.05,w:1.4,d:0.95,reqL:3,reqcur:sc,reqname:'Scouting-Akademie',unlocked:sc>=3},
+  {key:'fanzone',name:'Fan-Zone & Museum',gx:8.0,gy:5.55,w:1.2,d:0.95,reqL:4,reqcur:st,reqname:'Stadion',unlocked:st>=4}
+ ];}
+function _isoLockedPlot(f){const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso(f.gx+f.w,f.gy+f.d),D=_iso(f.gx,f.gy+f.d);
+ const cx=(A[0]+Cc[0])/2,cy=(A[1]+Cc[1])/2,col=f.unlocked?'#19e08f':'#8a99a2';
+ let g='<polygon points="'+_pp([A,B,Cc,D])+'" fill="#0b130d" fill-opacity=".55" stroke="'+col+'" stroke-width="1.6" stroke-dasharray="6 4"/>';
+ // Eckpfosten
+ [A,B,Cc,D].forEach(p=>{g+='<line x1="'+p[0].toFixed(1)+'" y1="'+p[1].toFixed(1)+'" x2="'+p[0].toFixed(1)+'" y2="'+(p[1]-6).toFixed(1)+'" stroke="'+col+'" stroke-width="1.4"/>';});
+ // Schild mit Schloss/Haken
+ g+='<line x1="'+cx+'" y1="'+(cy-2)+'" x2="'+cx+'" y2="'+(cy-22)+'" stroke="#5a6770" stroke-width="2"/>'+
+    '<circle cx="'+cx+'" cy="'+(cy-29)+'" r="9.5" fill="'+(f.unlocked?'#19e08f':'#39444c')+'" stroke="#06140d" stroke-width="1.5"/>';
+ g+=f.unlocked?'<path d="M'+(cx-3.5)+' '+(cy-29)+' l2.5 3 l4.5 -6" stroke="#06140d" stroke-width="2" fill="none"/>'
+   :'<rect x="'+(cx-3)+'" y="'+(cy-30)+'" width="6" height="5" rx="1" fill="#d4dbe0"/><path d="M'+(cx-2)+' '+(cy-30)+' a2 2 0 0 1 4 0" stroke="#d4dbe0" stroke-width="1.3" fill="none"/>';
+ return g;}
+function _lockedLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),w=Math.max(70,f.name.length*6.6+20),col=f.unlocked?'#19e08f':'#aeb9bf';
+ return '<g style="pointer-events:none"><rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="29" rx="8" fill="#0a130d" fill-opacity=".82" stroke="'+col+'" stroke-opacity=".5"/>'+
+   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+16).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="'+col+'" style="paint-order:stroke" stroke="#06140d" stroke-width="2.6">'+esc(f.name)+'</text>'+
+   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+28).toFixed(1)+'" text-anchor="middle" font-size="9.5" fill="#9fb0a8">'+(f.unlocked?'bereit zum Bau':esc(f.reqname)+' Stufe '+f.reqL)+'</text></g>';}
 function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
  return '<div class="facpanel"><div style="flex:1"><div class="fpn">'+esc(f.name)+'</div><div class="hbe">'+esc(f.eff)+'</div></div>'+
    '<div style="text-align:right;flex:none">'+(f.rating?'<span class="hblvl">'+f.rating+' OVR</span>':_dots(f.lvl,5))+
    '<div style="margin-top:7px"><button data-u="'+esc(f.key)+'" onclick="upg(this.dataset.u)" '+(v.budget<f.cost||f.maxed?'disabled':'')+'>'+(f.maxed?'Ausgebaut':'Ausbauen '+f.plus+' ('+f.cost+' Mio)')+'</button></div></div></div>';}
-function selFac(k){_selFac=k;document.querySelectorAll('.facb').forEach(e=>e.classList.toggle('sel',e.dataset.k===k));const p=$('facpanel');if(p&&lastView)p.innerHTML=_facPanelHTML(lastView);}
+function selFac(k){_selFac=k;document.querySelectorAll('.facb').forEach(e=>e.classList.toggle('sel',e.dataset.k===k));
+ ['facpanel','worldpanel'].forEach(id=>{const p=$(id);if(p&&lastView)p.innerHTML=_facPanelHTML(lastView);});}
+/* ---------- Vereinswelt (großes, bewegbares Pop-up) ---------- */
+let _wx=0,_wy=0,_ws=1,_wptr={},_wpd=0;
+function _devStars(ovr){return Math.max(1,Math.min(5,Math.round((ovr-58)/8)));}
+function _devList(v){const list=_facList(v);let lvl=0,mx=0;list.forEach(f=>{lvl+=(f.rating?Math.max(1,Math.round((f.rating-50)/10)):f.lvl);mx+=5;});return Math.round(lvl/mx*100);}
+function openWorld(){const v=lastView;if(!v)return;closeWorld();
+ const o=document.createElement('div');o.className='overlay';o.id='worldoverlay';o.addEventListener('click',e=>{if(e.target===o)closeWorld();});
+ const lf=_lockedFacs(v);
+ const ranking=(v.standings||[]).slice().sort((a,b)=>b.ovr-a.ovr).map((t,i)=>{
+   const stars='★★★★★'.slice(0,_devStars(t.ovr))+'☆☆☆☆☆'.slice(0,5-_devStars(t.ovr));
+   return '<div class="devrow'+(t.user?' me':'')+'"><span class="devrk">'+(i+1)+'</span>'+teamLogo(t.abbr,t.color)+
+     '<span class="devnm">'+esc(t.name)+(t.user?' <span class="tag" style="background:#16c784;color:#04140c">DU</span>':'')+
+     '<span class="devbarwrap"><span class="devbar" style="width:'+Math.round((t.ovr-50)/49*100)+'%;background:'+esc(t.color)+'"></span></span></span>'+
+     '<span class="devov">'+t.ovr+'<small>OVR</small></span><span class="devst">'+stars+'</span>'+
+     (t.user?'':'<button class="ghost mini" data-a="'+esc(t.abbr)+'" onclick="scoutTeam(this.dataset.a)">Scouten</button>')+
+     '</div><div class="devdet" id="dev_'+esc(t.abbr)+'"></div>';}).join('');
+ const exp=lf.map(f=>'<div class="exprow'+(f.unlocked?' on':'')+'"><span class="expic">'+(f.unlocked?'✓':'🔒')+'</span>'+
+   '<span class="expnm"><b>'+esc(f.name)+'</b><small>'+(f.unlocked?'Bauplatz bereit – bald baubar':'Benötigt '+esc(f.reqname)+' Stufe '+f.reqL+' (aktuell '+f.reqcur+')')+'</small></span></div>').join('');
+ o.innerHTML='<div class="modal worldwrap"><div class="modalhead"><h3>🌍 Vereinswelt — '+esc(v.team_name)+'</h3><button class="ghost" onclick="closeWorld()">Schließen</button></div>'+
+   '<div class="worldview" id="worldview"><div class="worldcanvas" id="worldcanvas">'+_complexSVG(v,{world:true})+'</div>'+
+   '<div class="worldzoom"><button data-d="1" onclick="worldZoomBtn(1)">+</button><button data-d="-1" onclick="worldZoomBtn(-1)">−</button><button onclick="worldReset()">⟳</button></div>'+
+   '<div class="worldhint">Ziehen zum Bewegen · Scrollen/Zwei-Finger zum Zoomen</div></div>'+
+   '<div id="worldpanel">'+_facPanelHTML(v)+'</div>'+
+   '<div class="sec">🏗️ Erweiterungen freischalten</div><div class="expgrid">'+exp+'</div>'+
+   '<div class="sec">📊 Liga-Entwicklung — wie stark sind die anderen Klubs?</div><div class="devlist">'+ranking+'</div>'+
+   '</div>';
+ document.body.appendChild(o);lockBody();_wx=0;_wy=0;_ws=1;_wapply();_wbind();}
+function closeWorld(){const o=$('worldoverlay');if(o)o.remove();unlockBodyIfNone();}
+function _wapply(){const c=$('worldcanvas');if(c)c.style.transform='translate('+_wx.toFixed(1)+'px,'+_wy.toFixed(1)+'px) scale('+_ws.toFixed(3)+')';}
+function _wzoom(f,cx,cy){const ns=Math.max(0.7,Math.min(3.4,_ws*f)),k=ns/_ws;_wx=cx-(cx-_wx)*k;_wy=cy-(cy-_wy)*k;_ws=ns;_wapply();}
+function worldZoomBtn(d){const v=$('worldview'),r=v?v.getBoundingClientRect():{width:320,height:320};_wzoom(d>0?1.28:0.78,r.width/2,r.height/2);}
+function worldReset(){_wx=0;_wy=0;_ws=1;_wapply();}
+function _wbind(){const v=$('worldview');if(!v)return;
+ v.onpointerdown=e=>{v.setPointerCapture(e.pointerId);_wptr[e.pointerId]={x:e.clientX,y:e.clientY};};
+ v.onpointermove=e=>{if(!_wptr[e.pointerId])return;const ids=Object.keys(_wptr);
+   if(ids.length>=2){const r=v.getBoundingClientRect();_wptr[e.pointerId]={x:e.clientX,y:e.clientY};
+     const a=_wptr[ids[0]],b=_wptr[ids[1]],nd=Math.hypot(a.x-b.x,a.y-b.y);
+     if(_wpd)_wzoom(nd/_wpd,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top);_wpd=nd;return;}
+   const p=_wptr[e.pointerId];_wx+=e.clientX-p.x;_wy+=e.clientY-p.y;_wptr[e.pointerId]={x:e.clientX,y:e.clientY};_wapply();};
+ const up=e=>{delete _wptr[e.pointerId];_wpd=0;};v.onpointerup=up;v.onpointercancel=up;v.onpointerleave=up;
+ v.onwheel=e=>{e.preventDefault();const r=v.getBoundingClientRect();_wzoom(e.deltaY<0?1.12:0.9,e.clientX-r.left,e.clientY-r.top);};}
+function scoutTeam(abbr){const d=$('dev_'+abbr);if(!d)return;if(d.innerHTML){d.innerHTML='';return;}
+ const t=(lastView.standings||[]).find(x=>x.abbr===abbr);if(!t)return;
+ const tier=t.ovr>=84?'Titelkandidat – sehr tiefer, starker Kader':t.ovr>=76?'Playoff-Team – ausgewogen und gefährlich':t.ovr>=68?'Mittelfeld – schlagbar mit gutem Plan':'Aufbau-Team – klarer Vorteil für dich';
+ const off=t.pf||0,def=t.pa||0;
+ d.innerHTML='<div class="scoutbox"><b>Scouting-Bericht '+esc(t.name)+'</b>'+
+   '<div class="mut">Bilanz '+t.w+'–'+t.l+' · '+off+' Punkte erzielt · '+def+' kassiert · '+t.ovr+' OVR</div>'+
+   '<div style="margin-top:4px">'+esc(tier)+'</div></div>';}
 function secBuild(v){
  // Anlagen-Gelände: anklickbare Karte mit Standorten, trainierenden Spielern und sichtbarem Ausbau
  let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Vereinsgelände</div>'+
-   '<div class="note">Tippe ein Gebäude an und bau es aus — jede Stufe verändert das Gebäude sichtbar. Budget: '+v.budget+' Mio.</div>'+
-   _complexSVG(v)+
+   '<div class="note">Budget: '+v.budget+' Mio. — tippe auf die Welt für die große, bewegbare Vereinswelt mit Ausbau, Erweiterungen & Liga-Vergleich.</div>'+
+   '<div class="citypreview" onclick="openWorld()">'+_complexSVG(v)+'<div class="cpbadge">🌍 Vereinswelt öffnen</div></div>'+
    '<div id="facpanel">'+_facPanelHTML(v)+'</div></div>';
  // Trainerstab als Karten mit Stärken/Schwächen + Markt
  h+='<div class="sec">Trainerstab</div>';
