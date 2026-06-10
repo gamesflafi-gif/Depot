@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v17-facilities"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v18-awards"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -168,6 +168,9 @@ _STYLE2 = """
  .hblv{display:inline-flex;gap:3px} .hblv i{width:10px;height:10px;border-radius:2px;background:#2c3a34} .hblv i.on{background:var(--acc)}
  @media(max-width:560px){.hubgrid{grid-template-columns:1fr 1fr}}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
+ .awrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin:8px 0;background:var(--tile)}
+ .awlabel{font-size:11px;font-weight:800;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
+ .awname{font-weight:700;margin:2px 0;display:flex;align-items:center;gap:7px}
  .evtgrp{margin:11px 0} .evtlab{font-size:11px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
  .evtopts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
  .evtopt{padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--tile);color:var(--fg);text-align:left;font-weight:600;cursor:pointer;font-size:12.5px;transition:border-color .12s,box-shadow .12s}
@@ -432,7 +435,7 @@ function unlockBodyIfNone(){if(!document.querySelector('.overlay'))document.body
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
-function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
+function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay','awoverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
  stopClock();liveG=null;playBusy=false;document.body.classList.remove('noscroll');}   // nichts darf den Bildschirm blockieren
 function tab(s){closeAllOverlays();                                                     // beim Tab-Wechsel offene Overlays/Sperren lösen
  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
@@ -935,7 +938,8 @@ function secDash(v){
    h+='</div>';}
  // 2) Spielbetrieb
  h+='<div class="card'+(active?' stepcard':'')+'" id="gamecard"><div class="sec" style="margin-top:0">'+(active?'<span class="stepnum">2</span>':'')+(v.phase==='done'?'Saison beendet':(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
- if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div><button onclick="newSeason()">Neue Saison starten</button> ';}
+ if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div>'+
+   (v.awards&&v.awards.length?'<button onclick="showAwards()">🏆 Award-Show</button> ':'')+'<button class="ghost" onclick="newSeason()">Neue Saison starten</button> ';}
  else if(v.week_done){
    h+='<div class="reco win"><span>Woche ausgewertet'+(v.is_bye?' (Bye Week)':'')+'.</span><span class="mut">bereit für die nächste Woche</span></div>'+
      '<button onclick="nextWeek()">Nächste Woche ▶</button> ';
@@ -1111,9 +1115,10 @@ function secStats(v){
      '<td>'+p.season.pass_yds+'</td><td>'+p.season.rush_yds+'</td><td>'+p.season.rec_yds+'</td>'+
      '<td>'+p.season.tkl+'</td><td>'+p.season.sack+'</td><td>'+p.season.intc+'</td><td>'+p.season.td+'</td></tr>').join('')+
    '</table></div>';}
- // Meister-Historie
- if(v.history&&v.history.length){h+='<div class="card"><div class="sec" style="margin-top:0">Meister-Historie</div>'+
-   v.history.map(x=>'<div class="reco"><span>Saison '+x.season+'</span><span class="mut">'+esc(x.champion)+'</span></div>').join('')+'</div>';}
+ // Hall of Fame / Historie
+ if(v.history&&v.history.length){h+='<div class="card"><div class="sec" style="margin-top:0">🏆 Hall of Fame / Historie</div>'+
+   v.history.slice().reverse().map(x=>'<div class="reco"><span><span class="tag">S'+x.season+'</span> Meister: <b>'+esc(x.champion)+'</b></span><span class="mut">'+(x.mvp?'MVP '+esc(x.mvp):'')+'</span></div>').join('')+'</div>';}
+ if(v.phase==='done'&&v.awards&&v.awards.length){h+='<div style="margin-top:8px"><button onclick="showAwards()">🏆 Award-Show ansehen</button></div>';}
  return h;
 }
 function playerImpact(p){const s=p.season;return s.pass_yds/20+s.rush_yds/12+s.rec_yds/12+s.tkl+s.sack*3+s.intc*5+s.td*4;}
@@ -1172,7 +1177,14 @@ function renderResult(res,me){
  return h+'</div>';
 }
 async function simWeek(){const r=await api('/api/fr/sim_week','POST');if(r.result&&r.result.error){alert(r.result.error);return;}if(r.view)renderMgr(r.view);}
-async function newSeason(){renderMgr(await api('/api/fr/new_season','POST'));}
+function showAwards(){const v=lastView;if(!v||!v.awards||!v.awards.length)return;
+ const o=document.createElement('div');o.className='overlay';o.id='awoverlay';o.addEventListener('click',e=>{if(e.target===o)closeAwards();});
+ o.innerHTML='<div class="modal"><div class="modalhead"><h3>🏆 Award-Show — Saison '+v.season+'</h3><button class="ghost" onclick="closeAwards()">Schließen</button></div>'+
+   (v.champion?'<div class="reco champ"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>':'')+
+   v.awards.map(a=>'<div class="awrow"><span class="pfa">'+portrait({id:a.id,name:a.name},48,v.color)+'</span><div class="awtxt"><div class="awlabel">'+esc(a.award)+'</div><div class="awname">'+posBadge(a.pos)+' <b>'+esc(a.name)+'</b></div><div class="mut" style="font-size:12px">'+esc(a.line)+'</div></div></div>').join('')+
+   '</div>';document.body.appendChild(o);lockBody();}
+function closeAwards(){const o=$('awoverlay');if(o)o.remove();unlockBodyIfNone();}
+async function newSeason(){closeAwards();renderMgr(await api('/api/fr/new_season','POST'));}
 async function resetFr(){if(confirm('Franchise wirklich löschen?')){await api('/api/fr/reset','POST');loadMgr();}}
 async function watchLast(){const r=await api('/api/fr/last_game');if(r.game)openBroadcast(r.game);}
 

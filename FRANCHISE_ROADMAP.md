@@ -32,9 +32,9 @@ Ziel: Du gehst in dein **Stadion/Gelände** und upgradest dort anklickbar.
 - **2.3 Trainingsplatz-Bereich** — Drills sichtbar wählbar mit Fortschritt.
 
 ## Priorität 3 — Saison-Tiefe
-- **3.1 Award-Show** am Saisonende: MVP, Offensiv-/Defensiv-Spieler,
+- **3.1 Award-Show** ✅ am Saisonende: MVP, Offensiv-/Defensiv-Spieler,
   Rookie of the Year, Top-Scorer (aus Box-Score-Statistik).
-- **3.2 Hall of Fame / Historie** — Meister, Award-Gewinner, Rekorde
+- **3.2 Hall of Fame / Historie** ✅ — Meister, Award-Gewinner, Rekorde
   über alle Saisons.
 - **3.3 Power-Ranking & Liga-News** pro Woche.
 - **3.4 Mehrsaison-Statistik** je Spieler/Team (Karriere-Verlauf).

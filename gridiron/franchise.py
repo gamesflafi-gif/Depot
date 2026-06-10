@@ -1207,6 +1207,59 @@ def _resolve_playoff(state: dict, rng: random.Random, user_result: dict | None =
     return {"phase": "playoffs", "round": po["round"], "games": games, "_user_game": user_game}
 
 
+def _season_awards(state: dict) -> list[dict]:
+    """Saison-Auszeichnungen aus den Saisonstatistiken des Nutzer-Teams."""
+    roster = state["teams"][0].get("roster", [])
+    played = [p for p in roster if p.get("season", {}).get("games", 0) > 0]
+    if not played:
+        return []
+
+    def offv(p):
+        s = p["season"]
+        return s["pass_yds"] / 20 + s["pass_td"] * 4 + s["rush_yds"] / 12 + s["rec_yds"] / 12 + s["rec"] + s["td"] * 4
+
+    def defv(p):
+        s = p["season"]
+        return s["tkl"] + s["sack"] * 3 + s["intc"] * 8
+
+    def line(p):
+        s = p["season"]
+        o = []
+        if s["pass_yds"]:
+            o.append(f"{s['pass_yds']} Pass-Yds, {s['pass_td']} TD")
+        if s["rush_yds"]:
+            o.append(f"{s['rush_yds']} Rush-Yds")
+        if s["rec"]:
+            o.append(f"{s['rec']} Fänge, {s['rec_yds']} Yds")
+        d = []
+        if s["tkl"]:
+            d.append(f"{s['tkl']} Tkl")
+        if s["sack"]:
+            d.append(f"{s['sack']} Sacks")
+        if s["intc"]:
+            d.append(f"{s['intc']} INT")
+        if d:
+            o.append(", ".join(d))
+        return " · ".join(o) or f"{s['games']} Spiele"
+
+    def mk(label, pool, key):
+        pool = [p for p in pool if key(p) > 0] or pool
+        if not pool:
+            return None
+        p = max(pool, key=key)
+        return {"award": label, "id": p["id"], "name": p["name"], "pos": p["pos"], "line": line(p)}
+
+    aw = []
+    for a in [mk("MVP", played, lambda p: offv(p) + defv(p)),
+              mk("Offensiv-Spieler des Jahres", played, offv),
+              mk("Defensiv-Spieler des Jahres", played, defv),
+              mk("Rookie des Jahres", [p for p in played if p["age"] <= 23], lambda p: offv(p) + defv(p)),
+              mk("Top-Scorer", played, lambda p: p["season"]["td"] + p["season"]["pass_td"])]:
+        if a:
+            aw.append(a)
+    return aw
+
+
 def _advance_playoff(state: dict) -> None:
     pend = state.pop("_po_pending", None)
     po = state["playoff"]
@@ -1220,7 +1273,10 @@ def _advance_playoff(state: dict) -> None:
         champ = pend["winners"][0]
         state["champion"] = champ
         state["phase"] = "done"
-        state["history"].append({"season": state["season"], "champion": champ})
+        aw = _season_awards(state)
+        state["awards"] = aw
+        state["history"].append({"season": state["season"], "champion": champ,
+                                 "mvp": (aw[0]["name"] if aw else None)})
 
 
 def new_season(cfg: Config, state: dict) -> dict:
@@ -1261,6 +1317,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["phase"] = "regular"
     state["playoff"] = None
     state["champion"] = None
+    state["awards"] = None
     state["results"] = []
     state["last_user_game"] = None
     state["active_game"] = None
@@ -1581,6 +1638,7 @@ def view(state: dict) -> dict:
         "last_result": last,
         "n_weeks": len(state["schedule"]),
         "history": state["history"],
+        "awards": state.get("awards") if state["phase"] == "done" else None,
         "has_last_game": bool(state.get("last_user_game")),
     }
 
