@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v28-world"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v29-polish"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -47,14 +47,15 @@ _STYLE = """
    color:var(--fg);font-size:14.5px;transition:border-color .15s,box-shadow .15s}
  select:hover,input:hover{border-color:#2f3a36}
  select:focus,input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--accsoft)}
- button{padding:10px 18px;border:0;border-radius:9px;background:var(--acc);color:#03130c;
-   font-weight:700;cursor:pointer;font-size:14.5px;transition:filter .12s,transform .04s}
- button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
- button[disabled]{opacity:.35;cursor:not-allowed;filter:none}
- button.ghost{background:var(--tile);color:var(--fg);border:1px solid #46544e;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+ button{padding:11px 18px;border:0;border-radius:11px;background:linear-gradient(180deg,#1fd897,#12ac72);color:#02140c;
+   font-weight:800;cursor:pointer;font-size:14.5px;letter-spacing:.01em;transition:filter .12s,transform .05s,box-shadow .12s;
+   box-shadow:0 2px 0 rgba(6,40,27,.55),0 8px 18px -8px rgba(25,224,143,.6),inset 0 1px 0 rgba(255,255,255,.28)}
+ button:hover{filter:brightness(1.05)} button:active{transform:translateY(1px);box-shadow:0 1px 0 rgba(6,40,27,.55),inset 0 1px 0 rgba(255,255,255,.2)}
+ button[disabled]{opacity:.32;cursor:not-allowed;filter:saturate(.5);box-shadow:none}
+ button.ghost{background:linear-gradient(180deg,#2a352f,#212c28);color:var(--fg);border:1px solid #46544e;box-shadow:0 1px 2px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.05)}
  button.ghost:hover{color:var(--acc);border-color:var(--acc);filter:none}
- .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0;
-   box-shadow:0 1px 2px rgba(0,0,0,.25)}
+ .card{background:linear-gradient(180deg,#1a2420,#141d1a);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0;
+   box-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -22px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.035)}
  .big{font-size:25px;font-weight:800;letter-spacing:-.01em}
  .row{display:flex;gap:24px;flex-wrap:wrap}
  .kgrid{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
@@ -189,12 +190,14 @@ _STYLE2 = """
  /* Vereinswelt-Vorschau + Pop-up */
  .citypreview{position:relative;cursor:pointer;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:12px;transition:border-color .15s}
  .citypreview:hover{border-color:var(--acc)} .citypreview .complex{margin-top:0;border:0;pointer-events:none}
- .cpbadge{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(8,16,11,.82);border:1px solid var(--acc);color:#eaf6ef;font-weight:800;font-size:13px;padding:8px 16px;border-radius:999px;backdrop-filter:blur(3px);pointer-events:none}
+ .cpbadge{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:linear-gradient(180deg,rgba(16,30,22,.92),rgba(9,16,12,.92));border:1px solid rgba(25,224,143,.5);color:#eaf6ef;font-weight:800;font-size:13px;padding:9px 18px;border-radius:999px;box-shadow:0 8px 22px -8px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.1);backdrop-filter:blur(5px);pointer-events:none}
+ .citypreview:hover .cpbadge{border-color:var(--acc)}
  .worldwrap{max-width:760px;width:96vw}
  .worldview{position:relative;height:54vh;min-height:300px;overflow:hidden;background:#0a120c;border:1px solid var(--line);border-radius:12px;margin-top:6px;touch-action:none;cursor:grab}
  .worldview:active{cursor:grabbing} .worldcanvas{position:absolute;top:0;left:0;width:100%;transform-origin:0 0;will-change:transform} .worldcanvas .complex{margin-top:0;border:0}
  .worldzoom{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
- .worldzoom button{width:38px;height:38px;padding:0;font-size:20px;font-weight:800;border-radius:10px}
+ .worldzoom button{width:42px;height:42px;padding:0;font-size:21px;font-weight:800;border-radius:50%;background:rgba(11,20,16,.72);color:#eaf6ef;border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 16px -4px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12);backdrop-filter:blur(7px)}
+ .worldzoom button:hover{border-color:var(--acc);color:var(--acc);filter:none}
  .worldhint{position:absolute;left:10px;bottom:12px;font-size:11px;color:#9fb0a8;background:rgba(8,16,11,.6);padding:4px 9px;border-radius:8px;pointer-events:none}
  .expgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
  .exprow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--tile)}
@@ -1344,11 +1347,15 @@ function _facBuilding(f){const sel=(_selFac===f.key);let g;
  if(f.k==='field')g=_isoField(f);else if(f.k==='stadium')g=_isoStadium(f);else if(f.k==='kick')g=_isoGoal(f);else g=_isoBuilding(f);
  return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+g+'</g>';}
 // Beschriftung getrennt — wird ganz oben gezeichnet, damit kein Gebäude sie verdeckt
-function _facLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=f.name,w=Math.max(60,nm.length*6.8+18),sel=(_selFac===f.key);
+function _shortName(n){const M={'Trainingsgelände':'Training','Medizinzentrum':'Medizin','Scouting-Akademie':'Scouting','Athletik-Center':'Athletik','Jugend-Akademie':'Jugend','Kicker-Akademie':'Kicker','Fan-Zone & Museum':'Fan-Zone','Analyse-Labor':'Analyse','Indoor-Halle':'Indoor'};return M[n]||String(n).split(/[ –—\-]/)[0];}
+function _facLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=_shortName(f.name),sel=(_selFac===f.key);
+ const ac=_ACC[f.k]||'#cfe0d8',sub=(f.rating?f.rating:f.lvl)+'';
+ const w=Math.round(38+nm.length*6.4),L=lp[0]-w/2,cy=lp[1]+15;
  return '<g data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+
-   '<rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="30" rx="8" fill="#0a130d" fill-opacity=".82" stroke="'+(sel?(_ACC[f.k]||'#19e08f'):'#ffffff')+'" stroke-opacity="'+(sel?'.9':'.1')+'"/>'+
-   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+17).toFixed(1)+'" text-anchor="middle" font-size="12.5" font-weight="800" fill="#eef4ef" style="paint-order:stroke" stroke="#06140d" stroke-width="2.8">'+esc(nm)+'</text>'+
-   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+29).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="700" fill="'+(sel?(_ACC[f.k]||'#9ad17a'):'#a6b6ad')+'">'+(f.rating?f.rating+' OVR':'Stufe '+f.lvl)+'</text></g>';}
+   '<rect x="'+L.toFixed(1)+'" y="'+(lp[1]+5).toFixed(1)+'" width="'+w+'" height="20" rx="10" fill="#0b1410" fill-opacity="'+(sel?'.97':'.86')+'" stroke="'+(sel?ac:'#04100a')+'" stroke-opacity="'+(sel?'.95':'.55')+'" stroke-width="'+(sel?'1.4':'1')+'"/>'+
+   '<circle cx="'+(L+12).toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="7" fill="'+ac+'" fill-opacity="'+(sel?'.3':'.16')+'" stroke="'+ac+'" stroke-opacity=".65"/>'+
+   '<text x="'+(L+12).toFixed(1)+'" y="'+(cy+3).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="800" fill="'+ac+'">'+sub+'</text>'+
+   '<text x="'+(L+24).toFixed(1)+'" y="'+(cy+3.4).toFixed(1)+'" font-size="10.5" font-weight="700" fill="#e3ece7" style="paint-order:stroke" stroke="#04100a" stroke-width="2.2">'+esc(nm)+'</text></g>';}
 function _complexSVG(v,opts){const world=!!(opts&&opts.world);
  // Boden mit Verlauf + Plaza-Wege + Parkplatz
  let s='<defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1810"/><stop offset="1" stop-color="#0a120c"/></linearGradient><radialGradient id="ggrass" cx="0.5" cy="0.42" r="0.7"><stop offset="0" stop-color="#1c4029"/><stop offset="1" stop-color="#143020"/></radialGradient></defs>'+
@@ -1410,10 +1417,11 @@ function _isoLockedPlot(f){const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso
  g+=f.unlocked?'<path d="M'+(cx-3.5)+' '+(cy-29)+' l2.5 3 l4.5 -6" stroke="#06140d" stroke-width="2" fill="none"/>'
    :'<rect x="'+(cx-3)+'" y="'+(cy-30)+'" width="6" height="5" rx="1" fill="#d4dbe0"/><path d="M'+(cx-2)+' '+(cy-30)+' a2 2 0 0 1 4 0" stroke="#d4dbe0" stroke-width="1.3" fill="none"/>';
  return g;}
-function _lockedLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),w=Math.max(70,f.name.length*6.6+20),col=f.unlocked?'#19e08f':'#aeb9bf';
- return '<g style="pointer-events:none"><rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="29" rx="8" fill="#0a130d" fill-opacity=".82" stroke="'+col+'" stroke-opacity=".5"/>'+
-   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+16).toFixed(1)+'" text-anchor="middle" font-size="11.5" font-weight="800" fill="'+col+'" style="paint-order:stroke" stroke="#06140d" stroke-width="2.6">'+esc(f.name)+'</text>'+
-   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+28).toFixed(1)+'" text-anchor="middle" font-size="9.5" fill="#9fb0a8">'+(f.unlocked?'bereit zum Bau':esc(f.reqname)+' Stufe '+f.reqL)+'</text></g>';}
+function _lockedLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=_shortName(f.name),col=f.unlocked?'#19e08f':'#9fb0a8';
+ const w=Math.round(38+nm.length*6.4),L=lp[0]-w/2,cy=lp[1]+15;
+ return '<g style="pointer-events:none"><rect x="'+L.toFixed(1)+'" y="'+(lp[1]+5).toFixed(1)+'" width="'+w+'" height="20" rx="10" fill="#0b1410" fill-opacity=".86" stroke="'+col+'" stroke-opacity=".45" stroke-dasharray="'+(f.unlocked?'0':'4 3')+'"/>'+
+   '<text x="'+(L+11).toFixed(1)+'" y="'+(cy+3.4).toFixed(1)+'" text-anchor="middle" font-size="10" fill="'+col+'">'+(f.unlocked?'✓':'🔒')+'</text>'+
+   '<text x="'+(L+22).toFixed(1)+'" y="'+(cy+3.4).toFixed(1)+'" font-size="10.5" font-weight="700" fill="'+col+'" style="paint-order:stroke" stroke="#04100a" stroke-width="2.2">'+esc(nm)+'</text></g>';}
 function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
  return '<div class="facpanel"><div style="flex:1"><div class="fpn">'+esc(f.name)+'</div><div class="hbe">'+esc(f.eff)+'</div></div>'+
    '<div style="text-align:right;flex:none">'+(f.rating?'<span class="hblvl">'+f.rating+' OVR</span>':_dots(f.lvl,5))+
