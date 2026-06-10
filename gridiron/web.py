@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v22-realfig"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v23-citylayout"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1156,13 +1156,13 @@ function _iso(gx,gy){return [(gx-gy)*30+_OX,(gx+gy)*15+_OY];}
 function _pp(a){return a.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');}
 function _dots(lvl,max){let s='<span class="hblv">';for(let i=0;i<max;i++)s+='<i class="'+(i<lvl?'on':'')+'"></i>';return s+'</span>';}
 function _facList(v){const F=v.facilities||{};const kU=(v.units||[]).find(u=>u.key==='K');
- const a=[{key:'stadium',k:'stadium',name:'Stadion',lvl:v.stadium.level,cost:v.stadium.cost,maxed:v.stadium.level>=5,plus:'+1',eff:'Einnahmen +'+v.stadium.income+'/Woche',gx:3.3,gy:0.2,w:2.4,d:1.6},
-  {key:'equipment',k:'field',name:'Trainingsgelände',lvl:v.equipment.level,cost:v.equipment.cost,maxed:v.equipment.level>=5,plus:'+1',eff:'+'+v.equipment.exp_week+' Trainings-EXP/Woche',gx:2.7,gy:3.2,w:3.6,d:2.0}];
- if(F.medical)a.push({key:'medical',k:'medical',name:'Medizinzentrum',lvl:F.medical.level,cost:F.medical.cost,maxed:F.medical.level>=5,plus:'+1',eff:F.medical.effect,gx:0.5,gy:1.4,w:1.3,d:1.1});
- if(F.athletic)a.push({key:'athletic',k:'athletic',name:'Athletik-Center',lvl:F.athletic.level,cost:F.athletic.cost,maxed:F.athletic.level>=5,plus:'+1',eff:F.athletic.effect,gx:6.9,gy:1.4,w:1.3,d:1.1});
- if(F.scouting_fac)a.push({key:'scouting_fac',k:'scouting',name:'Scouting-Akademie',lvl:F.scouting_fac.level,cost:F.scouting_fac.cost,maxed:F.scouting_fac.level>=5,plus:'+1',eff:F.scouting_fac.effect,gx:0.6,gy:5.1,w:1.0,d:1.0});
- if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,gx:6.9,gy:5.1,w:1.3,d:1.1});
- if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,gx:4.4,gy:5.5,w:0.6,d:0.6});
+ const a=[{key:'stadium',k:'stadium',name:'Stadion',lvl:v.stadium.level,cost:v.stadium.cost,maxed:v.stadium.level>=5,plus:'+1',eff:'Einnahmen +'+v.stadium.income+'/Woche',gx:3.05,gy:0.3,w:2.7,d:1.7},
+  {key:'equipment',k:'field',name:'Trainingsgelände',lvl:v.equipment.level,cost:v.equipment.cost,maxed:v.equipment.level>=5,plus:'+1',eff:'+'+v.equipment.exp_week+' Trainings-EXP/Woche',gx:2.5,gy:3.15,w:3.2,d:1.85}];
+ if(F.medical)a.push({key:'medical',k:'medical',name:'Medizinzentrum',lvl:F.medical.level,cost:F.medical.cost,maxed:F.medical.level>=5,plus:'+1',eff:F.medical.effect,gx:0.5,gy:0.7,w:1.3,d:1.1});
+ if(F.athletic)a.push({key:'athletic',k:'athletic',name:'Athletik-Center',lvl:F.athletic.level,cost:F.athletic.cost,maxed:F.athletic.level>=5,plus:'+1',eff:F.athletic.effect,gx:7.0,gy:0.7,w:1.3,d:1.1});
+ if(F.scouting_fac)a.push({key:'scouting_fac',k:'scouting',name:'Scouting-Akademie',lvl:F.scouting_fac.level,cost:F.scouting_fac.cost,maxed:F.scouting_fac.level>=5,plus:'+1',eff:F.scouting_fac.effect,gx:0.5,gy:3.2,w:1.2,d:1.1});
+ if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,gx:7.0,gy:3.3,w:1.3,d:1.1});
+ if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,gx:4.05,gy:5.6,w:0.7,d:0.7});
  return a;}
 const _BPAL={medical:['#5a6770','#414d55','#2c353b','#7a8990'],athletic:['#46587e','#33415f','#26314a','#6076a0'],scouting:['#445a7e','#33455f','#26344a','#5f78a0'],youth:['#46714f','#345740','#26402f','#5e9468'],generic:['#56636d','#3e4951','#2c343a','#76858f']};
 const _ACC={medical:'#ef5350',athletic:'#5fa8ff',scouting:'#5fa8ff',youth:'#19e08f'};
@@ -1181,7 +1181,7 @@ function _winGrid(p0,p1,h,cols,rows){const ex=(p1[0]-p0[0])/cols,ey=(p1[1]-p0[1]
    const wx=ex*0.48,wy=ey*0.48,wh=ry*0.5,lit=((c*5+r*3)%4===0);
    s+='<polygon points="'+_pp([[bx,by],[bx+wx,by+wy],[bx+wx,by+wy-wh],[bx,by-wh]])+'" fill="'+(lit?'#ffe6a0':'#a7cee0')+'" fill-opacity="'+(lit?'.9':'.46')+'"/>';}
  return s;}
-function _isoBuilding(f){const L=f.lvl,h=12+L*9,pal=_BPAL[f.k]||_BPAL.generic;
+function _isoBuilding(f){const L=f.lvl,h=11+L*6,pal=_BPAL[f.k]||_BPAL.generic;
  const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso(f.gx+f.w,f.gy+f.d),D=_iso(f.gx,f.gy+f.d),u=p=>[p[0],p[1]-h];
  let g=_shadow(f.gx,f.gy,f.w,f.d);
  // drei Wandflächen
@@ -1294,45 +1294,50 @@ function _parking(gx,gy){let s='<polygon points="'+_pp([_iso(gx,gy),_iso(gx+2.2,
  cars.forEach(c=>{const p=_iso(c[1],c[2]);s+='<ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-1).toFixed(1)+'" rx="8" ry="3" fill="#040c07" fill-opacity=".3"/><rect x="'+(p[0]-6).toFixed(1)+'" y="'+(p[1]-9).toFixed(1)+'" width="12" height="7" rx="2" fill="'+c[0]+'"/><rect x="'+(p[0]-4).toFixed(1)+'" y="'+(p[1]-8).toFixed(1)+'" width="8" height="2.6" rx="1" fill="#1c252b" fill-opacity=".6"/>';});return s;}
 function _facBuilding(f){const sel=(_selFac===f.key);let g;
  if(f.k==='field')g=_isoField(f);else if(f.k==='stadium')g=_isoStadium(f);else if(f.k==='kick')g=_isoGoal(f);else g=_isoBuilding(f);
- const lp=_iso(f.gx+f.w/2,f.gy+f.d);
- g+='<rect x="'+(lp[0]-34).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="68" height="24" rx="6" fill="#0a130d" fill-opacity=".62"/>'+
-    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+15).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#e8efea" style="paint-order:stroke" stroke="#06140d" stroke-width="2.5">'+esc(f.name.split(' ')[0])+'</text>'+
-    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+25).toFixed(1)+'" text-anchor="middle" font-size="9" fill="#aebdb6">'+(f.rating?f.rating+' OVR':'Lv '+f.lvl)+'</text>';
  return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+g+'</g>';}
+// Beschriftung getrennt — wird ganz oben gezeichnet, damit kein Gebäude sie verdeckt
+function _facLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=f.name,w=Math.max(54,nm.length*6.1+16),sel=(_selFac===f.key);
+ return '<g data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+
+   '<rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="26" rx="7" fill="#0a130d" fill-opacity=".78" stroke="'+(sel?(_ACC[f.k]||'#19e08f'):'#ffffff')+'" stroke-opacity="'+(sel?'.9':'.08')+'"/>'+
+   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+15.5).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#eef4ef" style="paint-order:stroke" stroke="#06140d" stroke-width="2.5">'+esc(nm)+'</text>'+
+   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+26).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+(sel?(_ACC[f.k]||'#9ad17a'):'#9fb0a8')+'">'+(f.rating?f.rating+' OVR':'Stufe '+f.lvl)+'</text></g>';}
 function _complexSVG(v){
- // Boden mit Verlauf + Wege + Parkplatz
+ // Boden mit Verlauf + Plaza-Wege + Parkplatz
  let s='<defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1810"/><stop offset="1" stop-color="#0a120c"/></linearGradient><radialGradient id="ggrass" cx="0.5" cy="0.42" r="0.7"><stop offset="0" stop-color="#1c4029"/><stop offset="1" stop-color="#143020"/></radialGradient></defs>'+
    '<rect x="0" y="0" width="600" height="380" fill="url(#gsky)"/>'+
    '<polygon points="'+_pp([_iso(-.6,-.6),_iso(9.6,-.6),_iso(9.6,7.6),_iso(-.6,7.6)])+'" fill="#0e1912"/>'+
    '<polygon points="'+_pp([_iso(0,0),_iso(9,0),_iso(9,7),_iso(0,7)])+'" fill="url(#ggrass)"/>'+
    '<polygon points="'+_pp([_iso(0,0),_iso(9,0),_iso(9,7),_iso(0,7)])+'" fill="none" stroke="#0a1c12" stroke-width="2"/>'+
-   _road(0,2.55,9,0.7)+_road(4.35,0,0.7,7)+_parking(5.0,5.55);
+   _road(0.5,2.4,8,0.5)+_road(5.5,5.15,2.4,0.55)+_parking(5.9,5.35);
  // Zaun entlang des Geländerandes
- let fence='';for(let i=0;i<=18;i++){const t=i/18;[[_iso(t*9,0),_iso(t*9,0)],[_iso(t*9,7),0]].length;
+ let fence='';for(let i=0;i<=18;i++){const t=i/18;
    const a=_iso(t*9,0);fence+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+a[0].toFixed(1)+'" y2="'+(a[1]-5).toFixed(1)+'" stroke="#3a4630" stroke-width="1"/>';
    const b=_iso(0,t*7);fence+='<line x1="'+b[0].toFixed(1)+'" y1="'+b[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+(b[1]-5).toFixed(1)+'" stroke="#3a4630" stroke-width="1"/>';}
  s+=fence;
  let dr=[];const push=(dep,svg)=>dr.push([dep,svg]);
- _facList(v).forEach(f=>push(f.gx+f.gy+f.d,_facBuilding(f)));
- // Bäume
- [[0.25,0.25],[8.5,0.3],[0.3,6.7],[8.3,6.7],[8.6,3.0],[0.2,3.4],[1.9,6.75],[6.7,0.2],[3.6,6.8],[8.55,5.1]].forEach(t=>push(t[0]+t[1],_isoTree(t[0],t[1])));
- // Laternen
- [[4.55,2.2],[4.55,4.9],[1.6,2.35],[7.3,2.35],[1.6,5.1],[7.3,5.1]].forEach(t=>push(t[0]+t[1]-0.05,_isoLamp(t[0],t[1])));
- // Büsche/Hecken
- [[3.0,1.2],[5.6,1.2],[3.0,4.4],[2.2,1.5],[6.4,4.6],[1.2,4.6]].forEach(t=>push(t[0]+t[1],_isoBush(t[0],t[1])));
- // Bänke, Brunnen, Blumenbeete
- push(4.5+3.0,_isoFountain(4.5,3.0));
- [[3.7,2.7],[5.3,2.7]].forEach(t=>push(t[0]+t[1],_isoBench(t[0],t[1])));
- [[3.9,1.6],[5.1,1.6],[1.5,3.6]].forEach(t=>push(t[0]+t[1],_isoFlowers(t[0],t[1])));
+ const list=_facList(v);
+ list.forEach(f=>push(f.gx+f.gy+f.d,_facBuilding(f)));
+ // Bäume entlang der Ränder (nicht auf Gebäuden)
+ [[0.25,0.25],[8.65,0.3],[0.3,6.7],[8.5,6.6],[8.65,2.6],[0.25,2.6],[2.0,6.6],[5.3,6.6],[6.8,6.5],[8.65,4.8]].forEach(t=>push(t[0]+t[1],_isoTree(t[0],t[1])));
+ // Laternen rund um Plaza & Bodenbereich
+ [[1.2,2.35],[7.7,2.35],[1.3,5.0],[7.5,5.2],[4.4,5.25]].forEach(t=>push(t[0]+t[1]-0.05,_isoLamp(t[0],t[1])));
+ // Büsche/Hecken an den Wegrändern
+ [[2.2,2.6],[5.9,2.6],[1.0,4.2],[8.0,4.2],[2.0,5.9],[6.2,5.95]].forEach(t=>push(t[0]+t[1],_isoBush(t[0],t[1])));
+ // Brunnen mittig auf der Plaza + Bänke & Blumenbeete
+ push(4.4+2.55,_isoFountain(4.4,2.55));
+ [[3.3,2.5],[5.5,2.5]].forEach(t=>push(t[0]+t[1],_isoBench(t[0],t[1])));
+ [[3.8,2.55],[5.0,2.55],[1.5,2.5],[7.2,2.5],[2.6,5.95],[5.5,5.95]].forEach(t=>push(t[0]+t[1],_isoFlowers(t[0],t[1])));
  // Mannschaftsbus am Parkplatz
- push(5.4+5.0,_isoBus(5.4,5.0));
- // Spaziergänger (animiert)
- push(2.1+2.55,_isoPerson(2.1,2.62,'#5fa8ff','walkx 7s ease-in-out infinite'));
- push(6.0+2.55,_isoPerson(6.0,2.62,'#e9b949','walky 8s ease-in-out infinite'));
- push(4.35+1.5,_isoPerson(4.5,1.5,'#e25b5b','walky 9s ease-in-out infinite 1s'));
- push(4.35+4.2,_isoPerson(4.5,4.2,'#9ad17a','walkx 8s ease-in-out infinite .5s'));
+ push(6.3+5.0,_isoBus(6.3,5.0));
+ // Spaziergänger (animiert) auf Plaza & unten
+ push(2.6+2.6,_isoPerson(2.6,2.6,'#5fa8ff','walkx 7s ease-in-out infinite'));
+ push(5.8+2.6,_isoPerson(5.8,2.6,'#e9b949','walky 8s ease-in-out infinite'));
+ push(3.4+5.85,_isoPerson(3.4,5.9,'#e25b5b','walky 9s ease-in-out infinite 1s'));
+ push(4.9+5.85,_isoPerson(4.9,5.9,'#9ad17a','walkx 8s ease-in-out infinite .5s'));
  dr.sort((a,b)=>a[0]-b[0]);
- return '<svg class="complex" viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+'</svg>';}
+ // Labels zuletzt, von hinten nach vorne, immer über den Gebäuden
+ const labels=list.slice().sort((a,b)=>(a.gy+a.d)-(b.gy+b.d)).map(_facLabel).join('');
+ return '<svg class="complex" viewBox="0 0 600 384" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+labels+'</svg>';}
 function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
  return '<div class="facpanel"><div style="flex:1"><div class="fpn">'+esc(f.name)+'</div><div class="hbe">'+esc(f.eff)+'</div></div>'+
    '<div style="text-align:right;flex:none">'+(f.rating?'<span class="hblvl">'+f.rating+' OVR</span>':_dots(f.lvl,5))+
