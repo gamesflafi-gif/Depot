@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v19-grounds"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v20-isocity"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1135,45 +1135,80 @@ async function scoutP(id){const r=await api('/api/fr/scout?pid='+id,'POST');if(r
 async function draftP(id){const r=await api('/api/fr/draft?pid='+id,'POST');if(r.result&&r.result.error){alert(r.result.error);return;}if(r.result&&r.result.drafted)alert('Gedraftet: '+r.result.drafted+' (OVR '+r.result.ovr+')');if(r.view)renderMgr(r.view);}
 async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const r=await api('/api/fr/cut?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view){lastView=r.view;closePlayer();renderMgr(r.view);}}
 let _selFac='stadium';
+const _OX=300,_OY=72;
+function _iso(gx,gy){return [(gx-gy)*30+_OX,(gx+gy)*15+_OY];}
+function _pp(a){return a.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');}
 function _dots(lvl,max){let s='<span class="hblv">';for(let i=0;i<max;i++)s+='<i class="'+(i<lvl?'on':'')+'"></i>';return s+'</span>';}
 function _facList(v){const F=v.facilities||{};const kU=(v.units||[]).find(u=>u.key==='K');
- const a=[{key:'stadium',k:'stadium',name:'Stadion',lvl:v.stadium.level,cost:v.stadium.cost,maxed:v.stadium.level>=5,plus:'+1',eff:'Einnahmen +'+v.stadium.income+'/Woche',x:300,y:78},
-  {key:'equipment',k:'field',name:'Trainingsgelände',lvl:v.equipment.level,cost:v.equipment.cost,maxed:v.equipment.level>=5,plus:'+1',eff:'+'+v.equipment.exp_week+' Trainings-EXP/Woche',x:300,y:258}];
- if(F.medical)a.push({key:'medical',k:'medical',name:'Medizinzentrum',lvl:F.medical.level,cost:F.medical.cost,maxed:F.medical.level>=5,plus:'+1',eff:F.medical.effect,x:80,y:108});
- if(F.athletic)a.push({key:'athletic',k:'athletic',name:'Athletik-Center',lvl:F.athletic.level,cost:F.athletic.cost,maxed:F.athletic.level>=5,plus:'+1',eff:F.athletic.effect,x:520,y:108});
- if(F.scouting_fac)a.push({key:'scouting_fac',k:'scouting',name:'Scouting-Akademie',lvl:F.scouting_fac.level,cost:F.scouting_fac.cost,maxed:F.scouting_fac.level>=5,plus:'+1',eff:F.scouting_fac.effect,x:80,y:268});
- if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,x:520,y:268});
- if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,x:300,y:170});
+ const a=[{key:'stadium',k:'stadium',name:'Stadion',lvl:v.stadium.level,cost:v.stadium.cost,maxed:v.stadium.level>=5,plus:'+1',eff:'Einnahmen +'+v.stadium.income+'/Woche',gx:3.3,gy:0.2,w:2.4,d:1.6},
+  {key:'equipment',k:'field',name:'Trainingsgelände',lvl:v.equipment.level,cost:v.equipment.cost,maxed:v.equipment.level>=5,plus:'+1',eff:'+'+v.equipment.exp_week+' Trainings-EXP/Woche',gx:2.7,gy:3.2,w:3.6,d:2.0}];
+ if(F.medical)a.push({key:'medical',k:'medical',name:'Medizinzentrum',lvl:F.medical.level,cost:F.medical.cost,maxed:F.medical.level>=5,plus:'+1',eff:F.medical.effect,gx:0.5,gy:1.4,w:1.3,d:1.1});
+ if(F.athletic)a.push({key:'athletic',k:'athletic',name:'Athletik-Center',lvl:F.athletic.level,cost:F.athletic.cost,maxed:F.athletic.level>=5,plus:'+1',eff:F.athletic.effect,gx:6.9,gy:1.4,w:1.3,d:1.1});
+ if(F.scouting_fac)a.push({key:'scouting_fac',k:'scouting',name:'Scouting-Akademie',lvl:F.scouting_fac.level,cost:F.scouting_fac.cost,maxed:F.scouting_fac.level>=5,plus:'+1',eff:F.scouting_fac.effect,gx:0.6,gy:5.1,w:1.0,d:1.0});
+ if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,gx:6.9,gy:5.1,w:1.3,d:1.1});
+ if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,gx:4.4,gy:5.5,w:0.6,d:0.6});
  return a;}
-function _trainPlayers(){const ps=[[-78,-8,'A',0],[-34,16,'B',.5],[8,-16,'C',.9],[52,12,'A',.3],[88,-4,'B',.7],[-104,14,'C',1.1]];
- return ps.map(p=>'<g transform="translate('+p[0]+' '+p[1]+')"><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s"><ellipse cy="1" rx="3.2" ry="2.4" fill="#19e08f" stroke="#06140d" stroke-width=".7"/><circle cy="-2.4" r="1.9" fill="#19e08f" stroke="#06140d" stroke-width=".7"/></g></g>').join('');}
-function _facBuilding(f){const L=f.lvl,sel=(_selFac===f.key);let g='';
- if(f.k==='stadium'){const rx=42+L*5,ry=20+L*2.4;
-   g='<ellipse rx="'+rx+'" ry="'+ry+'" fill="#2a3744"/><ellipse rx="'+(rx-9)+'" ry="'+(ry-6)+'" fill="#0f1820"/><ellipse cy="1" rx="'+(rx-21)+'" ry="'+(ry-11)+'" fill="#1d7a48"/>';
-   const pp=[[-rx+5,-ry+1],[rx-5,-ry+1],[-rx+12,ry-1],[rx-12,ry-1],[0,-ry-3]];
-   for(let i=0;i<L&&i<5;i++)g+='<rect x="'+(pp[i][0]-1)+'" y="'+(pp[i][1]-6)+'" width="2" height="6" fill="#3a4750"/><rect x="'+(pp[i][0]-4)+'" y="'+(pp[i][1]-9)+'" width="8" height="3" rx="1" fill="#fff6c8"/>';
-   if(L>=4)g+='<ellipse rx="'+(rx+3)+'" ry="'+(ry+2)+'" fill="none" stroke="#46545e" stroke-width="2"/>';
- }else if(f.k==='field'){const fw=120,fh=44;
-   g='<rect x="-'+fw+'" y="-'+fh+'" width="'+(fw*2)+'" height="'+(fh*2)+'" rx="6" fill="#1a6b40"/>';
-   for(let i=-3;i<=3;i++)g+='<line x1="'+(i*34)+'" y1="-'+fh+'" x2="'+(i*34)+'" y2="'+fh+'" stroke="#cfe" stroke-opacity=".16"/>';
-   for(let i=0;i<L;i++)g+='<path d="M'+(-92+i*30)+' '+(fh-5)+' l3 6 h-6 Z" fill="#ff8a3a"/>';
-   g+='<rect x="-'+fw+'" y="-'+(fh+6+L*2)+'" width="'+(22+L*5)+'" height="'+(8+L*2)+'" rx="2" fill="#26323b"/>'+_trainPlayers();
- }else if(f.k==='medical'){const fh=10,w=58;
-   for(let i=0;i<L;i++)g+='<rect x="-29" y="-'+((i+1)*fh)+'" width="'+w+'" height="'+(fh-1)+'" rx="2" fill="'+(i%2?'#223040':'#1a2530')+'"/>';
-   g+='<rect x="-5" y="-'+(L*fh-2)+'" width="10" height="3" fill="#ef5350"/><rect x="-1.5" y="-'+(L*fh+1)+'" width="3" height="10" fill="#ef5350"/>';
- }else if(f.k==='athletic'){const w=58,hh=20+L*5;
-   g='<rect x="-29" y="-'+hh+'" width="'+w+'" height="'+hh+'" rx="3" fill="#16243a"/>';
-   for(let i=0;i<L;i++)g+='<rect x="-23" y="-'+(hh-7-i*8)+'" width="46" height="4" rx="2" fill="#cfe3ff" opacity=".7"/>';
-   g+='<rect x="-12" y="-9" width="24" height="5" rx="2" fill="#cfe3ff"/>';
- }else if(f.k==='scouting'){const hh=24+L*7;
-   g='<rect x="-12" y="-'+hh+'" width="24" height="'+hh+'" rx="3" fill="#15233a"/><circle cy="-'+(hh-7)+'" r="7" fill="none" stroke="#5fa8ff" stroke-width="3"/>'+
-     '<line x1="0" y1="-'+hh+'" x2="0" y2="-'+(hh+8+L)+'" stroke="#5fa8ff" stroke-width="2"/><circle cy="-'+(hh+8+L)+'" r="2" fill="#5fa8ff"/>';
- }else if(f.k==='youth'){g='<rect x="-26" y="-26" width="52" height="26" rx="3" fill="#14301f"/><path d="M-28 -26 L0 -41 L28 -26 Z" fill="#1d4a2f"/>';
-   const t=(0.5+L*0.5).toFixed(2);g+='<g transform="translate(22 0) scale('+t+')"><rect x="-1.5" y="-12" width="3" height="12" fill="#7a4a28"/><circle cy="-15" r="7" fill="#19e08f"/></g>';
- }else{const s=(0.8+L*0.22).toFixed(2);g='<g transform="scale('+s+')"><line x1="-12" y1="0" x2="-12" y2="-22" stroke="#ffd34d" stroke-width="3"/><line x1="12" y1="0" x2="12" y2="-22" stroke="#ffd34d" stroke-width="3"/><line x1="-12" y1="-12" x2="12" y2="-12" stroke="#ffd34d" stroke-width="3"/><line x1="0" y1="-12" x2="0" y2="0" stroke="#ffd34d" stroke-width="3"/></g>';}
- g+='<text y="22" text-anchor="middle" font-size="11" font-weight="800" fill="#dfe7e3">'+esc(f.name.split(' ')[0])+'</text>'+
-    '<text y="34" text-anchor="middle" font-size="9.5" fill="#8d9d97">'+(f.rating?f.rating+' OVR':'Lv '+f.lvl)+'</text>';
- return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" transform="translate('+f.x+' '+f.y+')" style="cursor:pointer">'+g+'</g>';}
+const _BPAL={medical:['#4a565f','#353f47','#272f35'],athletic:['#3c4a68','#2b3752','#212a40'],scouting:['#3a4c68','#293a54','#1f2c40'],youth:['#3c5c46','#2b4836','#203628'],generic:['#4a565f','#353f47','#272f35']};
+const _ACC={medical:'#ef5350',athletic:'#5fa8ff',scouting:'#5fa8ff',youth:'#19e08f'};
+function _icon(k,x,y){const c='#ffffff';
+ if(k==='medical')return '<rect x="'+(x-1.6)+'" y="'+(y-5)+'" width="3.2" height="10" fill="'+c+'"/><rect x="'+(x-5)+'" y="'+(y-1.6)+'" width="10" height="3.2" fill="'+c+'"/>';
+ if(k==='athletic')return '<line x1="'+(x-5)+'" y1="'+y+'" x2="'+(x+5)+'" y2="'+y+'" stroke="'+c+'" stroke-width="2"/><circle cx="'+(x-5)+'" cy="'+y+'" r="2.6" fill="'+c+'"/><circle cx="'+(x+5)+'" cy="'+y+'" r="2.6" fill="'+c+'"/>';
+ if(k==='scouting')return '<circle cx="'+(x-2.8)+'" cy="'+y+'" r="2.8" fill="none" stroke="'+c+'" stroke-width="1.6"/><circle cx="'+(x+2.8)+'" cy="'+y+'" r="2.8" fill="none" stroke="'+c+'" stroke-width="1.6"/>';
+ if(k==='youth')return '<path d="M'+x+' '+(y+4)+' q-6 -2 -6 -8 q6 1 6 8 Z" fill="'+c+'"/>';
+ return '';}
+function _isoBuilding(f){const L=f.lvl,h=12+L*9,pal=_BPAL[f.k]||_BPAL.generic;
+ const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso(f.gx+f.w,f.gy+f.d),D=_iso(f.gx,f.gy+f.d),u=p=>[p[0],p[1]-h];
+ let g='<polygon points="'+_pp([B,Cc,u(Cc),u(B)])+'" fill="'+pal[2]+'"/>'+
+       '<polygon points="'+_pp([D,Cc,u(Cc),u(D)])+'" fill="'+pal[1]+'"/>'+
+       '<polygon points="'+_pp([u(A),u(B),u(Cc),u(D)])+'" fill="'+pal[0]+'"/>';
+ for(let i=1;i<=L;i++){const y=h*i/(L+1);
+   g+='<line x1="'+B[0].toFixed(1)+'" y1="'+(B[1]-y).toFixed(1)+'" x2="'+Cc[0].toFixed(1)+'" y2="'+(Cc[1]-y).toFixed(1)+'" stroke="#0c1116" stroke-opacity=".45"/>'+
+      '<line x1="'+D[0].toFixed(1)+'" y1="'+(D[1]-y).toFixed(1)+'" x2="'+Cc[0].toFixed(1)+'" y2="'+(Cc[1]-y).toFixed(1)+'" stroke="#0c1116" stroke-opacity=".45"/>';}
+ const cx=(A[0]+Cc[0])/2,cy=(A[1]+Cc[1])/2-h-15;
+ g+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="11" fill="'+(_ACC[f.k]||'#8aa2a8')+'" stroke="#06140d" stroke-width="1.5"/>'+_icon(f.k,cx,cy);
+ return g;}
+function _isoStadium(f){const L=f.lvl,c=_iso(f.gx+f.w/2,f.gy+f.d/2),cx=c[0],cy=c[1],h=8+L*3,rx=f.w*27,ry=f.d*17;
+ let g='<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" fill="#161d23"/>'+
+   '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+rx+'" ry="'+ry+'" fill="#3c4954"/>'+
+   '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.78).toFixed(1)+'" ry="'+(ry*0.78).toFixed(1)+'" fill="#1e2830"/>'+
+   '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.56).toFixed(1)+'" ry="'+(ry*0.56).toFixed(1)+'" fill="#1d7a48"/>'+
+   '<line x1="'+cx+'" y1="'+(cy-h-ry*0.56).toFixed(1)+'" x2="'+cx+'" y2="'+(cy-h+ry*0.56).toFixed(1)+'" stroke="#cfe" stroke-opacity=".25"/>';
+ const ang=[[-1,-1],[1,-1],[-1,1],[1,1],[0,-1.15]];
+ for(let i=0;i<L&&i<5;i++){const lx=cx+ang[i][0]*rx*0.9,ly=cy-h+ang[i][1]*ry*0.9;
+   g+='<line x1="'+lx.toFixed(1)+'" y1="'+ly.toFixed(1)+'" x2="'+lx.toFixed(1)+'" y2="'+(ly-13).toFixed(1)+'" stroke="#46525c" stroke-width="2"/><rect x="'+(lx-4).toFixed(1)+'" y="'+(ly-16).toFixed(1)+'" width="8" height="3.5" rx="1" fill="#fff6c8"/>';}
+ if(L>=4)g+='<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx+3)+'" ry="'+(ry+2)+'" fill="none" stroke="#56636d" stroke-width="2"/>';
+ return g;}
+function _isoField(f){const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso(f.gx+f.w,f.gy+f.d),D=_iso(f.gx,f.gy+f.d);
+ let g='<polygon points="'+_pp([A,B,Cc,D])+'" fill="#1a6b40"/><polygon points="'+_pp([A,B,Cc,D])+'" fill="none" stroke="#cfe" stroke-opacity=".22"/>';
+ const n=5;for(let i=1;i<n;i++){const t=i/n,p0=[A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t],p1=[D[0]+(Cc[0]-D[0])*t,D[1]+(Cc[1]-D[1])*t];
+   g+='<line x1="'+p0[0].toFixed(1)+'" y1="'+p0[1].toFixed(1)+'" x2="'+p1[0].toFixed(1)+'" y2="'+p1[1].toFixed(1)+'" stroke="#cfe" stroke-opacity=".16"/>';}
+ g+=_trainPlayers(f);return g;}
+function _isoGoal(f){const L=f.lvl,p=_iso(f.gx,f.gy),s=12+L*3,x=p[0],y=p[1];
+ return '<line x1="'+(x-9)+'" y1="'+y+'" x2="'+(x-9)+'" y2="'+(y-s)+'" stroke="#ffd34d" stroke-width="3"/><line x1="'+(x+9)+'" y1="'+y+'" x2="'+(x+9)+'" y2="'+(y-s)+'" stroke="#ffd34d" stroke-width="3"/><line x1="'+(x-9)+'" y1="'+(y-s*0.62).toFixed(1)+'" x2="'+(x+9)+'" y2="'+(y-s*0.62).toFixed(1)+'" stroke="#ffd34d" stroke-width="3"/>';}
+function _trainPlayers(f){const c=_iso(f.gx+f.w/2,f.gy+f.d/2),ps=[[-46,-6,'A',0],[-18,8,'B',.5],[12,-8,'C',.9],[36,6,'A',.3],[58,-3,'B',.7],[-66,7,'C',1.1]];
+ return ps.map(p=>'<g transform="translate('+(c[0]+p[0]).toFixed(1)+' '+(c[1]+p[1]).toFixed(1)+')"><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s"><ellipse cy="1" rx="2.6" ry="1.9" fill="#19e08f" stroke="#06140d" stroke-width=".6"/><circle cy="-1.8" r="1.5" fill="#19e08f" stroke="#06140d" stroke-width=".6"/></g></g>').join('');}
+function _isoTree(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-1.5).toFixed(1)+'" y="'+(p[1]-10).toFixed(1)+'" width="3" height="10" fill="#5a3a1e"/><ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-15).toFixed(1)+'" rx="9" ry="10" fill="#1d6b3f"/><ellipse cx="'+(p[0]-3).toFixed(1)+'" cy="'+(p[1]-18).toFixed(1)+'" rx="6" ry="7" fill="#27964f"/>';}
+function _isoLamp(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-1).toFixed(1)+'" y="'+(p[1]-16).toFixed(1)+'" width="2" height="16" fill="#46525c"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-17).toFixed(1)+'" r="2.6" fill="#ffe9a8"/>';}
+function _road(gx,gy,w,d,col){return '<polygon points="'+_pp([_iso(gx,gy),_iso(gx+w,gy),_iso(gx+w,gy+d),_iso(gx,gy+d)])+'" fill="'+(col||'#222a25')+'"/>';}
+function _parking(gx,gy){let s=_road(gx,gy,2.0,1.3,'#2a322c');const cars=[['#e25b5b',gx+0.5,gy+0.4],['#5fa8ff',gx+1.2,gy+0.5],['#e9b949',gx+0.8,gy+0.95]];
+ cars.forEach(c=>{const p=_iso(c[1],c[2]);s+='<rect x="'+(p[0]-6).toFixed(1)+'" y="'+(p[1]-9).toFixed(1)+'" width="12" height="7" rx="2" fill="'+c[0]+'"/>';});return s;}
+function _facBuilding(f){const sel=(_selFac===f.key);let g;
+ if(f.k==='field')g=_isoField(f);else if(f.k==='stadium')g=_isoStadium(f);else if(f.k==='kick')g=_isoGoal(f);else g=_isoBuilding(f);
+ const lp=_iso(f.gx+f.w/2,f.gy+f.d);
+ g+='<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+13).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#e8efea" style="paint-order:stroke" stroke="#06140d" stroke-width="2.5">'+esc(f.name.split(' ')[0])+'</text>'+
+    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+24).toFixed(1)+'" text-anchor="middle" font-size="9" fill="#aebdb6">'+(f.rating?f.rating+' OVR':'Lv '+f.lvl)+'</text>';
+ return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+g+'</g>';}
+function _complexSVG(v){
+ let s='<rect x="0" y="0" width="600" height="380" fill="#0b120d"/>'+
+   '<polygon points="'+_pp([_iso(-.5,-.5),_iso(9.5,-.5),_iso(9.5,7.5),_iso(-.5,7.5)])+'" fill="#0e1912"/>'+
+   '<polygon points="'+_pp([_iso(0,0),_iso(9,0),_iso(9,7),_iso(0,7)])+'" fill="#163522"/>'+
+   _road(0,2.55,9,0.7)+_road(4.35,0,0.7,7)+_parking(5.2,5.6);
+ let dr=[];const push=(dep,svg)=>dr.push([dep,svg]);
+ _facList(v).forEach(f=>push(f.gx+f.gy+f.d,_facBuilding(f)));
+ [[0.2,0.2],[8.4,0.3],[0.3,6.6],[8.2,6.6],[8.6,3.2],[0.2,3.5],[2.0,6.7],[6.6,0.2]].forEach(t=>push(t[0]+t[1],_isoTree(t[0],t[1])));
+ [[4.5,2.3],[4.5,5.0],[1.7,2.4],[7.2,2.4]].forEach(t=>push(t[0]+t[1]-0.1,_isoLamp(t[0],t[1])));
+ dr.sort((a,b)=>a[0]-b[0]);
+ return '<svg class="complex" viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+'</svg>';}
 function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
  return '<div class="facpanel"><div style="flex:1"><div class="fpn">'+esc(f.name)+'</div><div class="hbe">'+esc(f.eff)+'</div></div>'+
    '<div style="text-align:right;flex:none">'+(f.rating?'<span class="hblvl">'+f.rating+' OVR</span>':_dots(f.lvl,5))+
@@ -1181,14 +1216,9 @@ function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_s
 function selFac(k){_selFac=k;document.querySelectorAll('.facb').forEach(e=>e.classList.toggle('sel',e.dataset.k===k));const p=$('facpanel');if(p&&lastView)p.innerHTML=_facPanelHTML(lastView);}
 function secBuild(v){
  // Anlagen-Gelände: anklickbare Karte mit Standorten, trainierenden Spielern und sichtbarem Ausbau
- let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Anlagen-Gelände</div>'+
+ let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Vereinsgelände</div>'+
    '<div class="note">Tippe ein Gebäude an und bau es aus — jede Stufe verändert das Gebäude sichtbar. Budget: '+v.budget+' Mio.</div>'+
-   '<svg class="complex" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid meet">'+
-     '<rect x="0" y="0" width="600" height="360" fill="#0c130f"/>'+
-     '<rect x="40" y="40" width="520" height="290" rx="14" fill="#101a14"/>'+
-     '<path d="M300 120 V250 M120 130 H300 M480 130 H300 M150 290 H300 M450 290 H300" stroke="#1b2922" stroke-width="6" fill="none" stroke-linecap="round"/>'+
-     _facList(v).map(_facBuilding).join('')+
-   '</svg>'+
+   _complexSVG(v)+
    '<div id="facpanel">'+_facPanelHTML(v)+'</div></div>';
  // Trainerstab als Karten mit Stärken/Schwächen + Markt
  h+='<div class="sec">Trainerstab</div>';
