@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v18-awards"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v19-grounds"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -167,6 +167,14 @@ _STYLE2 = """
  .hubb button{width:100%;margin-top:2px} .hblvl{font-size:13px;font-weight:800;color:var(--acc)}
  .hblv{display:inline-flex;gap:3px} .hblv i{width:10px;height:10px;border-radius:2px;background:#2c3a34} .hblv i.on{background:var(--acc)}
  @media(max-width:560px){.hubgrid{grid-template-columns:1fr 1fr}}
+ .complex{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--line);margin-top:12px;background:#0c130f;touch-action:manipulation}
+ .facb{transition:opacity .12s} .facb:hover{opacity:.84} .facb.sel{filter:drop-shadow(0 0 7px var(--acc))}
+ .tp{transform-box:fill-box;transform-origin:center}
+ @keyframes drillA{0%,100%{transform:translate(0,0)}50%{transform:translate(38px,0)}}
+ @keyframes drillB{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-22px)}}
+ @keyframes drillC{0%{transform:translate(-22px,8px)}50%{transform:translate(22px,-8px)}100%{transform:translate(-22px,8px)}}
+ .facpanel{display:flex;align-items:center;gap:12px;background:var(--tile);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:10px}
+ .facpanel .fpn{font-weight:800;font-size:15px}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
  .awrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin:8px 0;background:var(--tile)}
  .awlabel{font-size:11px;font-weight:800;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
@@ -1126,32 +1134,62 @@ async function signP(id){const r=await api('/api/fr/sign?pid='+id,'POST');if(r.r
 async function scoutP(id){const r=await api('/api/fr/scout?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function draftP(id){const r=await api('/api/fr/draft?pid='+id,'POST');if(r.result&&r.result.error){alert(r.result.error);return;}if(r.result&&r.result.drafted)alert('Gedraftet: '+r.result.drafted+' (OVR '+r.result.ovr+')');if(r.view)renderMgr(r.view);}
 async function cutP(id){if(!confirm('Spieler wirklich entlassen?'))return;const r=await api('/api/fr/cut?pid='+id,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view){lastView=r.view;closePlayer();renderMgr(r.view);}}
-function _bsvg(k){
- if(k==='stadium')return '<svg viewBox="0 0 96 60" width="90" height="56"><ellipse cx="48" cy="32" rx="43" ry="25" fill="#22303c"/><ellipse cx="48" cy="32" rx="40" ry="22" fill="#16222b"/><ellipse cx="48" cy="32" rx="30" ry="15" fill="#1d7a48"/><line x1="48" y1="18" x2="48" y2="46" stroke="#cfe" stroke-opacity=".25"/>'+[12,48,84].map(x=>'<rect x="'+(x-1)+'" y="4" width="2" height="6" fill="#3a4750"/><rect x="'+(x-5)+'" y="1" width="10" height="3" rx="1" fill="#cfe3ff" opacity=".85"/>').join('')+'</svg>';
- if(k==='train')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="4" y="8" width="88" height="44" rx="4" fill="#1d7a48"/>'+[20,40,60,76].map(x=>'<line x1="'+x+'" y1="8" x2="'+x+'" y2="52" stroke="#cfe" stroke-opacity=".25"/>').join('')+'<rect x="44" y="6" width="8" height="3" fill="#ffd34d"/><line x1="44" y1="6" x2="44" y2="2" stroke="#ffd34d" stroke-width="2"/><line x1="52" y1="6" x2="52" y2="2" stroke="#ffd34d" stroke-width="2"/><path d="M22 44 l3 6 h-6 Z" fill="#ff8a3a"/><path d="M70 40 l3 6 h-6 Z" fill="#ff8a3a"/></svg>';
- if(k==='medical')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#1a2530"/><rect x="42" y="18" width="12" height="24" rx="2" fill="#ef5350"/><rect x="36" y="24" width="24" height="12" rx="2" fill="#ef5350"/></svg>';
- if(k==='athletic')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#16243a"/><rect x="20" y="27" width="56" height="6" rx="3" fill="#cfe3ff"/><rect x="14" y="20" width="9" height="20" rx="2" fill="#cfe3ff"/><rect x="73" y="20" width="9" height="20" rx="2" fill="#cfe3ff"/></svg>';
- if(k==='scouting')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#15233a"/><circle cx="38" cy="30" r="11" fill="none" stroke="#5fa8ff" stroke-width="4"/><circle cx="58" cy="30" r="11" fill="none" stroke="#5fa8ff" stroke-width="4"/><rect x="46" y="28" width="4" height="5" fill="#5fa8ff"/></svg>';
- if(k==='youth')return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="6" y="8" width="84" height="44" rx="6" fill="#14301f"/><rect x="46" y="32" width="4" height="16" fill="#7a4a28"/><path d="M48 36 q-14 -2 -16 -16 q14 2 16 16 Z" fill="#19e08f"/><path d="M48 32 q14 -2 16 -18 q-14 2 -16 18 Z" fill="#16c784"/></svg>';
- return '<svg viewBox="0 0 96 60" width="90" height="56"><rect x="0" y="40" width="96" height="20" fill="#143d28"/><line x1="30" y1="41" x2="30" y2="14" stroke="#ffd34d" stroke-width="3"/><line x1="66" y1="41" x2="66" y2="14" stroke="#ffd34d" stroke-width="3"/><line x1="30" y1="24" x2="66" y2="24" stroke="#ffd34d" stroke-width="3"/><line x1="48" y1="24" x2="48" y2="41" stroke="#ffd34d" stroke-width="3"/><ellipse cx="48" cy="50" rx="6" ry="3.6" fill="#9a5a1e" stroke="#3a1f08"/></svg>';}
+let _selFac='stadium';
+function _dots(lvl,max){let s='<span class="hblv">';for(let i=0;i<max;i++)s+='<i class="'+(i<lvl?'on':'')+'"></i>';return s+'</span>';}
+function _facList(v){const F=v.facilities||{};const kU=(v.units||[]).find(u=>u.key==='K');
+ const a=[{key:'stadium',k:'stadium',name:'Stadion',lvl:v.stadium.level,cost:v.stadium.cost,maxed:v.stadium.level>=5,plus:'+1',eff:'Einnahmen +'+v.stadium.income+'/Woche',x:300,y:78},
+  {key:'equipment',k:'field',name:'Trainingsgelände',lvl:v.equipment.level,cost:v.equipment.cost,maxed:v.equipment.level>=5,plus:'+1',eff:'+'+v.equipment.exp_week+' Trainings-EXP/Woche',x:300,y:258}];
+ if(F.medical)a.push({key:'medical',k:'medical',name:'Medizinzentrum',lvl:F.medical.level,cost:F.medical.cost,maxed:F.medical.level>=5,plus:'+1',eff:F.medical.effect,x:80,y:108});
+ if(F.athletic)a.push({key:'athletic',k:'athletic',name:'Athletik-Center',lvl:F.athletic.level,cost:F.athletic.cost,maxed:F.athletic.level>=5,plus:'+1',eff:F.athletic.effect,x:520,y:108});
+ if(F.scouting_fac)a.push({key:'scouting_fac',k:'scouting',name:'Scouting-Akademie',lvl:F.scouting_fac.level,cost:F.scouting_fac.cost,maxed:F.scouting_fac.level>=5,plus:'+1',eff:F.scouting_fac.effect,x:80,y:268});
+ if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,x:520,y:268});
+ if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,x:300,y:170});
+ return a;}
+function _trainPlayers(){const ps=[[-78,-8,'A',0],[-34,16,'B',.5],[8,-16,'C',.9],[52,12,'A',.3],[88,-4,'B',.7],[-104,14,'C',1.1]];
+ return ps.map(p=>'<g transform="translate('+p[0]+' '+p[1]+')"><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s"><ellipse cy="1" rx="3.2" ry="2.4" fill="#19e08f" stroke="#06140d" stroke-width=".7"/><circle cy="-2.4" r="1.9" fill="#19e08f" stroke="#06140d" stroke-width=".7"/></g></g>').join('');}
+function _facBuilding(f){const L=f.lvl,sel=(_selFac===f.key);let g='';
+ if(f.k==='stadium'){const rx=42+L*5,ry=20+L*2.4;
+   g='<ellipse rx="'+rx+'" ry="'+ry+'" fill="#2a3744"/><ellipse rx="'+(rx-9)+'" ry="'+(ry-6)+'" fill="#0f1820"/><ellipse cy="1" rx="'+(rx-21)+'" ry="'+(ry-11)+'" fill="#1d7a48"/>';
+   const pp=[[-rx+5,-ry+1],[rx-5,-ry+1],[-rx+12,ry-1],[rx-12,ry-1],[0,-ry-3]];
+   for(let i=0;i<L&&i<5;i++)g+='<rect x="'+(pp[i][0]-1)+'" y="'+(pp[i][1]-6)+'" width="2" height="6" fill="#3a4750"/><rect x="'+(pp[i][0]-4)+'" y="'+(pp[i][1]-9)+'" width="8" height="3" rx="1" fill="#fff6c8"/>';
+   if(L>=4)g+='<ellipse rx="'+(rx+3)+'" ry="'+(ry+2)+'" fill="none" stroke="#46545e" stroke-width="2"/>';
+ }else if(f.k==='field'){const fw=120,fh=44;
+   g='<rect x="-'+fw+'" y="-'+fh+'" width="'+(fw*2)+'" height="'+(fh*2)+'" rx="6" fill="#1a6b40"/>';
+   for(let i=-3;i<=3;i++)g+='<line x1="'+(i*34)+'" y1="-'+fh+'" x2="'+(i*34)+'" y2="'+fh+'" stroke="#cfe" stroke-opacity=".16"/>';
+   for(let i=0;i<L;i++)g+='<path d="M'+(-92+i*30)+' '+(fh-5)+' l3 6 h-6 Z" fill="#ff8a3a"/>';
+   g+='<rect x="-'+fw+'" y="-'+(fh+6+L*2)+'" width="'+(22+L*5)+'" height="'+(8+L*2)+'" rx="2" fill="#26323b"/>'+_trainPlayers();
+ }else if(f.k==='medical'){const fh=10,w=58;
+   for(let i=0;i<L;i++)g+='<rect x="-29" y="-'+((i+1)*fh)+'" width="'+w+'" height="'+(fh-1)+'" rx="2" fill="'+(i%2?'#223040':'#1a2530')+'"/>';
+   g+='<rect x="-5" y="-'+(L*fh-2)+'" width="10" height="3" fill="#ef5350"/><rect x="-1.5" y="-'+(L*fh+1)+'" width="3" height="10" fill="#ef5350"/>';
+ }else if(f.k==='athletic'){const w=58,hh=20+L*5;
+   g='<rect x="-29" y="-'+hh+'" width="'+w+'" height="'+hh+'" rx="3" fill="#16243a"/>';
+   for(let i=0;i<L;i++)g+='<rect x="-23" y="-'+(hh-7-i*8)+'" width="46" height="4" rx="2" fill="#cfe3ff" opacity=".7"/>';
+   g+='<rect x="-12" y="-9" width="24" height="5" rx="2" fill="#cfe3ff"/>';
+ }else if(f.k==='scouting'){const hh=24+L*7;
+   g='<rect x="-12" y="-'+hh+'" width="24" height="'+hh+'" rx="3" fill="#15233a"/><circle cy="-'+(hh-7)+'" r="7" fill="none" stroke="#5fa8ff" stroke-width="3"/>'+
+     '<line x1="0" y1="-'+hh+'" x2="0" y2="-'+(hh+8+L)+'" stroke="#5fa8ff" stroke-width="2"/><circle cy="-'+(hh+8+L)+'" r="2" fill="#5fa8ff"/>';
+ }else if(f.k==='youth'){g='<rect x="-26" y="-26" width="52" height="26" rx="3" fill="#14301f"/><path d="M-28 -26 L0 -41 L28 -26 Z" fill="#1d4a2f"/>';
+   const t=(0.5+L*0.5).toFixed(2);g+='<g transform="translate(22 0) scale('+t+')"><rect x="-1.5" y="-12" width="3" height="12" fill="#7a4a28"/><circle cy="-15" r="7" fill="#19e08f"/></g>';
+ }else{const s=(0.8+L*0.22).toFixed(2);g='<g transform="scale('+s+')"><line x1="-12" y1="0" x2="-12" y2="-22" stroke="#ffd34d" stroke-width="3"/><line x1="12" y1="0" x2="12" y2="-22" stroke="#ffd34d" stroke-width="3"/><line x1="-12" y1="-12" x2="12" y2="-12" stroke="#ffd34d" stroke-width="3"/><line x1="0" y1="-12" x2="0" y2="0" stroke="#ffd34d" stroke-width="3"/></g>';}
+ g+='<text y="22" text-anchor="middle" font-size="11" font-weight="800" fill="#dfe7e3">'+esc(f.name.split(' ')[0])+'</text>'+
+    '<text y="34" text-anchor="middle" font-size="9.5" fill="#8d9d97">'+(f.rating?f.rating+' OVR':'Lv '+f.lvl)+'</text>';
+ return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" transform="translate('+f.x+' '+f.y+')" style="cursor:pointer">'+g+'</g>';}
+function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
+ return '<div class="facpanel"><div style="flex:1"><div class="fpn">'+esc(f.name)+'</div><div class="hbe">'+esc(f.eff)+'</div></div>'+
+   '<div style="text-align:right;flex:none">'+(f.rating?'<span class="hblvl">'+f.rating+' OVR</span>':_dots(f.lvl,5))+
+   '<div style="margin-top:7px"><button data-u="'+esc(f.key)+'" onclick="upg(this.dataset.u)" '+(v.budget<f.cost||f.maxed?'disabled':'')+'>'+(f.maxed?'Ausgebaut':'Ausbauen '+f.plus+' ('+f.cost+' Mio)')+'</button></div></div></div>';}
+function selFac(k){_selFac=k;document.querySelectorAll('.facb').forEach(e=>e.classList.toggle('sel',e.dataset.k===k));const p=$('facpanel');if(p&&lastView)p.innerHTML=_facPanelHTML(lastView);}
 function secBuild(v){
- const kU=(v.units||[]).find(u=>u.key==='K');const F=v.facilities||{};
- const dots=(lvl,max)=>{let s='<span class="hblv">';for(let i=0;i<max;i++)s+='<i class="'+(i<lvl?'on':'')+'"></i>';return s+'</span>';};
- const bld=(key,name,svgk,lvl,sub,cost,maxed,plus)=>'<div class="hubb"><div class="hbi">'+_bsvg(svgk)+'</div>'+
-   '<div class="hbn">'+esc(name)+'</div>'+lvl+'<div class="hbe">'+esc(sub)+'</div>'+
-   '<button data-u="'+esc(key)+'" onclick="upg(this.dataset.u)" '+(v.budget<cost||maxed?'disabled':'')+'>'+(maxed?'Ausgebaut':plus+' ('+cost+' Mio)')+'</button></div>';
- // Visueller Anlagen-Hub (FIFA-11-Wii-Stil): ins Stadion gehen und ausbauen
- let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Stadion &amp; Trainingsgelände</div>'+
-   '<div class="note">Geh in deine Anlagen und bau sie aus — jede Stufe bringt einen echten Vorteil. Budget: '+v.budget+' Mio.</div>'+
-   '<div class="hubgrid">'+
-     bld('stadium','Stadion','stadium',dots(v.stadium.level,5),'Einnahmen +'+v.stadium.income+'/Woche',v.stadium.cost,v.stadium.level>=5,'+1')+
-     bld('equipment','Trainingsgelände','train',dots(v.equipment.level,5),'+'+v.equipment.exp_week+' Trainings-EXP/Woche',v.equipment.cost,v.equipment.level>=5,'+1')+
-     (F.medical?bld('medical','Medizinzentrum','medical',dots(F.medical.level,5),F.medical.effect,F.medical.cost,F.medical.level>=5,'+1'):'')+
-     (F.athletic?bld('athletic','Athletik-Center','athletic',dots(F.athletic.level,5),F.athletic.effect,F.athletic.cost,F.athletic.level>=5,'+1'):'')+
-     (F.scouting_fac?bld('scouting_fac','Scouting-Akademie','scouting',dots(F.scouting_fac.level,5),F.scouting_fac.effect,F.scouting_fac.cost,F.scouting_fac.level>=5,'+1'):'')+
-     (F.youth?bld('youth','Jugend-Akademie','youth',dots(F.youth.level,5),F.youth.effect,F.youth.cost,F.youth.level>=5,'+1'):'')+
-     (kU?bld('K','Kicker-Akademie','kick','<span class="hblvl">'+kU.level+' OVR</span>','Field Goals weiter & Extra-Punkte sicherer',kU.cost,kU.level>=95,'+2'):'')+
-   '</div></div>';
+ // Anlagen-Gelände: anklickbare Karte mit Standorten, trainierenden Spielern und sichtbarem Ausbau
+ let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Anlagen-Gelände</div>'+
+   '<div class="note">Tippe ein Gebäude an und bau es aus — jede Stufe verändert das Gebäude sichtbar. Budget: '+v.budget+' Mio.</div>'+
+   '<svg class="complex" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid meet">'+
+     '<rect x="0" y="0" width="600" height="360" fill="#0c130f"/>'+
+     '<rect x="40" y="40" width="520" height="290" rx="14" fill="#101a14"/>'+
+     '<path d="M300 120 V250 M120 130 H300 M480 130 H300 M150 290 H300 M450 290 H300" stroke="#1b2922" stroke-width="6" fill="none" stroke-linecap="round"/>'+
+     _facList(v).map(_facBuilding).join('')+
+   '</svg>'+
+   '<div id="facpanel">'+_facPanelHTML(v)+'</div></div>';
  // Trainerstab als Karten mit Stärken/Schwächen + Markt
  h+='<div class="sec">Trainerstab</div>';
  v.coaches.forEach(c=>{const mk=v.coach_market[c.role]||[];

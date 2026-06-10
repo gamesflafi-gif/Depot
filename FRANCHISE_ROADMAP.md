@@ -19,7 +19,7 @@ Ziel: Plays sehen unterschiedlich & echt aus, Bewegungen flüssig.
 ## Priorität 2 — Anlagen-Hub „Stadion & Trainingsgelände" (FIFA-11-Wii-Stil)
 Ziel: Du gehst in dein **Stadion/Gelände** und upgradest dort anklickbar.
 
-- **2.1 Visueller Hub** ✅ (Stadion/Trainingsgelände/Kicker als anklickbare Gebäude) — ein Gelände-Screen mit anklickbaren Gebäuden
+- **2.1 Visueller Hub** ✅ — interaktive Gelände-Karte: Gebäude an Standorten, trainierende Spieler, Antippen zum Ausbauen, Gebäude wächst sichtbar je Stufe — ein Gelände-Screen mit anklickbaren Gebäuden
   statt Listen: Stadion, Trainingsplatz, Medizin, Athletik, Scouting-
   Akademie, Jugend/Akademie. Jedes Gebäude zeigt Stufe + Effekt + Upgrade.
 - **2.2 Echte Effekte je Anlage/Stufe** ✅
