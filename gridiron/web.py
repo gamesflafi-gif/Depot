@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v25-rules"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v26-flagfix"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -145,7 +145,7 @@ _STYLE2 = """
  .reco{padding:11px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;margin:7px 0;font-size:14px;
    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
  .reco>span:first-child{min-width:0}
- .reco b{font-weight:700} .reco.win{border-color:#1c5a40} .reco.loss{border-color:#5a2a20}
+ .reco b{font-weight:700} .reco.win{border-color:#1c5a40} .reco.loss{border-color:#5a2a20} .reco.flag{border-color:#e9b949;background:#1d1b11}
  /* College-Scouting: Punkte-Badge, Scouting-Pips, kompakte Prospect-Karten */
  .schead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
  .scoutpts{display:flex;flex-direction:column;align-items:center;background:var(--accsoft);border:1px solid var(--acc);border-radius:10px;padding:5px 14px;min-width:66px;flex:none}
@@ -1523,6 +1523,8 @@ function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div 
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
 function renderGame(g,play){
  if(!g.over)playClock=15;                                    // jeder neue Snap: Play-Clock zurücksetzen
+ const willAnimate=!!(play&&(play.concept||play.kind==='fg'));   // läuft eine Snap-/Kick-Animation?
+ if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern (Bugfix: nach Flag wählbar)
  let h='<div class="modalhead"><h3><span class="livedot"></span> Dein Spiel</h3>'+
    '<button class="ghost" onclick="abortGame()">Verlassen</button></div>'+
    '<div class="tvscore">'+
@@ -1536,7 +1538,7 @@ function renderGame(g,play){
      gameTurf(g)+'<div class="ez" style="background:'+esc(g.hcolor)+'">'+esc(g.habbr)+'</div></div>'+
    '<div class="dd"><span>'+g.down+'. &amp; '+g.dist+'</span><span class="mut">noch '+g.ytz+' Yd bis TD · Ball: '+esc(g.possession)+'</span></div>'+
    '<div class="fieldwrap" style="margin:10px 0"><svg id="gfield" viewBox="0 0 533 360" style="width:100%;height:auto;display:block"></svg></div>';
- if(play)h+='<div class="reco'+(play.scored?' win':'')+'"><span>'+esc(play.desc)+'</span><span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span></div>';
+ if(play)h+='<div class="reco'+(play.scored?' win':'')+(play.penalty?' flag':'')+'"><span>'+esc(play.desc)+'</span>'+(play.penalty?'<span class="mut">Strafe</span>':'<span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span>')+'</div>';
  if(g.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(g.away)+' '+g['as']+' : '+g.hs+' '+esc(g.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
  else{const ban=g.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
