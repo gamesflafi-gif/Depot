@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v20-isocity"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v21-isodetail"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -173,6 +173,12 @@ _STYLE2 = """
  @keyframes drillA{0%,100%{transform:translate(0,0)}50%{transform:translate(38px,0)}}
  @keyframes drillB{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-22px)}}
  @keyframes drillC{0%{transform:translate(-22px,8px)}50%{transform:translate(22px,-8px)}100%{transform:translate(-22px,8px)}}
+ .cz{transform-box:fill-box;transform-origin:center}
+ @keyframes walkx{0%{transform:translate(0,0)}50%{transform:translate(54px,27px)}100%{transform:translate(0,0)}}
+ @keyframes walky{0%{transform:translate(0,0)}50%{transform:translate(-50px,25px)}100%{transform:translate(0,0)}}
+ @keyframes flagw{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.55)}}
+ @keyframes glow{0%,100%{opacity:.10}50%{opacity:.28}}
+ .flagw{transform-box:fill-box;transform-origin:left center}
  .facpanel{display:flex;align-items:center;gap:12px;background:var(--tile);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:10px}
  .facpanel .fpn{font-weight:800;font-size:15px}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
@@ -1148,7 +1154,7 @@ function _facList(v){const F=v.facilities||{};const kU=(v.units||[]).find(u=>u.k
  if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,gx:6.9,gy:5.1,w:1.3,d:1.1});
  if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,gx:4.4,gy:5.5,w:0.6,d:0.6});
  return a;}
-const _BPAL={medical:['#4a565f','#353f47','#272f35'],athletic:['#3c4a68','#2b3752','#212a40'],scouting:['#3a4c68','#293a54','#1f2c40'],youth:['#3c5c46','#2b4836','#203628'],generic:['#4a565f','#353f47','#272f35']};
+const _BPAL={medical:['#5a6770','#414d55','#2c353b','#7a8990'],athletic:['#46587e','#33415f','#26314a','#6076a0'],scouting:['#445a7e','#33455f','#26344a','#5f78a0'],youth:['#46714f','#345740','#26402f','#5e9468'],generic:['#56636d','#3e4951','#2c343a','#76858f']};
 const _ACC={medical:'#ef5350',athletic:'#5fa8ff',scouting:'#5fa8ff',youth:'#19e08f'};
 function _icon(k,x,y){const c='#ffffff';
  if(k==='medical')return '<rect x="'+(x-1.6)+'" y="'+(y-5)+'" width="3.2" height="10" fill="'+c+'"/><rect x="'+(x-5)+'" y="'+(y-1.6)+'" width="10" height="3.2" fill="'+c+'"/>';
@@ -1156,57 +1162,157 @@ function _icon(k,x,y){const c='#ffffff';
  if(k==='scouting')return '<circle cx="'+(x-2.8)+'" cy="'+y+'" r="2.8" fill="none" stroke="'+c+'" stroke-width="1.6"/><circle cx="'+(x+2.8)+'" cy="'+y+'" r="2.8" fill="none" stroke="'+c+'" stroke-width="1.6"/>';
  if(k==='youth')return '<path d="M'+x+' '+(y+4)+' q-6 -2 -6 -8 q6 1 6 8 Z" fill="'+c+'"/>';
  return '';}
+// Schatten der Grundfläche, leicht nach vorn versetzt
+function _shadow(gx,gy,w,d){const o=0.22;
+ return '<polygon points="'+_pp([_iso(gx+o,gy+o),_iso(gx+w+o+0.3,gy+o),_iso(gx+w+o+0.3,gy+d+o+0.3),_iso(gx+o,gy+d+o+0.3)])+'" fill="#040c07" fill-opacity=".34"/>';}
+// Fensterraster auf eine geneigte Wandfläche (Basiskante p0->p1, Höhe h nach oben)
+function _winGrid(p0,p1,h,cols,rows){const ex=(p1[0]-p0[0])/cols,ey=(p1[1]-p0[1])/cols,ry=h/rows;let s='';
+ for(let c=0;c<cols;c++)for(let r=0;r<rows;r++){const bx=p0[0]+ex*(c+0.26),by=p0[1]+ey*(c+0.26)-ry*(r+0.24);
+   const wx=ex*0.48,wy=ey*0.48,wh=ry*0.5,lit=((c*5+r*3)%4===0);
+   s+='<polygon points="'+_pp([[bx,by],[bx+wx,by+wy],[bx+wx,by+wy-wh],[bx,by-wh]])+'" fill="'+(lit?'#ffe6a0':'#a7cee0')+'" fill-opacity="'+(lit?'.9':'.46')+'"/>';}
+ return s;}
 function _isoBuilding(f){const L=f.lvl,h=12+L*9,pal=_BPAL[f.k]||_BPAL.generic;
  const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso(f.gx+f.w,f.gy+f.d),D=_iso(f.gx,f.gy+f.d),u=p=>[p[0],p[1]-h];
- let g='<polygon points="'+_pp([B,Cc,u(Cc),u(B)])+'" fill="'+pal[2]+'"/>'+
-       '<polygon points="'+_pp([D,Cc,u(Cc),u(D)])+'" fill="'+pal[1]+'"/>'+
-       '<polygon points="'+_pp([u(A),u(B),u(Cc),u(D)])+'" fill="'+pal[0]+'"/>';
+ let g=_shadow(f.gx,f.gy,f.w,f.d);
+ // drei Wandflächen
+ g+='<polygon points="'+_pp([B,Cc,u(Cc),u(B)])+'" fill="'+pal[2]+'"/>'+
+    '<polygon points="'+_pp([D,Cc,u(Cc),u(D)])+'" fill="'+pal[1]+'"/>'+
+    '<polygon points="'+_pp([u(A),u(B),u(Cc),u(D)])+'" fill="'+pal[0]+'"/>';
+ // Sockel etwas heller
+ g+='<polygon points="'+_pp([B,Cc,[Cc[0],Cc[1]-4],[B[0],B[1]-4]])+'" fill="#0c1116" fill-opacity=".4"/>';
+ // Fenster auf beiden Frontflächen
+ const cols=Math.max(2,Math.round(f.w*2.4)),rows=Math.max(2,L+1);
+ g+=_winGrid(B,Cc,h-3,cols,rows)+_winGrid(D,Cc,h-3,Math.max(2,Math.round(f.d*2.4)),rows);
+ // Etagenbänder
  for(let i=1;i<=L;i++){const y=h*i/(L+1);
-   g+='<line x1="'+B[0].toFixed(1)+'" y1="'+(B[1]-y).toFixed(1)+'" x2="'+Cc[0].toFixed(1)+'" y2="'+(Cc[1]-y).toFixed(1)+'" stroke="#0c1116" stroke-opacity=".45"/>'+
-      '<line x1="'+D[0].toFixed(1)+'" y1="'+(D[1]-y).toFixed(1)+'" x2="'+Cc[0].toFixed(1)+'" y2="'+(Cc[1]-y).toFixed(1)+'" stroke="#0c1116" stroke-opacity=".45"/>';}
- const cx=(A[0]+Cc[0])/2,cy=(A[1]+Cc[1])/2-h-15;
- g+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="11" fill="'+(_ACC[f.k]||'#8aa2a8')+'" stroke="#06140d" stroke-width="1.5"/>'+_icon(f.k,cx,cy);
+   g+='<line x1="'+B[0].toFixed(1)+'" y1="'+(B[1]-y).toFixed(1)+'" x2="'+Cc[0].toFixed(1)+'" y2="'+(Cc[1]-y).toFixed(1)+'" stroke="#0a0f14" stroke-opacity=".4"/>'+
+      '<line x1="'+D[0].toFixed(1)+'" y1="'+(D[1]-y).toFixed(1)+'" x2="'+Cc[0].toFixed(1)+'" y2="'+(Cc[1]-y).toFixed(1)+'" stroke="#0a0f14" stroke-opacity=".4"/>';}
+ // Dachkante + Dachaufbauten (Lüfter, Antenne, Tank)
+ g+='<polygon points="'+_pp([u(A),u(B),u(Cc),u(D)])+'" fill="none" stroke="#0a0f14" stroke-opacity=".5"/>';
+ const ru=p=>[p[0],p[1]-h],rc=ru([(A[0]+Cc[0])/2,(A[1]+Cc[1])/2]);
+ g+='<rect x="'+(rc[0]-10).toFixed(1)+'" y="'+(rc[1]-7).toFixed(1)+'" width="9" height="6" rx="1" fill="#2a323a" stroke="#0a0f14" stroke-width=".6"/>'+
+    '<rect x="'+(rc[0]+2).toFixed(1)+'" y="'+(rc[1]-5).toFixed(1)+'" width="6" height="4" rx="1" fill="#39424b"/>'+
+    '<line x1="'+(rc[0]+7).toFixed(1)+'" y1="'+(rc[1]-5).toFixed(1)+'" x2="'+(rc[0]+11).toFixed(1)+'" y2="'+(rc[1]-16).toFixed(1)+'" stroke="#7a8990" stroke-width="1"/><circle cx="'+(rc[0]+11).toFixed(1)+'" cy="'+(rc[1]-16).toFixed(1)+'" r="1.4" fill="#ef5350"/>';
+ // schwebendes Icon-Badge
+ const cx=(A[0]+Cc[0])/2,cy=(A[1]+Cc[1])/2-h-17;
+ g+='<line x1="'+cx.toFixed(1)+'" y1="'+(cy+11).toFixed(1)+'" x2="'+cx.toFixed(1)+'" y2="'+(cy+17).toFixed(1)+'" stroke="#06140d" stroke-opacity=".5"/>'+
+    '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="11.5" fill="'+(_ACC[f.k]||'#8aa2a8')+'" stroke="#06140d" stroke-width="1.5"/><circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="11.5" fill="none" stroke="#ffffff" stroke-opacity=".25"/>'+_icon(f.k,cx,cy);
  return g;}
-function _isoStadium(f){const L=f.lvl,c=_iso(f.gx+f.w/2,f.gy+f.d/2),cx=c[0],cy=c[1],h=8+L*3,rx=f.w*27,ry=f.d*17;
- let g='<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" fill="#161d23"/>'+
-   '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+rx+'" ry="'+ry+'" fill="#3c4954"/>'+
-   '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.78).toFixed(1)+'" ry="'+(ry*0.78).toFixed(1)+'" fill="#1e2830"/>'+
-   '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.56).toFixed(1)+'" ry="'+(ry*0.56).toFixed(1)+'" fill="#1d7a48"/>'+
-   '<line x1="'+cx+'" y1="'+(cy-h-ry*0.56).toFixed(1)+'" x2="'+cx+'" y2="'+(cy-h+ry*0.56).toFixed(1)+'" stroke="#cfe" stroke-opacity=".25"/>';
- const ang=[[-1,-1],[1,-1],[-1,1],[1,1],[0,-1.15]];
- for(let i=0;i<L&&i<5;i++){const lx=cx+ang[i][0]*rx*0.9,ly=cy-h+ang[i][1]*ry*0.9;
-   g+='<line x1="'+lx.toFixed(1)+'" y1="'+ly.toFixed(1)+'" x2="'+lx.toFixed(1)+'" y2="'+(ly-13).toFixed(1)+'" stroke="#46525c" stroke-width="2"/><rect x="'+(lx-4).toFixed(1)+'" y="'+(ly-16).toFixed(1)+'" width="8" height="3.5" rx="1" fill="#fff6c8"/>';}
- if(L>=4)g+='<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx+3)+'" ry="'+(ry+2)+'" fill="none" stroke="#56636d" stroke-width="2"/>';
+function _isoStadium(f){const L=f.lvl,c=_iso(f.gx+f.w/2,f.gy+f.d/2),cx=c[0],cy=c[1],h=11+L*3,rx=f.w*27,ry=f.d*17;
+ let g='<ellipse cx="'+(cx+12)+'" cy="'+(cy+7)+'" rx="'+(rx+7)+'" ry="'+(ry+5)+'" fill="#040c07" fill-opacity=".32"/>';
+ // Außenwand (unten dunkel) -> sichtbare Frontmauer als Sichel
+ g+='<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" fill="#10161b"/>';
+ // Wandstützen an der Front
+ for(let i=1;i<14;i++){const a=Math.PI*(i/14),ex=cx+Math.cos(a)*rx*0.99;
+   g+='<line x1="'+ex.toFixed(1)+'" y1="'+(cy+Math.sin(a)*ry*0.99).toFixed(1)+'" x2="'+ex.toFixed(1)+'" y2="'+(cy-h+Math.sin(a)*ry*0.99).toFixed(1)+'" stroke="#05090c" stroke-opacity=".35"/>';}
+ // oberer Ring + Sitzränge
+ g+='<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+rx+'" ry="'+ry+'" fill="#46525c"/>'+
+    '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.9).toFixed(1)+'" ry="'+(ry*0.9).toFixed(1)+'" fill="#5d6b76"/>'+
+    '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.74).toFixed(1)+'" ry="'+(ry*0.74).toFixed(1)+'" fill="#39434c"/>'+
+    '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.6).toFixed(1)+'" ry="'+(ry*0.6).toFixed(1)+'" fill="#222b32"/>';
+ // Zuschauer-Tupfen auf dem oberen Rang
+ const crowd=['#d8dde2','#e0b07a','#c98a8a','#8aa0c0'];for(let i=0;i<60;i++){const a=i/60*Math.PI*2,rr=0.82+((i*7)%5)*0.018;
+   g+='<circle cx="'+(cx+Math.cos(a)*rx*rr).toFixed(1)+'" cy="'+(cy-h+Math.sin(a)*ry*rr).toFixed(1)+'" r="1" fill="'+crowd[i%4]+'" fill-opacity=".8"/>';}
+ // Spielfeld
+ g+='<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.5).toFixed(1)+'" ry="'+(ry*0.5).toFixed(1)+'" fill="#1d7a48"/>'+
+    '<ellipse cx="'+cx+'" cy="'+(cy-h)+'" rx="'+(rx*0.5).toFixed(1)+'" ry="'+(ry*0.5).toFixed(1)+'" fill="none" stroke="#eaf6ef" stroke-opacity=".4"/>'+
+    '<line x1="'+cx+'" y1="'+(cy-h-ry*0.5).toFixed(1)+'" x2="'+cx+'" y2="'+(cy-h+ry*0.5).toFixed(1)+'" stroke="#eaf6ef" stroke-opacity=".3"/>';
+ // Flutlichtmasten mit Lichtkegel
+ const ang=[[-1,-1],[1,-1],[-1,1],[1,1],[0,-1.18]];
+ for(let i=0;i<L&&i<5;i++){const lx=cx+ang[i][0]*rx*0.86,ly=cy-h+ang[i][1]*ry*0.86;
+   g+='<ellipse cx="'+lx.toFixed(1)+'" cy="'+(ly-19).toFixed(1)+'" rx="11" ry="7" fill="#fff6c8"><animate attributeName="opacity" values=".1;.26;.1" dur="3.5s" repeatCount="indefinite"/></ellipse>'+
+      '<line x1="'+lx.toFixed(1)+'" y1="'+ly.toFixed(1)+'" x2="'+lx.toFixed(1)+'" y2="'+(ly-17).toFixed(1)+'" stroke="#46525c" stroke-width="2"/><rect x="'+(lx-5).toFixed(1)+'" y="'+(ly-21).toFixed(1)+'" width="10" height="4.5" rx="1" fill="#fff6c8"/>';}
+ // Videowürfel (ab Stufe 3)
+ if(L>=3){const by=cy-h-ry*0.92;g+='<line x1="'+cx+'" y1="'+(by+2)+'" x2="'+cx+'" y2="'+(by+9)+'" stroke="#46525c" stroke-width="2"/><rect x="'+(cx-13)+'" y="'+(by-12)+'" width="26" height="12" rx="1.5" fill="#0c1116" stroke="#46525c"/><rect x="'+(cx-11)+'" y="'+(by-10)+'" width="22" height="8" fill="#2d6cc0"/><text x="'+cx+'" y="'+(by-3.5)+'" text-anchor="middle" font-size="6" font-weight="800" fill="#eaf6ef">HOME</text>';}
+ // Fahnen am Ringrand (ab Stufe 2)
+ if(L>=2){const fc=['#e25b5b','#5fa8ff','#19e08f','#e9b949'];for(let i=0;i<8;i++){const a=i/8*Math.PI*2,fx=cx+Math.cos(a)*rx*0.99,fy=cy-h+Math.sin(a)*ry*0.99;
+   g+='<line x1="'+fx.toFixed(1)+'" y1="'+fy.toFixed(1)+'" x2="'+fx.toFixed(1)+'" y2="'+(fy-10).toFixed(1)+'" stroke="#c8d2da" stroke-width="1"/><path class="flagw" style="animation:flagw '+(1.3+i*0.1).toFixed(1)+'s ease-in-out infinite" d="M'+fx.toFixed(1)+' '+(fy-10).toFixed(1)+' l6 1.8 l-6 1.8 Z" fill="'+fc[i%4]+'"/>';}}
+ // Dachring (ab Stufe 4)
+ if(L>=4)g+='<ellipse cx="'+cx+'" cy="'+(cy-h-3)+'" rx="'+(rx+4)+'" ry="'+(ry+3)+'" fill="none" stroke="#66737d" stroke-width="2.5"/>';
  return g;}
 function _isoField(f){const A=_iso(f.gx,f.gy),B=_iso(f.gx+f.w,f.gy),Cc=_iso(f.gx+f.w,f.gy+f.d),D=_iso(f.gx,f.gy+f.d);
- let g='<polygon points="'+_pp([A,B,Cc,D])+'" fill="#1a6b40"/><polygon points="'+_pp([A,B,Cc,D])+'" fill="none" stroke="#cfe" stroke-opacity=".22"/>';
- const n=5;for(let i=1;i<n;i++){const t=i/n,p0=[A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t],p1=[D[0]+(Cc[0]-D[0])*t,D[1]+(Cc[1]-D[1])*t];
-   g+='<line x1="'+p0[0].toFixed(1)+'" y1="'+p0[1].toFixed(1)+'" x2="'+p1[0].toFixed(1)+'" y2="'+p1[1].toFixed(1)+'" stroke="#cfe" stroke-opacity=".16"/>';}
+ const lerp=(p,q,t)=>[p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t];
+ // gemähte Streifen + Endzonen
+ const n=10;let g='';
+ for(let i=0;i<n;i++){const t0=i/n,t1=(i+1)/n,ez=(i===0||i===n-1);
+   g+='<polygon points="'+_pp([lerp(A,B,t0),lerp(A,B,t1),lerp(D,Cc,t1),lerp(D,Cc,t0)])+'" fill="'+(ez?'#15532f':(i%2?'#1c7546':'#1a6b40'))+'"/>';}
+ // Yardlinien + Mittellinie
+ for(let i=1;i<n;i++){const t=i/n;const p0=lerp(A,B,t),p1=lerp(D,Cc,t);
+   g+='<line x1="'+p0[0].toFixed(1)+'" y1="'+p0[1].toFixed(1)+'" x2="'+p1[0].toFixed(1)+'" y2="'+p1[1].toFixed(1)+'" stroke="#eaf6ef" stroke-opacity="'+(i===5?'.7':'.45')+'" stroke-width="'+(i===5?'1.6':'1.1')+'"/>';}
+ // Hashmarks
+ for(let i=1;i<n;i++){const t=i/n;[0.4,0.6].forEach(s=>{const a=lerp(lerp(A,B,t),lerp(D,Cc,t),s);g+='<rect x="'+(a[0]-0.8).toFixed(1)+'" y="'+(a[1]-0.8).toFixed(1)+'" width="2.4" height="1.6" fill="#eaf6ef" fill-opacity=".5"/>';});}
+ // Seitenlinien-Rahmen
+ g+='<polygon points="'+_pp([A,B,Cc,D])+'" fill="none" stroke="#eaf6ef" stroke-opacity=".8" stroke-width="1.6"/>';
+ // Tore an beiden Enden
+ const gp=(p)=>'<line x1="'+(p[0]-8).toFixed(1)+'" y1="'+p[1].toFixed(1)+'" x2="'+(p[0]-8).toFixed(1)+'" y2="'+(p[1]-13).toFixed(1)+'" stroke="#ffd34d" stroke-width="2"/><line x1="'+(p[0]+8).toFixed(1)+'" y1="'+p[1].toFixed(1)+'" x2="'+(p[0]+8).toFixed(1)+'" y2="'+(p[1]-13).toFixed(1)+'" stroke="#ffd34d" stroke-width="2"/><line x1="'+(p[0]-8).toFixed(1)+'" y1="'+(p[1]-8).toFixed(1)+'" x2="'+(p[0]+8).toFixed(1)+'" y2="'+(p[1]-8).toFixed(1)+'" stroke="#ffd34d" stroke-width="2"/>';
+ g+=gp(lerp(A,D,0.5))+gp(lerp(B,Cc,0.5));
  g+=_trainPlayers(f);return g;}
 function _isoGoal(f){const L=f.lvl,p=_iso(f.gx,f.gy),s=12+L*3,x=p[0],y=p[1];
- return '<line x1="'+(x-9)+'" y1="'+y+'" x2="'+(x-9)+'" y2="'+(y-s)+'" stroke="#ffd34d" stroke-width="3"/><line x1="'+(x+9)+'" y1="'+y+'" x2="'+(x+9)+'" y2="'+(y-s)+'" stroke="#ffd34d" stroke-width="3"/><line x1="'+(x-9)+'" y1="'+(y-s*0.62).toFixed(1)+'" x2="'+(x+9)+'" y2="'+(y-s*0.62).toFixed(1)+'" stroke="#ffd34d" stroke-width="3"/>';}
+ return _shadow(f.gx-0.1,f.gy-0.1,0.4,0.4)+'<line x1="'+(x-9)+'" y1="'+y+'" x2="'+(x-9)+'" y2="'+(y-s)+'" stroke="#ffd34d" stroke-width="3"/><line x1="'+(x+9)+'" y1="'+y+'" x2="'+(x+9)+'" y2="'+(y-s)+'" stroke="#ffd34d" stroke-width="3"/><line x1="'+(x-9)+'" y1="'+(y-s*0.62).toFixed(1)+'" x2="'+(x+9)+'" y2="'+(y-s*0.62).toFixed(1)+'" stroke="#ffd34d" stroke-width="3"/><rect x="'+(x-2)+'" y="'+(y-s)+'" width="4" height="'+s+'" fill="#ffd34d" fill-opacity=".25"/>';}
 function _trainPlayers(f){const c=_iso(f.gx+f.w/2,f.gy+f.d/2),ps=[[-46,-6,'A',0],[-18,8,'B',.5],[12,-8,'C',.9],[36,6,'A',.3],[58,-3,'B',.7],[-66,7,'C',1.1]];
- return ps.map(p=>'<g transform="translate('+(c[0]+p[0]).toFixed(1)+' '+(c[1]+p[1]).toFixed(1)+')"><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s"><ellipse cy="1" rx="2.6" ry="1.9" fill="#19e08f" stroke="#06140d" stroke-width=".6"/><circle cy="-1.8" r="1.5" fill="#19e08f" stroke="#06140d" stroke-width=".6"/></g></g>').join('');}
-function _isoTree(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-1.5).toFixed(1)+'" y="'+(p[1]-10).toFixed(1)+'" width="3" height="10" fill="#5a3a1e"/><ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-15).toFixed(1)+'" rx="9" ry="10" fill="#1d6b3f"/><ellipse cx="'+(p[0]-3).toFixed(1)+'" cy="'+(p[1]-18).toFixed(1)+'" rx="6" ry="7" fill="#27964f"/>';}
-function _isoLamp(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-1).toFixed(1)+'" y="'+(p[1]-16).toFixed(1)+'" width="2" height="16" fill="#46525c"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-17).toFixed(1)+'" r="2.6" fill="#ffe9a8"/>';}
-function _road(gx,gy,w,d,col){return '<polygon points="'+_pp([_iso(gx,gy),_iso(gx+w,gy),_iso(gx+w,gy+d),_iso(gx,gy+d)])+'" fill="'+(col||'#222a25')+'"/>';}
-function _parking(gx,gy){let s=_road(gx,gy,2.0,1.3,'#2a322c');const cars=[['#e25b5b',gx+0.5,gy+0.4],['#5fa8ff',gx+1.2,gy+0.5],['#e9b949',gx+0.8,gy+0.95]];
- cars.forEach(c=>{const p=_iso(c[1],c[2]);s+='<rect x="'+(p[0]-6).toFixed(1)+'" y="'+(p[1]-9).toFixed(1)+'" width="12" height="7" rx="2" fill="'+c[0]+'"/>';});return s;}
+ // Trainingsschlitten + Hütchen
+ let extra='<rect x="'+(c[0]-78).toFixed(1)+'" y="'+(c[1]-4).toFixed(1)+'" width="14" height="7" rx="1.5" fill="#c2452f"/>';
+ [[-60,12],[-40,14],[-20,12],[0,14]].forEach(o=>{extra+='<path d="M'+(c[0]+o[0])+' '+(c[1]+o[1])+' l3 5 l-6 0 Z" fill="#e9b949"/>';});
+ return extra+ps.map(p=>'<g transform="translate('+(c[0]+p[0]).toFixed(1)+' '+(c[1]+p[1]).toFixed(1)+')"><ellipse cy="3" rx="3" ry="1.6" fill="#06140d" fill-opacity=".3"/><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s"><ellipse cy="1" rx="2.6" ry="1.9" fill="#19e08f" stroke="#06140d" stroke-width=".6"/><circle cy="-1.8" r="1.5" fill="#19e08f" stroke="#06140d" stroke-width=".6"/></g></g>').join('');}
+function _isoTree(gx,gy){const p=_iso(gx,gy);return '<ellipse cx="'+(p[0]+2).toFixed(1)+'" cy="'+(p[1]+1).toFixed(1)+'" rx="9" ry="3.4" fill="#040c07" fill-opacity=".3"/><rect x="'+(p[0]-1.5).toFixed(1)+'" y="'+(p[1]-10).toFixed(1)+'" width="3" height="10" fill="#5a3a1e"/><ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-15).toFixed(1)+'" rx="9" ry="10" fill="#1d6b3f"/><ellipse cx="'+(p[0]-3).toFixed(1)+'" cy="'+(p[1]-18).toFixed(1)+'" rx="6" ry="7" fill="#2aa257"/><ellipse cx="'+(p[0]+4).toFixed(1)+'" cy="'+(p[1]-13).toFixed(1)+'" rx="4.5" ry="5" fill="#22864a"/>';}
+function _isoLamp(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-1).toFixed(1)+'" y="'+(p[1]-16).toFixed(1)+'" width="2" height="16" fill="#46525c"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-17).toFixed(1)+'" r="6.5" fill="#ffe9a8" fill-opacity=".18"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-17).toFixed(1)+'" r="2.6" fill="#ffe9a8"/>';}
+function _isoBush(gx,gy){const p=_iso(gx,gy);return '<ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-2).toFixed(1)+'" rx="6" ry="4.4" fill="#1d6b3f"/><ellipse cx="'+(p[0]-2.5).toFixed(1)+'" cy="'+(p[1]-4).toFixed(1)+'" rx="4" ry="3.2" fill="#2aa257"/>';}
+function _isoBench(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-5).toFixed(1)+'" y="'+(p[1]-3).toFixed(1)+'" width="10" height="2.4" rx="1" fill="#6b4a2a"/><rect x="'+(p[0]-5).toFixed(1)+'" y="'+(p[1]-6.5).toFixed(1)+'" width="10" height="2" rx="1" fill="#7d5832"/>';}
+function _isoFountain(gx,gy){const p=_iso(gx,gy);return '<ellipse cx="'+p[0]+'" cy="'+p[1]+'" rx="14" ry="7" fill="#2a3a44" stroke="#46606e" stroke-width="2"/><ellipse cx="'+p[0]+'" cy="'+p[1]+'" rx="10" ry="4.8" fill="#3d8fb0"/><ellipse cx="'+p[0]+'" cy="'+(p[1]-0.5)+'" rx="2.4" ry="1.4" fill="#bfe6f2"/><rect x="'+(p[0]-1)+'" y="'+(p[1]-10)+'" width="2" height="9" fill="#46606e"/>';}
+function _isoFlowers(gx,gy){const p=_iso(gx,gy),cols=['#e25b9a','#e9b949','#e25b5b','#b66be0'];let s='<ellipse cx="'+p[0]+'" cy="'+p[1]+'" rx="9" ry="5" fill="#274a2c"/>';
+ for(let i=0;i<8;i++){const a=i*0.85;s+='<circle cx="'+(p[0]+Math.cos(a)*5.5).toFixed(1)+'" cy="'+(p[1]+Math.sin(a)*2.8).toFixed(1)+'" r="1.5" fill="'+cols[i%4]+'"/>';}return s;}
+function _isoBus(gx,gy){const p=_iso(gx,gy);return '<ellipse cx="'+p[0]+'" cy="'+(p[1]+2)+'" rx="18" ry="4" fill="#040c07" fill-opacity=".3"/><rect x="'+(p[0]-16)+'" y="'+(p[1]-13)+'" width="32" height="13" rx="2.5" fill="#e5b73b"/><rect x="'+(p[0]-13)+'" y="'+(p[1]-10)+'" width="26" height="4.5" fill="#243038"/><rect x="'+(p[0]-15)+'" y="'+(p[1]-3)+'" width="30" height="2" fill="#b5892a"/><circle cx="'+(p[0]-9)+'" cy="'+p[1]+'" r="2.6" fill="#1a1a1a"/><circle cx="'+(p[0]+9)+'" cy="'+p[1]+'" r="2.6" fill="#1a1a1a"/>';}
+function _isoPerson(gx,gy,col,anim){const p=_iso(gx,gy);
+ return '<g'+(anim?' class="cz" style="animation:'+anim+'"':'')+'><ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]+1).toFixed(1)+'" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><rect x="'+(p[0]-1.5).toFixed(1)+'" y="'+(p[1]-6).toFixed(1)+'" width="3" height="6" rx="1.3" fill="'+col+'"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-7.6).toFixed(1)+'" r="1.7" fill="#e8c9a8"/></g>';}
+function _road(gx,gy,w,d,col){let s='<polygon points="'+_pp([_iso(gx,gy),_iso(gx+w,gy),_iso(gx+w,gy+d),_iso(gx,gy+d)])+'" fill="'+(col||'#2b332e')+'"/>';
+ // Mittelstreifen entlang der längeren Achse
+ if(w>=d){for(let i=0;i*0.6<w;i++){const a=_iso(gx+i*0.6+0.18,gy+d/2),b=_iso(gx+i*0.6+0.42,gy+d/2);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cdb23a" stroke-opacity=".55" stroke-width="1.2"/>';}}
+ else{for(let i=0;i*0.6<d;i++){const a=_iso(gx+w/2,gy+i*0.6+0.18),b=_iso(gx+w/2,gy+i*0.6+0.42);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cdb23a" stroke-opacity=".55" stroke-width="1.2"/>';}}
+ return s;}
+function _parking(gx,gy){let s='<polygon points="'+_pp([_iso(gx,gy),_iso(gx+2.2,gy),_iso(gx+2.2,gy+1.5),_iso(gx,gy+1.5)])+'" fill="#2f372f"/>';
+ // Markierungen
+ for(let i=1;i<5;i++){const a=_iso(gx+i*0.44,gy+0.1),b=_iso(gx+i*0.44,gy+1.4);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#eaf6ef" stroke-opacity=".25"/>';}
+ const cars=[['#e25b5b',gx+0.45,gy+0.45],['#5fa8ff',gx+0.95,gy+0.5],['#e9b949',gx+1.45,gy+0.5],['#9ad17a',gx+0.7,gy+1.05],['#d8dde2',gx+1.7,gy+1.0]];
+ cars.forEach(c=>{const p=_iso(c[1],c[2]);s+='<ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-1).toFixed(1)+'" rx="8" ry="3" fill="#040c07" fill-opacity=".3"/><rect x="'+(p[0]-6).toFixed(1)+'" y="'+(p[1]-9).toFixed(1)+'" width="12" height="7" rx="2" fill="'+c[0]+'"/><rect x="'+(p[0]-4).toFixed(1)+'" y="'+(p[1]-8).toFixed(1)+'" width="8" height="2.6" rx="1" fill="#1c252b" fill-opacity=".6"/>';});return s;}
 function _facBuilding(f){const sel=(_selFac===f.key);let g;
  if(f.k==='field')g=_isoField(f);else if(f.k==='stadium')g=_isoStadium(f);else if(f.k==='kick')g=_isoGoal(f);else g=_isoBuilding(f);
  const lp=_iso(f.gx+f.w/2,f.gy+f.d);
- g+='<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+13).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#e8efea" style="paint-order:stroke" stroke="#06140d" stroke-width="2.5">'+esc(f.name.split(' ')[0])+'</text>'+
-    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+24).toFixed(1)+'" text-anchor="middle" font-size="9" fill="#aebdb6">'+(f.rating?f.rating+' OVR':'Lv '+f.lvl)+'</text>';
+ g+='<rect x="'+(lp[0]-34).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="68" height="24" rx="6" fill="#0a130d" fill-opacity=".62"/>'+
+    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+15).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#e8efea" style="paint-order:stroke" stroke="#06140d" stroke-width="2.5">'+esc(f.name.split(' ')[0])+'</text>'+
+    '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+25).toFixed(1)+'" text-anchor="middle" font-size="9" fill="#aebdb6">'+(f.rating?f.rating+' OVR':'Lv '+f.lvl)+'</text>';
  return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+g+'</g>';}
 function _complexSVG(v){
- let s='<rect x="0" y="0" width="600" height="380" fill="#0b120d"/>'+
-   '<polygon points="'+_pp([_iso(-.5,-.5),_iso(9.5,-.5),_iso(9.5,7.5),_iso(-.5,7.5)])+'" fill="#0e1912"/>'+
-   '<polygon points="'+_pp([_iso(0,0),_iso(9,0),_iso(9,7),_iso(0,7)])+'" fill="#163522"/>'+
-   _road(0,2.55,9,0.7)+_road(4.35,0,0.7,7)+_parking(5.2,5.6);
+ // Boden mit Verlauf + Wege + Parkplatz
+ let s='<defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1810"/><stop offset="1" stop-color="#0a120c"/></linearGradient><radialGradient id="ggrass" cx="0.5" cy="0.42" r="0.7"><stop offset="0" stop-color="#1c4029"/><stop offset="1" stop-color="#143020"/></radialGradient></defs>'+
+   '<rect x="0" y="0" width="600" height="380" fill="url(#gsky)"/>'+
+   '<polygon points="'+_pp([_iso(-.6,-.6),_iso(9.6,-.6),_iso(9.6,7.6),_iso(-.6,7.6)])+'" fill="#0e1912"/>'+
+   '<polygon points="'+_pp([_iso(0,0),_iso(9,0),_iso(9,7),_iso(0,7)])+'" fill="url(#ggrass)"/>'+
+   '<polygon points="'+_pp([_iso(0,0),_iso(9,0),_iso(9,7),_iso(0,7)])+'" fill="none" stroke="#0a1c12" stroke-width="2"/>'+
+   _road(0,2.55,9,0.7)+_road(4.35,0,0.7,7)+_parking(5.0,5.55);
+ // Zaun entlang des Geländerandes
+ let fence='';for(let i=0;i<=18;i++){const t=i/18;[[_iso(t*9,0),_iso(t*9,0)],[_iso(t*9,7),0]].length;
+   const a=_iso(t*9,0);fence+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+a[0].toFixed(1)+'" y2="'+(a[1]-5).toFixed(1)+'" stroke="#3a4630" stroke-width="1"/>';
+   const b=_iso(0,t*7);fence+='<line x1="'+b[0].toFixed(1)+'" y1="'+b[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+(b[1]-5).toFixed(1)+'" stroke="#3a4630" stroke-width="1"/>';}
+ s+=fence;
  let dr=[];const push=(dep,svg)=>dr.push([dep,svg]);
  _facList(v).forEach(f=>push(f.gx+f.gy+f.d,_facBuilding(f)));
- [[0.2,0.2],[8.4,0.3],[0.3,6.6],[8.2,6.6],[8.6,3.2],[0.2,3.5],[2.0,6.7],[6.6,0.2]].forEach(t=>push(t[0]+t[1],_isoTree(t[0],t[1])));
- [[4.5,2.3],[4.5,5.0],[1.7,2.4],[7.2,2.4]].forEach(t=>push(t[0]+t[1]-0.1,_isoLamp(t[0],t[1])));
+ // Bäume
+ [[0.25,0.25],[8.5,0.3],[0.3,6.7],[8.3,6.7],[8.6,3.0],[0.2,3.4],[1.9,6.75],[6.7,0.2],[3.6,6.8],[8.55,5.1]].forEach(t=>push(t[0]+t[1],_isoTree(t[0],t[1])));
+ // Laternen
+ [[4.55,2.2],[4.55,4.9],[1.6,2.35],[7.3,2.35],[1.6,5.1],[7.3,5.1]].forEach(t=>push(t[0]+t[1]-0.05,_isoLamp(t[0],t[1])));
+ // Büsche/Hecken
+ [[3.0,1.2],[5.6,1.2],[3.0,4.4],[2.2,1.5],[6.4,4.6],[1.2,4.6]].forEach(t=>push(t[0]+t[1],_isoBush(t[0],t[1])));
+ // Bänke, Brunnen, Blumenbeete
+ push(4.5+3.0,_isoFountain(4.5,3.0));
+ [[3.7,2.7],[5.3,2.7]].forEach(t=>push(t[0]+t[1],_isoBench(t[0],t[1])));
+ [[3.9,1.6],[5.1,1.6],[1.5,3.6]].forEach(t=>push(t[0]+t[1],_isoFlowers(t[0],t[1])));
+ // Mannschaftsbus am Parkplatz
+ push(5.4+5.0,_isoBus(5.4,5.0));
+ // Spaziergänger (animiert)
+ push(2.1+2.55,_isoPerson(2.1,2.62,'#5fa8ff','walkx 7s ease-in-out infinite'));
+ push(6.0+2.55,_isoPerson(6.0,2.62,'#e9b949','walky 8s ease-in-out infinite'));
+ push(4.35+1.5,_isoPerson(4.5,1.5,'#e25b5b','walky 9s ease-in-out infinite 1s'));
+ push(4.35+4.2,_isoPerson(4.5,4.2,'#9ad17a','walkx 8s ease-in-out infinite .5s'));
  dr.sort((a,b)=>a[0]-b[0]);
  return '<svg class="complex" viewBox="0 0 600 380" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+'</svg>';}
 function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
