@@ -409,6 +409,41 @@ def test_end_game_by_clock(tmp_path):
     assert st.get("active_game") is None            # Spiel abgeschlossen
 
 
+def test_penalties_apply_rules(tmp_path):
+    """Strafen: Vor-Snap-Foul wiederholt den Down, Defensiv-Foul gibt Yards/automatisches First Down."""
+    from gridiron import franchise as F
+
+    # Roll wirft mit Sicherheit eine Strafe, wenn rate hoch genug
+    class _Always:
+        def __init__(self, seq):
+            self.seq = list(seq); self.i = 0
+        def random(self):
+            v = self.seq[self.i % len(self.seq)]; self.i += 1; return v
+
+    # Pre-Snap (False Start): kein Play, Down bleibt, Distanz +5, Feldposition nach hinten
+    g = {"ytz": 60.0, "dist": 10.0, "down": 2, "q": 1, "score": [0, 0], "log": []}
+    pen = {"name": "False Start", "side": "off", "yards": 5, "auto_first": False, "pre_snap": True, "spot": False}
+    off = {"name": "Adler"}
+    accepted = F._apply_penalty(g, pen, {"turnover": False, "yards": 4}, 4, False, off, True)
+    assert accepted and g["down"] == 2 and g["dist"] == 15.0 and g["ytz"] == 65.0
+
+    # Defensive Holding: +5 Yard, automatisches First Down
+    g2 = {"ytz": 60.0, "dist": 8.0, "down": 3, "q": 1, "score": [0, 0], "log": []}
+    pen2 = {"name": "Defensive Holding", "side": "def", "yards": 5, "auto_first": True, "pre_snap": False, "spot": False}
+    accepted2 = F._apply_penalty(g2, pen2, {"turnover": False, "yards": 2}, 2, False, off, True)
+    assert accepted2 and g2["down"] == 1 and g2["dist"] == 10.0 and g2["ytz"] == 55.0
+
+    # Offense lehnt Defensiv-Strafe ab, wenn das Play mehr brachte (großer Lauf, kein Auto-First)
+    g3 = {"ytz": 60.0, "dist": 5.0, "down": 1, "q": 1, "score": [0, 0], "log": []}
+    pen3 = {"name": "Offside (Defense)", "side": "def", "yards": 5, "auto_first": False, "pre_snap": False, "spot": False}
+    accepted3 = F._apply_penalty(g3, pen3, {"turnover": False, "yards": 20}, 20, False, off, True)
+    assert accepted3 is False and g3["ytz"] == 60.0      # abgelehnt -> unverändert, Play zählt
+
+    # _roll_penalty: rate=1 liefert immer, rate=0 nie
+    assert F._roll_penalty(_Always([0.0]), rate=1.0) is not None
+    assert F._roll_penalty(_Always([0.99]), rate=0.13) is None
+
+
 def test_random_playcalls_and_philly(tmp_path):
     """Eigene Plays: 4 zufällige Offense-Calls, 4 Coverages; Philly Special genau 1×."""
     from gridiron import franchise as F
