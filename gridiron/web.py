@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v26-flagfix"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v27-mobile"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -115,6 +115,9 @@ _STYLE = """
   .tvmid .qn{font-size:14px} .tvfield{height:58px} .tvfield .ez{width:24px;font-size:10px}
   .optgrid{grid-template-columns:1fr 1fr;gap:7px} .optbtn{padding:9px 10px;font-size:12.5px}
   .dd{padding:9px 11px;font-size:13px} .dd .mut{font-size:11px}
+  /* Anlagen-Hub: Karte größer nutzen, Ausbau-Button bricht sauber um */
+  .hubcard{padding:12px} .hubcard .note{font-size:12px;margin-bottom:4px} .complex{margin-top:8px}
+  .facpanel{flex-wrap:wrap;gap:8px;padding:11px 12px} .facpanel>div:last-child{text-align:left;width:100%} .facpanel>div:last-child button{width:100%}
  }
 """
 
@@ -1319,11 +1322,11 @@ function _facBuilding(f){const sel=(_selFac===f.key);let g;
  if(f.k==='field')g=_isoField(f);else if(f.k==='stadium')g=_isoStadium(f);else if(f.k==='kick')g=_isoGoal(f);else g=_isoBuilding(f);
  return '<g class="facb'+(sel?' sel':'')+'" data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+g+'</g>';}
 // Beschriftung getrennt — wird ganz oben gezeichnet, damit kein Gebäude sie verdeckt
-function _facLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=f.name,w=Math.max(54,nm.length*6.1+16),sel=(_selFac===f.key);
+function _facLabel(f){const lp=_iso(f.gx+f.w/2,f.gy+f.d),nm=f.name,w=Math.max(60,nm.length*6.8+18),sel=(_selFac===f.key);
  return '<g data-k="'+f.key+'" onclick="selFac(this.dataset.k)" style="cursor:pointer">'+
-   '<rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="26" rx="7" fill="#0a130d" fill-opacity=".78" stroke="'+(sel?(_ACC[f.k]||'#19e08f'):'#ffffff')+'" stroke-opacity="'+(sel?'.9':'.08')+'"/>'+
-   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+15.5).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="800" fill="#eef4ef" style="paint-order:stroke" stroke="#06140d" stroke-width="2.5">'+esc(nm)+'</text>'+
-   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+26).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+(sel?(_ACC[f.k]||'#9ad17a'):'#9fb0a8')+'">'+(f.rating?f.rating+' OVR':'Stufe '+f.lvl)+'</text></g>';}
+   '<rect x="'+(lp[0]-w/2).toFixed(1)+'" y="'+(lp[1]+4).toFixed(1)+'" width="'+w.toFixed(1)+'" height="30" rx="8" fill="#0a130d" fill-opacity=".82" stroke="'+(sel?(_ACC[f.k]||'#19e08f'):'#ffffff')+'" stroke-opacity="'+(sel?'.9':'.1')+'"/>'+
+   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+17).toFixed(1)+'" text-anchor="middle" font-size="12.5" font-weight="800" fill="#eef4ef" style="paint-order:stroke" stroke="#06140d" stroke-width="2.8">'+esc(nm)+'</text>'+
+   '<text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]+29).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="700" fill="'+(sel?(_ACC[f.k]||'#9ad17a'):'#a6b6ad')+'">'+(f.rating?f.rating+' OVR':'Stufe '+f.lvl)+'</text></g>';}
 function _complexSVG(v){
  // Boden mit Verlauf + Plaza-Wege + Parkplatz
  let s='<defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1810"/><stop offset="1" stop-color="#0a120c"/></linearGradient><radialGradient id="ggrass" cx="0.5" cy="0.42" r="0.7"><stop offset="0" stop-color="#1c4029"/><stop offset="1" stop-color="#143020"/></radialGradient></defs>'+
@@ -1360,7 +1363,7 @@ function _complexSVG(v){
  dr.sort((a,b)=>a[0]-b[0]);
  // Labels zuletzt, von hinten nach vorne, immer über den Gebäuden
  const labels=list.slice().sort((a,b)=>(a.gy+a.d)-(b.gy+b.d)).map(_facLabel).join('');
- return '<svg class="complex" viewBox="0 0 600 384" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+labels+'</svg>';}
+ return '<svg class="complex" viewBox="92 30 460 300" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+labels+'</svg>';}
 function _facPanelHTML(v){const list=_facList(v);const f=list.find(x=>x.key===_selFac)||list[0];if(!f)return '';
  return '<div class="facpanel"><div style="flex:1"><div class="fpn">'+esc(f.name)+'</div><div class="hbe">'+esc(f.eff)+'</div></div>'+
    '<div style="text-align:right;flex:none">'+(f.rating?'<span class="hblvl">'+f.rating+' OVR</span>':_dots(f.lvl,5))+
