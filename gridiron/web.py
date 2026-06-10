@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v21-isodetail"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v22-realfig"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -660,11 +660,21 @@ const _ppos={};
 function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p.y);
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx+' '+sy+')');
  const fig=el('g',{}); fig.setAttribute('class','fig');
- if(o&&o.target){const ring=el('circle',{cx:0,cy:0,r:10.5,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.9,'class':'pulse'});fig.appendChild(ring);}
- fig.appendChild(el('ellipse',{cx:0,cy:1.5,rx:6,ry:4.2,fill:color,stroke:'#06140d','stroke-width':1.3}));        // Schultern
- fig.appendChild(el('circle',{cx:0,cy:-3.5,r:3.1,fill:color,stroke:'#06140d','stroke-width':1.3}));              // Helm
- fig.appendChild(el('line',{x1:-2,y1:-5,x2:2,y2:-5,stroke:'#06140d','stroke-width':1}));                          // Facemask
- const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:3.5,'text-anchor':'middle','font-size':6.2,fill:'#03130c','font-weight':800});t.textContent=lbl;fig.appendChild(t);}
+ const f=(id&&id[0]==='d')?-1:1;                       // Blickrichtung: Offense nach oben, Defense nach unten
+ const hy=-4*f,gy=hy-f,gcy=hy-3*f,fmy=hy-2.4*f,fmu=hy-1.2*f,fmd=hy-3.6*f;
+ if(o&&o.target)fig.appendChild(el('circle',{cx:0,cy:0,r:10.5,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.9,'class':'pulse'}));
+ fig.appendChild(el('ellipse',{cx:0,cy:3.6,rx:6.8,ry:2.5,fill:'#03100a',opacity:.32}));                          // Schatten
+ fig.appendChild(el('ellipse',{cx:-5.5,cy:1.4,rx:2,ry:2.9,fill:color,stroke:'#06140d','stroke-width':1}));       // Arm links
+ fig.appendChild(el('ellipse',{cx:5.5,cy:1.4,rx:2,ry:2.9,fill:color,stroke:'#06140d','stroke-width':1}));        // Arm rechts
+ fig.appendChild(el('ellipse',{cx:0,cy:1.3,rx:6.2,ry:4.4,fill:color,stroke:'#06140d','stroke-width':1.3}));      // Schulterpolster/Trikot
+ fig.appendChild(el('ellipse',{cx:0,cy:0.2,rx:5,ry:2.3,fill:'#ffffff',opacity:.13}));                            // Polster-Glanz
+ fig.appendChild(el('line',{x1:0,y1:-1.4,x2:0,y2:3.4,stroke:'#06140d','stroke-width':.7,opacity:.45}));          // Trikot-Naht
+ fig.appendChild(el('circle',{cx:0,cy:hy,r:3.2,fill:color,stroke:'#06140d','stroke-width':1.3}));                // Helm
+ fig.appendChild(el('path',{d:'M-2 '+gy+' Q0 '+gcy+' 2 '+gy,fill:'none',stroke:'#ffffff','stroke-width':1,opacity:.4})); // Helm-Glanz
+ fig.appendChild(el('line',{x1:-2.3,y1:fmy,x2:2.3,y2:fmy,stroke:'#0a1a12','stroke-width':1}));                   // Facemask quer
+ fig.appendChild(el('line',{x1:-1.3,y1:fmu,x2:-1.3,y2:fmd,stroke:'#0a1a12','stroke-width':.6}));                 // Facemask-Streben
+ fig.appendChild(el('line',{x1:1.3,y1:fmu,x2:1.3,y2:fmd,stroke:'#0a1a12','stroke-width':.6}));
+ const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:2.9,'text-anchor':'middle','font-size':5.6,fill:'#03130c','font-weight':800});t.textContent=lbl;fig.appendChild(t);}
  g.appendChild(fig); svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
 function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;g.setAttribute('transform','translate('+mapX(x)+' '+mapY(y)+')');_ppos[P+id]=[x,y];}
@@ -1253,7 +1263,15 @@ function _trainPlayers(f){const c=_iso(f.gx+f.w/2,f.gy+f.d/2),ps=[[-46,-6,'A',0]
  // Trainingsschlitten + Hütchen
  let extra='<rect x="'+(c[0]-78).toFixed(1)+'" y="'+(c[1]-4).toFixed(1)+'" width="14" height="7" rx="1.5" fill="#c2452f"/>';
  [[-60,12],[-40,14],[-20,12],[0,14]].forEach(o=>{extra+='<path d="M'+(c[0]+o[0])+' '+(c[1]+o[1])+' l3 5 l-6 0 Z" fill="#e9b949"/>';});
- return extra+ps.map(p=>'<g transform="translate('+(c[0]+p[0]).toFixed(1)+' '+(c[1]+p[1]).toFixed(1)+')"><ellipse cy="3" rx="3" ry="1.6" fill="#06140d" fill-opacity=".3"/><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s"><ellipse cy="1" rx="2.6" ry="1.9" fill="#19e08f" stroke="#06140d" stroke-width=".6"/><circle cy="-1.8" r="1.5" fill="#19e08f" stroke="#06140d" stroke-width=".6"/></g></g>').join('');}
+ const jer=['#19e08f','#5fa8ff','#e9b949','#e25b5b','#b66be0','#19e08f'];
+ return extra+ps.map((p,i)=>{const col=jer[i%jer.length];
+   return '<g transform="translate('+(c[0]+p[0]).toFixed(1)+' '+(c[1]+p[1]).toFixed(1)+')"><ellipse cy="3" rx="3" ry="1.6" fill="#06140d" fill-opacity=".3"/><g class="tp" style="animation:drill'+p[2]+' '+(2.1+p[3]).toFixed(1)+'s ease-in-out infinite '+p[3]+'s">'+
+     '<ellipse cx="-2.3" cy="1.2" rx=".9" ry="1.5" fill="'+col+'"/><ellipse cx="2.3" cy="1.2" rx=".9" ry="1.5" fill="'+col+'"/>'+   // Arme
+     '<ellipse cy="1" rx="2.7" ry="2" fill="'+col+'" stroke="#06140d" stroke-width=".6"/>'+                                          // Trikot/Schultern
+     '<ellipse cy="0.2" rx="2" ry=".9" fill="#ffffff" fill-opacity=".18"/>'+                                                        // Glanz
+     '<circle cy="-2" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+                                                  // Helm/Kopf
+     '<path d="M-1.4 -2.7 Q0 -3.9 1.4 -2.7" fill="none" stroke="#06140d" stroke-width=".5"/>'+                                       // Facemask
+     '</g></g>';}).join('');}
 function _isoTree(gx,gy){const p=_iso(gx,gy);return '<ellipse cx="'+(p[0]+2).toFixed(1)+'" cy="'+(p[1]+1).toFixed(1)+'" rx="9" ry="3.4" fill="#040c07" fill-opacity=".3"/><rect x="'+(p[0]-1.5).toFixed(1)+'" y="'+(p[1]-10).toFixed(1)+'" width="3" height="10" fill="#5a3a1e"/><ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-15).toFixed(1)+'" rx="9" ry="10" fill="#1d6b3f"/><ellipse cx="'+(p[0]-3).toFixed(1)+'" cy="'+(p[1]-18).toFixed(1)+'" rx="6" ry="7" fill="#2aa257"/><ellipse cx="'+(p[0]+4).toFixed(1)+'" cy="'+(p[1]-13).toFixed(1)+'" rx="4.5" ry="5" fill="#22864a"/>';}
 function _isoLamp(gx,gy){const p=_iso(gx,gy);return '<rect x="'+(p[0]-1).toFixed(1)+'" y="'+(p[1]-16).toFixed(1)+'" width="2" height="16" fill="#46525c"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-17).toFixed(1)+'" r="6.5" fill="#ffe9a8" fill-opacity=".18"/><circle cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-17).toFixed(1)+'" r="2.6" fill="#ffe9a8"/>';}
 function _isoBush(gx,gy){const p=_iso(gx,gy);return '<ellipse cx="'+p[0].toFixed(1)+'" cy="'+(p[1]-2).toFixed(1)+'" rx="6" ry="4.4" fill="#1d6b3f"/><ellipse cx="'+(p[0]-2.5).toFixed(1)+'" cy="'+(p[1]-4).toFixed(1)+'" rx="4" ry="3.2" fill="#2aa257"/>';}
