@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v23-citylayout"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v24-routerun"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -731,6 +731,10 @@ const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5
 function _spd(p){return SPD[p]||8;}
 function _toward(o,tx,ty,mx){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx,dy);if(d<=mx||d<1e-6){o.x=tx;o.y=ty;}else{o.x+=dx/d*mx;o.y+=dy/d*mx;}}
 function _advance(o,mx){if(!o.route)return;let b=mx;while(b>0&&o.ri<o.route.length){const wp=o.route[o.ri],dx=wp[0]-o.x,dy=wp[1]-o.y,d=Math.hypot(dx,dy);if(d<=b){o.x=wp[0];o.y=wp[1];o.ri++;b-=d;}else{o.x+=dx/d*b;o.y+=dy/d*b;b=0;}}}
+// läuft die Route ab UND danach in deren Endrichtung weiter (kein Stehenbleiben am letzten Wegpunkt)
+function _routeRun(o,mx,fwd){if(!o.route)return;_advance(o,mx);
+ if(o.ri>=o.route.length){if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=-1;dd=1;}o._dir=[dx/dd,dy/dd];}
+   o.x+=o._dir[0]*mx*(fwd||1);o.y+=o._dir[1]*mx*(fwd||1);}}
 function playAnim(svg,d,res,onDone){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
  res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
@@ -769,20 +773,25 @@ function playAnim(svg,d,res,onDone){
        else _toward(o,o.x+(lane-o.x)*0.2,Math.min(3.5,o.y+2.4),M('OL'));}
      return;}
    if(o===tgt){
-     if(isPass){if(!caught)_advance(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}
+     if(isPass){if(!caught)_routeRun(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}  // läuft die Route weiter, bleibt nicht am Ende stehen
      else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
      if(!isPass||caught){const nd=D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-o.x,q.y-o.y)),9);   // läuft die optimale Linie (durchs Loch, dann gerade zum TD)
        if(nd<1.7&&el>(o._jukeT||-9)+0.7){o._jukeT=el;o.x+=(o.x<=C?1.3:-1.3);if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // nur bei nahem Gegner ein Ausweichschritt + Spin
      return;}
-   if(o.route){_advance(o,M(o.pos));
-     if(o.ri>=o.route.length&&!caught){o.y+=M(o.pos)*0.45;o.x+=(Math.sin((el+o.i)*2.2))*M(o.pos)*0.25;}}  // weiter freilaufen bis zum Wurf
+   if(o.route&&!caught)_routeRun(o,M(o.pos)*0.94);   // Mitläufer laufen ihre Routen voll aus und danach weiter (kein Einfrieren)
   });
   // Ball / Wurf
   if(isPass&&kind!=='sack'){
-   const tgtDone=tgt&&tgt.ri>=(tgt.route?tgt.route.length:1);
-   if(!thrown&&(tgtDone||el>1.7)){thrown=true;tAt=now;bp=[qb.x,qb.y];}
-   if(thrown&&!arrived){const dest=intD?[intD.x,intD.y]:catchPt;const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],26*dt);bp=[o2.x,o2.y];
-     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.5){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
+   // QB wirft, sobald der Receiver frei ist (kein Verteidiger nah), nicht erst am Routenende.
+   const openDist=tgt?D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-tgt.x,q.y-tgt.y)),9):9;
+   const downfield=tgt?Math.abs(tgt.y-tgt.sy):0;                           // wie weit der Receiver schon gelaufen ist
+   const reach=tgt?Math.max(2,Math.abs(catchPt[1]-tgt.sy)):2;              // Tiefe bis zum Fangpunkt
+   const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
+   const open=tgt&&openDist>=2.0&&downfield>=Math.max(1.4,reach*0.55)&&el>0.55;  // frei UND Route zu gut der Hälfte gelaufen
+   if(!thrown&&(open||(qbPressed&&el>0.7)||el>2.3)){thrown=true;tAt=now;bp=[qb.x,qb.y];}
+   if(thrown&&!arrived){const dest=intD?[intD.x,intD.y]:(kind==='complete'&&tgt?[tgt.x,tgt.y]:catchPt);  // Ball peilt den laufenden Receiver an (Vorlage)
+     const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],26*dt);bp=[o2.x,o2.y];
+     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.7){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
    else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[intD.x,intD.y];}
   }
   // Defense (geschwindigkeitsbasiert)
