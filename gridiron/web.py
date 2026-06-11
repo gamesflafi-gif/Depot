@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v64-fumble"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v65-figures"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -806,32 +806,49 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  svg.appendChild(el('ellipse',{id:P+'_pball',cx:mapX(bx),cy:mapY(by),rx:4,ry:2.5,fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:preSnap?1:0}));
 }
 const _ppos={};
+// Hex-Farbe aufhellen/abdunkeln (für plastische Schattierung ohne Verläufe)
+function _shade(c,a){c=(''+(c||'#888888')).replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+ const f=i=>{const v=Math.max(0,Math.min(255,parseInt(c.substr(i,2),16)+a));return v.toString(16).padStart(2,'0');};
+ return '#'+f(0)+f(2)+f(4);}
+/* Detaillierte Spielerfigur (Top-Down): Schulterpolster mit Plastik-Schattierung, Arme & Handschuhe,
+   Helm mit Glanz, Mittelstreifen und Facemask-Käfig, Cleats. Figur zeigt immer nach oben; die
+   .face-Gruppe dreht sie in Laufrichtung (Defense im Stand um 180° gedreht). */
 function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p.y);
+ const side=(id&&id[0]==='d')?-1:1;
+ const edge=_shade(color,-92),hel=_shade(color,-26),sleeve=_shade(color,-14),glove=_shade(color,92),stripe=_shade(color,104),cleat=_shade(color,-40),fm='#10191333';
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx+' '+sy+')');
- g.appendChild(el('ellipse',{cx:0,cy:3.6,rx:6.8,ry:2.5,fill:'#03100a',opacity:.32}));   // Schatten bleibt flach (außerhalb der Dreh-Gruppe)
- const fc=el('g',{}); fc.setAttribute('class','face');                                   // Blickrichtungs-Gruppe (dreht in Laufrichtung)
+ g.appendChild(el('ellipse',{cx:0,cy:4.0,rx:6.9,ry:2.5,fill:'#03100a',opacity:.34}));   // Schatten bleibt flach
+ const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate('+(side<0?180:0)+')');   // Blickrichtung
  const fig=el('g',{}); fig.setAttribute('class','fig');                                  // Animations-Gruppe (pop/spin/down/cel)
- const f=(id&&id[0]==='d')?-1:1;                       // Grund-Blickrichtung: Offense nach oben, Defense nach unten
- const hy=-4*f,gy=hy-f,gcy=hy-3*f,fmy=hy-2.4*f,fmu=hy-1.2*f,fmd=hy-3.6*f;
- if(o&&o.target)fig.appendChild(el('circle',{cx:0,cy:0,r:10.5,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.9,'class':'pulse'}));
- fig.appendChild(el('ellipse',{cx:-5.5,cy:1.4,rx:2,ry:2.9,fill:color,stroke:'#06140d','stroke-width':1}));       // Arm links
- fig.appendChild(el('ellipse',{cx:5.5,cy:1.4,rx:2,ry:2.9,fill:color,stroke:'#06140d','stroke-width':1}));        // Arm rechts
- fig.appendChild(el('ellipse',{cx:0,cy:1.3,rx:6.2,ry:4.4,fill:color,stroke:'#06140d','stroke-width':1.3}));      // Schulterpolster/Trikot
- fig.appendChild(el('ellipse',{cx:0,cy:0.2,rx:5,ry:2.3,fill:'#ffffff',opacity:.13}));                            // Polster-Glanz
- fig.appendChild(el('line',{x1:0,y1:-1.4,x2:0,y2:3.4,stroke:'#06140d','stroke-width':.7,opacity:.45}));          // Trikot-Naht
- fig.appendChild(el('circle',{cx:0,cy:hy,r:3.2,fill:color,stroke:'#06140d','stroke-width':1.3}));                // Helm
- fig.appendChild(el('path',{d:'M-2 '+gy+' Q0 '+gcy+' 2 '+gy,fill:'none',stroke:'#ffffff','stroke-width':1,opacity:.4})); // Helm-Glanz
- fig.appendChild(el('line',{x1:-2.3,y1:fmy,x2:2.3,y2:fmy,stroke:'#0a1a12','stroke-width':1}));                   // Facemask quer
- fig.appendChild(el('line',{x1:-1.3,y1:fmu,x2:-1.3,y2:fmd,stroke:'#0a1a12','stroke-width':.6}));                 // Facemask-Streben
- fig.appendChild(el('line',{x1:1.3,y1:fmu,x2:1.3,y2:fmd,stroke:'#0a1a12','stroke-width':.6}));
+ if(o&&o.target)fig.appendChild(el('circle',{cx:0,cy:0,r:10.8,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.9,'class':'pulse'}));
+ fig.appendChild(el('ellipse',{cx:-1.9,cy:4.7,rx:1.05,ry:1.7,fill:cleat,stroke:edge,'stroke-width':.5}));          // Cleats (hinten)
+ fig.appendChild(el('ellipse',{cx:1.9,cy:4.7,rx:1.05,ry:1.7,fill:cleat,stroke:edge,'stroke-width':.5}));
+ fig.appendChild(el('ellipse',{cx:-5.7,cy:1.1,rx:1.95,ry:3.15,fill:sleeve,stroke:edge,'stroke-width':.7}));        // Arme/Ärmel
+ fig.appendChild(el('ellipse',{cx:5.7,cy:1.1,rx:1.95,ry:3.15,fill:sleeve,stroke:edge,'stroke-width':.7}));
+ fig.appendChild(el('path',{d:'M-6.2 2.3 C-6.7 -1.3 -4.2 -3.0 0 -3.0 C4.2 -3.0 6.7 -1.3 6.2 2.3 C6.0 4.6 3.2 5.2 0 5.2 C-3.2 5.2 -6.0 4.6 -6.2 2.3 Z',fill:color,stroke:edge,'stroke-width':1.2}));   // Schulterpolster
+ fig.appendChild(el('ellipse',{cx:0,cy:-0.7,rx:3.7,ry:2.0,fill:'#ffffff',opacity:.17}));                          // Brust-Highlight
+ fig.appendChild(el('ellipse',{cx:0,cy:3.5,rx:4.9,ry:1.7,fill:'#000000',opacity:.20}));                           // Rücken-Schatten
+ fig.appendChild(el('path',{d:'M-3.6 -2.1 Q0 -1.1 3.6 -2.1',fill:'none',stroke:edge,'stroke-width':.7,opacity:.5}));   // Pad-Trennung
+ fig.appendChild(el('line',{x1:0,y1:-1.0,x2:0,y2:4.6,stroke:edge,'stroke-width':.6,opacity:.4}));                 // Mittelnaht
+ fig.appendChild(el('ellipse',{cx:-5.1,cy:-1.9,rx:1.25,ry:1.5,fill:glove,stroke:edge,'stroke-width':.5}));        // Handschuhe (vorne)
+ fig.appendChild(el('ellipse',{cx:5.1,cy:-1.9,rx:1.25,ry:1.5,fill:glove,stroke:edge,'stroke-width':.5}));
+ fig.appendChild(el('ellipse',{cx:0,cy:-2.5,rx:1.8,ry:1.2,fill:hel,stroke:edge,'stroke-width':.5}));              // Hals
+ fig.appendChild(el('circle',{cx:0,cy:-4.4,r:3.5,fill:hel,stroke:edge,'stroke-width':1.2}));                      // Helm
+ fig.appendChild(el('ellipse',{cx:-1.1,cy:-5.6,rx:1.5,ry:1.0,fill:'#ffffff',opacity:.5}));                        // Helm-Glanz
+ fig.appendChild(el('path',{d:'M0 -7.8 L0 -1.7',fill:'none',stroke:stripe,'stroke-width':1.0,opacity:.85}));      // Mittelstreifen
+ fig.appendChild(el('path',{d:'M-2.6 -6.1 Q0 -8.5 2.6 -6.1',fill:'none',stroke:fm,'stroke-width':.9}));           // Facemask: Querbügel
+ fig.appendChild(el('path',{d:'M-2.1 -5.0 Q0 -7.1 2.1 -5.0',fill:'none',stroke:fm,'stroke-width':.8}));
+ fig.appendChild(el('line',{x1:0,y1:-7.7,x2:0,y2:-4.7,stroke:fm,'stroke-width':.8}));                             // Facemask: Streben
+ fig.appendChild(el('line',{x1:-1.45,y1:-7.1,x2:-1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
+ fig.appendChild(el('line',{x1:1.45,y1:-7.1,x2:1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
  fc.appendChild(fig); g.appendChild(fc);
- const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:2.9,'text-anchor':'middle','font-size':5.6,fill:'#03130c','font-weight':800});t.textContent=lbl;g.appendChild(t);}  // Label aufrecht (dreht nicht mit)
+ const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:2.7,'text-anchor':'middle','font-size':5.2,fill:'#ffffff','font-weight':800,stroke:'#0a140f','stroke-width':.7,'paint-order':'stroke'});t.textContent=lbl;g.appendChild(t);}  // Label aufrecht & lesbar
  svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
-// Figur dreht weich in ihre Laufrichtung (Offense Grundausrichtung oben, Defense unten)
-function faceP(P,id,vx,vy,side,o){if(Math.hypot(vx,vy)<0.7)return;
- let a=Math.atan2(-vy,vx)*180/Math.PI+(side>0?90:-90);
- if(o._fa==null)o._fa=a;else{let dd=((a-o._fa+540)%360)-180;o._fa+=dd*0.3;}
+// Figur dreht weich in ihre Laufrichtung (alle Figuren zeichnen nach oben -> einheitliche Formel)
+function faceP(P,id,vx,vy,o){if(Math.hypot(vx,vy)<0.7)return;
+ const a=Math.atan2(-vy,vx)*180/Math.PI+90;
+ if(o._fa==null)o._fa=a;else{const dd=((a-o._fa+540)%360)-180;o._fa+=dd*0.3;}
  const g=$(P+'_pl_'+id);if(!g)return;const fcel=g.querySelector('.face');if(fcel)fcel.setAttribute('transform','rotate('+o._fa.toFixed(1)+')');}
 // Kleine 2D-Figur (Sideline-Crew / Schiedsrichter)
 function _crewFig(x,y,vest,acc){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.3" ry="3" fill="'+vest+'" stroke="#06140d" stroke-width=".6"/><circle cy="-2.4" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+(acc||'')+'</g>';}
@@ -931,8 +948,8 @@ function playAnim(svg,d,res,onDone){
  const OFFSK={X:1,Z:1,SL:1,TE:1,RB:1,FB:1},DEFCV={CB:1,S:1,DB:1};
  const sf=pos=>OFFSK[pos]?SP.off:(DEFCV[pos]?SP.def:1);
  let handoffDone=isPass;                                       // bei Läufen erst nach dem Handoff trägt der RB den Ball
- const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry}));
- const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop}));
+ const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry,_fa:0}));
+ const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop,_fa:180}));
  const qb=O.find(o=>o.pos==='QB'),tgt=O.find(o=>o.target||o.carry),ols=O.filter(o=>o.pos==='OL');
  // Ballträger-Route auf den tatsächlichen Raumgewinn kürzen (Completion: Fang dann YAC; Lauf: bis Yards, auch negativ)
  if((kind==='complete'||kind==='run')&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1];
@@ -1029,8 +1046,8 @@ function playAnim(svg,d,res,onDone){
   O.forEach(o=>{o.x=Math.max(1.5,Math.min(51.8,o.x));o.y=Math.max(-7.5,Math.min(25.5,o.y));});   // im Feld bleiben (kein Aus, keine Endlinie)
   D.forEach(p=>{p.x=Math.max(1.5,Math.min(51.8,p.x));p.y=Math.max(-7.5,Math.min(25.5,p.y));});
   // schreiben
-  O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,1,o);});
-  D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,-1,p);});
+  O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,o);});
+  D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,p);});
   if(ball){
    if(fumbled){const fb=(recovered&&recoverer)?[recoverer.x,recoverer.y]:fumbleSpot;const fx=mapX(fb[0]),fy=mapY(fb[1]);   // loser Ball trudelt, dann beim Eroberer
      ball.setAttribute('opacity',1);ball.setAttribute('cx',fx);ball.setAttribute('cy',fy);ball.setAttribute('transform','rotate('+((el*780)%360).toFixed(0)+' '+fx+' '+fy+')');}
