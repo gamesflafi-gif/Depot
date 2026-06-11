@@ -125,21 +125,29 @@ _PASS_ROUTES = {
 }
 
 # Aufstellungen: pro Play eine echte Formation (verschiebt Skill-Spieler/QB-Tiefe).
+# "FB"-Sets setzen den Slot-Receiver als Fullback in den Backfield (Lead-Blocker).
 FORMATIONS = {
     "Shotgun":    {},
     "Singleback": {"QB": (26.65, -1.6)},
     "I-Form":     {"QB": (26.65, -1.6), "RB": (26.65, -7.6)},
+    "I-Form FB":  {"QB": (26.65, -1.6), "RB": (26.65, -7.6), "SL": (26.65, -3.8)},
+    "Pistol FB":  {"QB": (26.65, -4.0), "RB": (26.65, -7.2), "SL": (26.65, -2.0)},
     "Trips Re":   {"X": (5.0, 0.0), "TE": (39.0, -0.6), "SL": (44.0, -0.6), "Z": (49.0, 0.0)},
     "Empty":      {"QB": (26.65, -5.0), "RB": (11.0, -0.4)},
 }
-_PASS_FORMS = ["Shotgun", "Trips Re", "Empty", "Singleback"]
-_RUN_FORMS = ["Singleback", "I-Form", "Shotgun"]
+# Shotgun ist in beiden Pools, damit es bei jedem Play untergemischt werden kann.
+_PASS_FORMS = ["Shotgun", "Trips Re", "Empty", "Singleback", "Shotgun"]
+_RUN_FORMS = ["Shotgun", "Singleback", "I-Form", "I-Form FB", "Pistol FB"]
 
 
-def _formation(concept: str, is_pass: bool) -> tuple[str, dict]:
-    """Deterministische, zum Konzept passende Formation (gleiches Konzept -> gleicher Look)."""
+def _is_fb(fname: str) -> bool:
+    return fname.endswith("FB")
+
+
+def _formation(concept: str, is_pass: bool, variant: int = 0) -> tuple[str, dict]:
+    """Zum Konzept passende Formation; variant mischt pro Snap andere Looks (inkl. Shotgun) unter."""
     forms = _PASS_FORMS if is_pass else _RUN_FORMS
-    name = forms[sum(ord(c) for c in concept) % len(forms)]
+    name = forms[(sum(ord(c) for c in concept) + int(variant)) % len(forms)]
     return name, FORMATIONS[name]
 
 
@@ -235,15 +243,16 @@ def _defense(coverage: str) -> list[dict]:
     return out
 
 
-def diagram(concept: str, coverage: str) -> dict:
+def diagram(concept: str, coverage: str, variant: int = 0) -> dict:
     if coverage not in COVERAGES:
         raise ValueError(f"Unbekannte Coverage: {coverage}")
     is_pass = concept in PASS_CONCEPTS
     if not is_pass and concept not in RUN_CONCEPTS:
         raise ValueError(f"Unbekanntes Konzept: {concept}")
 
-    fname, fov = _formation(concept, is_pass)
+    fname, fov = _formation(concept, is_pass, variant)
     pos = {**POS, **fov}                                  # Aufstellung dieses Plays
+    fb = (not is_pass) and _is_fb(fname)                  # Fullback-Lauf (Slot als Lead-Blocker)
 
     offense: list[dict] = []
     for k in OL:
@@ -267,11 +276,18 @@ def diagram(concept: str, coverage: str) -> dict:
         kind = "pass"
     else:
         run = _run_path(concept, pos["RB"])
-        # RB läuft den Pfad, andere Skill-Spieler blocken/stehen
+        hole = run["path"][-1]
+        # RB läuft den Pfad, andere Skill-Spieler blocken/stehen; im FB-Set führt der Slot durchs Loch
         for k in SKILL:
             if k == "RB":
                 offense.append({"pos": "RB", "x": pos[k][0], "y": pos[k][1],
                                 "route": run["path"], "rname": "run", "carry": True})
+            elif fb and k == "SL":
+                lead = [[round(_clampx(pos[k][0]), 2), round(pos[k][1], 2)],
+                        [round(_clampx((pos[k][0] + hole[0]) / 2), 2), 0.8],
+                        [round(_clampx(hole[0]), 2), round(min(hole[1], 4.0), 2)]]
+                offense.append({"pos": "FB", "x": pos[k][0], "y": pos[k][1],
+                                "route": lead, "rname": "lead"})
             else:
                 offense.append({"pos": k, "x": pos[k][0], "y": pos[k][1], "route": None})
         ball_target = run["path"][-1]
