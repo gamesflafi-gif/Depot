@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v59-ratings"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v60-movement"       # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -892,6 +892,17 @@ function curPos(P,id){return _ppos[P+id]||null;}
 const SPD={QB:7.4,RB:9.0,WR:9.6,TE:8.4,OL:6.0,DL:6.6,DE:6.9,DT:6.0,LB:8.5,CB:9.5,DB:9.4,S:8.9};
 function _spd(p){return SPD[p]||8;}
 function _toward(o,tx,ty,mx){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx,dy);if(d<=mx||d<1e-6){o.x=tx;o.y=ty;}else{o.x+=dx/d*mx;o.y+=dy/d*mx;}}
+// Geschwindigkeits-basiertes Steuern: beschleunigt/dreht weich auf das Ziel zu (Impuls -> keine ruckartigen Knicke)
+function steer(o,tx,ty,maxspd,dt,resp){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx,dy);
+ let dvx=0,dvy=0;if(d>1e-4){const s=Math.min(maxspd,d/dt);dvx=dx/d*s;dvy=dy/d*s;}
+ const k=Math.min(1,(resp||8)*dt);o.vx=(o.vx||0)+(dvx-(o.vx||0))*k;o.vy=(o.vy||0)+(dvy-(o.vy||0))*k;
+ o.x+=o.vx*dt;o.y+=o.vy*dt;}
+// Route weich ablaufen (an jedem Break abbremsen/cutten) und danach in Endrichtung weiter, ohne ins Aus
+function routeStep(o,mx,dt,rp){if(!o.route)return;
+ if(o.ri<o.route.length){const wp=o.route[o.ri];steer(o,wp[0],wp[1],mx(o.pos),dt,rp(o.pos));if(Math.hypot(wp[0]-o.x,wp[1]-o.y)<0.7)o.ri++;}
+ else{if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=1;dd=1;}o._dir=[dx/dd,dy/dd];}
+   let dx=o._dir[0],dy=o._dir[1];if((o.x<6&&dx<0)||(o.x>47.3&&dx>0)){dx=(o.x>26.65?-0.3:0.3);dy=Math.abs(dy)+0.7;}
+   const dd=Math.hypot(dx,dy)||1;steer(o,o.x+dx/dd*5,o.y+dy/dd*5,mx(o.pos),dt,rp(o.pos));}}
 function _advance(o,mx){if(!o.route)return;let b=mx;while(b>0&&o.ri<o.route.length){const wp=o.route[o.ri],dx=wp[0]-o.x,dy=wp[1]-o.y,d=Math.hypot(dx,dy);if(d<=b){o.x=wp[0];o.y=wp[1];o.ri++;b-=d;}else{o.x+=dx/d*b;o.y+=dy/d*b;b=0;}}}
 // läuft die Route ab UND danach in deren Endrichtung weiter (kein Stehenbleiben am letzten Wegpunkt)
 function _routeRun(o,mx,fwd){if(!o.route)return;_advance(o,mx);
@@ -928,33 +939,38 @@ function playAnim(svg,d,res,onDone){
  const BALLSPD=23;                                  // Ballgeschwindigkeit (Yd/s) — Flug sichtbar, Receiver fängt im Lauf
  const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/BALLSPD);
- function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;const acc=Math.min(1,0.4+el*1.5);const M=p=>_spd(p)*dt*acc*sf(p);  // Beschleunigung vom Snap weg, Tempo nach Spielerwert
+ const RESP={QB:8,RB:10,WR:10.5,TE:8.5,OL:6,FB:8.5,DE:7.5,DT:6.5,LB:8.5,CB:10.5,DB:10,S:9};   // Wendigkeit je Position
+ const rp=pos=>RESP[pos]||8;
+ const rushers=D.filter(p=>p.role==='rush');
+ const olsX=ols.slice().sort((a,b)=>a.x-b.x);
+ if(isPass){const rs=rushers.slice().sort((a,b)=>a.x-b.x);     // Pass-Schutz: jeder Blocker nimmt einen Rusher (Überzahl = freier Rusher = Druck)
+   rs.forEach((r,i)=>{const o=olsX[i];if(o){r._ol=o;o._asg=r;}});}
+ function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;
+  const ramp=Math.min(1,0.34+el*1.7);                          // explosiver Antritt aus dem Stand
+  const mx=pos=>_spd(pos)*sf(pos)*ramp;                        // Maximaltempo (Yd/s) dieses Frames
   if(!isPass&&!handoffDone&&tgt&&(Math.hypot(tgt.x-qb.x,tgt.y-qb.y)<1.6||el>1.0))handoffDone=true;   // Handoff am Mesh-Punkt
-  const carrier=(kind==='complete'&&caught)?tgt:(!isPass?tgt:null);
-  // QB
-  if(isPass&&!sacked){_toward(qb,qb.sy<-3?qb.sy:(qb.sy-2.3),qb.sy-2.3,M('QB')*0.85);qb.x=C;}
-  else if(!isPass){_toward(qb,C-0.6,-3.6,M('QB')*0.7);}
-  // Offense
+  const carrier=(kind==='complete'&&caught)?tgt:(!isPass?(handoffDone?tgt:null):null);
+  const pressure=isPass&&rushers.some(r=>(!r._ol||el>1.6)&&Math.hypot(r.x-qb.x,r.y-qb.y)<2.3);   // freier/durchgebrochener Rusher
+  // ---- QB: Drop in die Pocket, Schritt nach vorn beim Wurf ----
+  if(isPass&&!sacked){const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.5);steer(qb,C,Math.max(-7.6,ty),mx('QB')*0.95,dt,rp('QB'));}
+  else if(!isPass){steer(qb,C-0.4,-3.4,mx('QB')*0.7,dt,rp('QB'));}
+  // ---- Offense: Blocker (Pocket/Run-Block), Ballträger, Routen ----
   O.forEach(o=>{if(o.pos==='QB')return;
-   if(o.pos==='OL'){const idx=ols.indexOf(o),off=idx-(ols.length-1)/2;
-     if(isPass){let r=null,bd=1e9;D.forEach(p=>{if(p.role!=='rush')return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
-       if(r){_toward(o,r.x*0.55+(C+off*1.4)*0.45,Math.max(-2.8,Math.min(-0.4,r.y-0.9)),M('OL'));}  // Blocker stellt sich goalside vor den Rusher
-       else _toward(o,C+off*1.7,-2.2,M('OL'));}
-     else{const lane=runEnd?runEnd[0]:C;  // Run-Block: nächsten Front-Verteidiger aufnehmen und vom Loch wegtreiben
-       let r=null,bd=1e9;D.forEach(p=>{if(p.role==='man'||p.drop)return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
-       if(r){const side=(r.x<=lane)?0.7:-0.7;_toward(o,r.x+side,Math.max(o.y,r.y-0.3),M('OL')*1.08);}  // an die Lade-Schulter, Verteidiger vom Loch wegdrücken
-       else _toward(o,o.x+(lane-o.x)*0.2,Math.min(3.5,o.y+2.4),M('OL'));}
+   if(o.pos==='OL'){
+     if(isPass){const r=o._asg;
+       if(r){const dx=qb.x-r.x,dy=qb.y-r.y,dd=Math.hypot(dx,dy)||1;steer(o,r.x+dx/dd*0.85,Math.max(-3.4,Math.min(-0.2,r.y+dy/dd*0.85)),mx('OL'),dt,rp('OL'));}  // goalside vor dem Rusher -> Wall
+       else{const slot=C+(olsX.indexOf(o)-(olsX.length-1)/2)*1.7;steer(o,slot,-1.9,mx('OL'),dt,rp('OL'));}}               // unbeschäftigt -> Pocket füllen
+     else{const lane=runEnd?runEnd[0]:C;let r=null,bd=1e9;D.forEach(p=>{if(p.role==='man'||p.drop)return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
+       if(r){const toLane=(r.x<=lane)?0.6:-0.6;steer(o,r.x+toLane,Math.max(o.y,r.y+0.3),mx('OL')*1.05,dt,rp('OL'));}     // an die lochnahe Schulter -> Verteidiger vom Loch wegtreiben
+       else steer(o,o.x+(lane-o.x)*0.25,Math.min(4.5,o.y+2.6),mx('OL'),dt,rp('OL'));}                                   // frei -> zum Second Level
      return;}
    if(o===tgt){
-     if(isPass){if(!caught)_routeRun(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}  // läuft die Route weiter, bleibt nicht am Ende stehen
-     else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
-     if(!isPass||caught){let near=null,nd=9;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nd){nd=dd;near=q;}});   // sucht das offene Loch: weicht zur freien Seite aus
-       if(near&&nd<1.9&&el>(o._jukeT||-9)+0.55){o._jukeT=el;
-         let dir=(near.x>o.x)?-1:1;                       // weg vom nächsten Verteidiger (in den offenen Raum)
-         if(o.x<5)dir=1;else if(o.x>48)dir=-1;            // nicht ins Seitenaus cutten
-         o.x+=dir*1.15;if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // ein sauberer Cut + Spin, kein Zickzack
+     if(isPass){if(!caught)routeStep(o,mx,dt,rp);else if(kind==='complete')steer(o,gain[0],gain[1],mx(o.pos),dt,rp(o.pos));}
+     else{routeStep(o,mx,dt,rp);if(o.route&&o.ri>=o.route.length&&runEnd)steer(o,runEnd[0],runEnd[1],mx(o.pos),dt,rp(o.pos));}
+     if((!isPass&&handoffDone)||caught){let near=null,nd=9;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nd){nd=dd;near=q;}});   // Loch lesen: weicher Cut in den freien Raum
+       if(near&&nd<2.0&&el>(o._jukeT||-9)+0.6){o._jukeT=el;let dir=(near.x>o.x)?-1:1;if(o.x<5)dir=1;else if(o.x>48)dir=-1;o.vx=(o.vx||0)+dir*3.2;if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}
      return;}
-   if(o.route&&!caught)_routeRun(o,M(o.pos)*0.94);   // Mitläufer laufen ihre Routen voll aus und danach weiter (kein Einfrieren)
+   if(o.route&&!caught)routeStep(o,mx,dt,rp);   // Mitläufer/FB-Lead laufen ihre Wege
   });
   // Ball / Wurf — fester Fangpunkt, Release so getimt, dass Ball und Receiver zusammen ankommen
   if(isPass&&kind!=='sack'){
@@ -970,30 +986,27 @@ function playAnim(svg,d,res,onDone){
      if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
    else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[intD.x,intD.y];}
   }
-  // Defense (geschwindigkeitsbasiert)
-  D.forEach(p=>{let tx,ty,mx=M(p.pos);
-   if(kind==='sack'){tx=qb.x;ty=qb.y;}
-   else if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                       // Verfolgungswinkel: leicht vor den Läufer zielen
-     const ahead=Math.min(0.34,Math.max(0,(carrier.y-p.y))/20);tx=carrier.x+(dest[0]-carrier.x)*ahead;ty=carrier.y+(dest[1]-carrier.y)*ahead;}
-   else if(p.role==='rush'){tx=qb.x+Math.sin(el*7+p.i)*0.5;ty=qb.y;mx*=0.92;}  // drückt zum QB – wird von der O-Line geblockt (Kollision)
-   else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);
-     if(r){const trail=Math.min(3,0.8+el*0.9);tx=r.x+(p.x<r.x?-0.5:0.5);ty=r.y-trail;mx*=0.95;}  // läuft hinterher -> Receiver bekommt Separation und wird frei
-     else{tx=p.x;ty=p.y;}}
-   else if(p.drop){tx=p.drop[0];ty=p.drop[1];                              // Zone: zur Landmarke, dann auf nächsten Receiver in der Zone reagieren
-     let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});
-     if(bestR){tx=p.drop[0]+(bestR.x-p.drop[0])*0.45;ty=p.drop[1]+(bestR.y-p.drop[1])*0.30;}mx*=0.85;}
-   else{tx=p.x;ty=p.y;}
-   _toward(p,tx,ty,mx);
+  // ---- Defense: Rush / Mann / Zone / Verfolgung (alles weich gesteuert) ----
+  D.forEach(p=>{const sp=mx(p.pos);
+   if(kind==='sack'){steer(p,qb.x,qb.y,sp,dt,rp(p.pos));return;}
+   if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                              // Verfolgungswinkel: leicht vor den Läufer
+     const ahead=Math.min(0.42,Math.max(0,(carrier.y-p.y))/16);steer(p,carrier.x+(dest[0]-carrier.x)*ahead,carrier.y+(dest[1]-carrier.y)*ahead,sp,dt,rp(p.pos));return;}
+   if(p.role==='rush'){steer(p,qb.x+Math.sin(el*5+p.i)*0.4,qb.y,sp*(p._ol?0.9:1.0),dt,rp(p.pos));return;}   // zum QB – von der O-Line geblockt
+   if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){const trail=Math.min(2.6,0.7+el*0.85);steer(p,r.x+(p.x<r.x?-0.4:0.4),r.y-trail,sp*0.97,dt,rp(p.pos));}else steer(p,p.x,p.y,sp,dt,rp(p.pos));return;}
+   if(p.drop){let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});  // Zone: Landmarke, dann auf den nächsten Receiver brechen
+     const tx=bestR?p.drop[0]+(bestR.x-p.drop[0])*0.5:p.drop[0],ty=bestR?p.drop[1]+(bestR.y-p.drop[1])*0.32:p.drop[1];steer(p,tx,ty,sp*0.9,dt,rp(p.pos));return;}
+   steer(p,p.x,p.y,sp,dt,rp(p.pos));
   });
-  // Sack: QB wird zurückgedrängt sobald Rusher nah
-  if(kind==='sack'){if(D.some(p=>p.role==='rush'&&Math.hypot(p.x-qb.x,p.y-qb.y)<1.4)||el>1.3){sacked=true;qb.y=Math.max(qb.y-M('QB'),yards);}}
-  // Kollision: gegnerische Körper durchdringen sich nicht (Offense hält Stand, Verteidiger wird abgedrängt)
+  // Sack: QB wird zurückgedrängt, sobald ein Rusher durch ist
+  if(kind==='sack'){if(rushers.some(p=>Math.hypot(p.x-qb.x,p.y-qb.y)<1.4)||el>1.3){sacked=true;qb.y=Math.max(qb.y-mx('QB')*dt,yards);}}
+  // Kollision: Körper durchdringen sich nicht. Blocker hält/treibt, freier oder durchbrechender Rusher setzt sich durch.
   for(let it=0;it<2;it++)O.forEach(o=>{if(o.pos==='QB'&&kind!=='sack')return;
     D.forEach(p=>{const dx=p.x-o.x,dy=p.y-o.y,dist=Math.hypot(dx,dy);
-      const mind=(o.pos==='OL')?1.9:(o===carrier?1.0:1.3);
+      const mind=(o.pos==='OL')?1.95:(o.pos==='FB'?1.7:(o===carrier?1.05:1.3));
       if(dist<mind&&dist>1e-4){const push=mind-dist,ux=dx/dist,uy=dy/dist;
-        if(kind==='sack'&&o.pos==='OL'&&p.role==='rush'){o.x-=ux*push;o.y-=uy*push;}  // Sack: Rusher setzt sich durch
-        else{p.x+=ux*push;p.y+=uy*push;}}});});                                        // sonst: Verteidiger wird geblockt
+        const rusherWins=(kind==='sack'&&p.role==='rush')||(isPass&&o.pos==='OL'&&p.role==='rush'&&!p._ol);   // Sack / freier Blitzer bricht durch
+        if(rusherWins){o.x-=ux*push*0.5;o.y-=uy*push*0.5;p.x+=ux*push*0.5;p.y+=uy*push*0.5;}
+        else{p.x+=ux*push;p.y+=uy*push;p.vx=(p.vx||0)*0.35;p.vy=(p.vy||0)*0.35;}}});});                       // Verteidiger wird geblockt (Tempo bricht)
   // Out of bounds: Ballträger an der Seitenlinie -> Play tot am Spot (wie im echten Football)
   const LO=1.2,HI=52.1;
   if(carrier){if(carrier.x<LO){carrier.x=LO;oob=true;}else if(carrier.x>HI){carrier.x=HI;oob=true;}}
@@ -1015,7 +1028,7 @@ function playAnim(svg,d,res,onDone){
    else {ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(qb.x));ball.setAttribute('cy',mapY(qb.y));ball.setAttribute('transform','');}   // Pass: Ball in QB-Hand bis zum Wurf
   }
   // Ende: erst wenn der Raumgewinn erreicht ist (Verteidiger treffen dort ein = Tackle), Pass aufgelöst, Sack oder Timeout
-  const atGain=carrier&&((kind==='complete'&&Math.hypot(carrier.x-gain[0],carrier.y-gain[1])<0.6)||(!isPass&&runEnd&&Math.hypot(carrier.x-runEnd[0],carrier.y-runEnd[1])<0.6));
+  const atGain=carrier&&((kind==='complete'&&Math.hypot(carrier.x-gain[0],carrier.y-gain[1])<0.9)||(!isPass&&runEnd&&Math.abs(carrier.y-runEnd[1])<0.9));
   const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0) || (oob&&!td&&el>0.8&&(caught||!isPass));
   if(!done)_anim[P]=requestAnimationFrame(frame);
