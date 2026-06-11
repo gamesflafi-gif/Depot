@@ -334,7 +334,7 @@ def test_punt_flips_possession(tmp_path):
     F.start_game(cfg, st)
     g = st["active_game"]
     g["pos"] = 0 if g["user_is_home"] else 1
-    g["ytz"], g["absx"], g["down"], g["dist"] = 70.0, (30.0 if g["pos"] == 1 else 70.0), 3, 7
+    g["ytz"], g["absx"], g["down"], g["dist"] = 70.0, (30.0 if g["pos"] == 1 else 70.0), 4, 7   # Punt nur im 4. Versuch
     F._new_decision_options(st)
     assert any(o["key"] == "__PUNT__" for o in F._game_view(st)["options"])
     pos0 = g["pos"]
@@ -343,6 +343,29 @@ def test_punt_flips_possession(tmp_path):
     assert r["play"]["kind"] == "punt" and r["play"]["punt_net"] >= 25
     assert g2["pos"] != pos0 and g2["down"] == 1 and g2["dist"] == 10
     assert 1.0 <= g2["ytz"] <= 99.0
+
+
+def test_kick_options_only_on_fourth_down(tmp_path):
+    """Field Goal & Punt erscheinen nur im 4. Versuch (in den Downs 1–3 nicht)."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
+    F.start_game(cfg, st)
+    g = st["active_game"]
+    g["pos"] = 0 if g["user_is_home"] else 1             # Nutzer am Ball
+    g["ytz"] = 40                                         # in FG-Reichweite
+    for d in (1, 2, 3):
+        g["down"] = d
+        F._new_decision_options(st)
+        keys = {o["key"] for o in g["opts"]}
+        assert "__FG__" not in keys and "__PUNT__" not in keys, f"Down {d}: Kick-Option zu früh"
+    g["down"] = 4
+    F._new_decision_options(st)
+    keys = {o["key"] for o in g["opts"]}
+    assert "__FG__" in keys and "__PUNT__" in keys        # 4. Versuch: beide da
+    # 6 Plays bleiben zusätzlich erhalten
+    assert len([o for o in g["opts"] if o["type"] in ("Pass", "Lauf")]) == 6
 
 
 def test_kicker_fg_and_extra_point(tmp_path):
