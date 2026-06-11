@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v35-mgr1"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v36-mgr2"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -370,6 +370,21 @@ _STYLE2 = """
    border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--fg);cursor:pointer;font:inherit;transition:border-color .12s,transform .04s}
  .traincard:hover{border-color:var(--acc)} .traincard:active{transform:translateY(1px)}
  .traincard .ti{color:var(--acc)} .traincard b{font-size:14px} .traincard .td{font-size:11.5px;color:var(--mut);font-weight:400}
+ .traincard .texp{font-size:11px;font-weight:800;color:var(--acc);background:var(--accsoft);border:1px solid #1c5a40;border-radius:6px;padding:2px 7px;margin-top:2px}
+ /* Matchup-Analyse */
+ .matchup .mvs{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin:4px 0 12px}
+ .mteam{display:flex;flex-direction:column;align-items:flex-start;gap:4px} .mteam.r{align-items:flex-end;text-align:right} .mteam b{font-size:14px}
+ .crest.sm{width:34px;height:34px;border-radius:9px;font-size:12px}
+ .mvsmid{text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px} .mvsmid .mut{font-size:10.5px}
+ .wpbig{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--acc);text-shadow:0 2px 8px rgba(0,0,0,.4);line-height:1}
+ .vsrow{display:flex;align-items:center;gap:10px;margin:7px 0}
+ .vsl{flex:1;font-size:12.5px;color:var(--mut)} .vsbar{position:relative;width:88px;height:8px;border-radius:5px;background:#3a2420;overflow:hidden;flex:none}
+ .vsmine{position:absolute;inset:0 auto 0 0;background:var(--acc)} .vsv{width:54px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums} .vsv small{color:var(--mut);font-weight:600}
+ /* Form-Verlauf */
+ .formrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+ .formchips{display:inline-flex;gap:4px} .formchip{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:#04140c}
+ .formchip.w{background:linear-gradient(180deg,#1fd897,#12ac72)} .formchip.l{background:#ef5350;color:#240606}
+ .spark{display:block;background:#0c130f;border:1px solid var(--line);border-radius:9px;padding:6px}
  #tutspot{position:fixed;inset:0;z-index:60;pointer-events:none}
  .tuthole{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.74);border:2px solid var(--acc);transition:all .22s ease;pointer-events:none}
  .tuttip{position:fixed;left:50%;transform:translateX(-50%);max-width:380px;width:calc(100% - 28px);pointer-events:auto;
@@ -1043,7 +1058,7 @@ function secDash(v){
  // 1) Training zuerst — Pflicht vor dem Spiel
  if(active){h+='<div class="card stepcard"><div class="sec" style="margin-top:0"><span class="stepnum">1</span>Training dieser Woche'+(v.week_trained?'':' <span class="navbadge">!</span>')+'</div>';
    if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span><span class="mut">weiter zu Schritt 2</span></div>'+(v.game_bonus>0?'<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>':'');
-   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span></button>').join('')+'</div>';
+   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span>'+(t.exp?'<span class="texp">+'+t.exp+' EXP · '+esc(t.group)+'</span>':(t.group?'<span class="texp">'+esc(t.group)+'</span>':''))+'</button>').join('')+'</div>';
    h+='</div>';}
  // 2) Spielbetrieb
  h+='<div class="card'+(active?' stepcard':'')+'" id="gamecard"><div class="sec" style="margin-top:0">'+(active?'<span class="stepnum">2</span>':'')+(v.phase==='done'?'Saison beendet':(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
@@ -1070,6 +1085,10 @@ function secDash(v){
  }
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
+ // Matchup-Analyse, Form & Verletzungen
+ if(v.phase!=='done'&&!v.is_bye)h+=matchupCard(v);
+ h+=formStrip(v);
+ h+=injuryCard(v);
  // Entscheidungs-Event (nicht jede Woche, getrennt vom Training)
  if(v.pending_event){const ev=v.pending_event;_evt={b0:0,b1:0,d:0};
    const grp=(key,title,opts,cls)=>'<div class="evtgrp"><div class="evtlab">'+esc(title)+'</div><div class="evtopts">'+
@@ -1098,6 +1117,31 @@ function secDash(v){
  h+='<div style="text-align:center;margin:16px 0 4px"><button class="ghost" onclick="resetFr()" style="opacity:.7;font-size:13px">Franchise zurücksetzen</button></div>';
  return h;
 }
+function _winProb(my,opp,home){let p=1/(1+Math.pow(10,(opp-my)/14));if(home)p+=0.05;return Math.max(.05,Math.min(.95,p));}
+function _vsbar(label,mine,opp){const t=(mine+opp)||1,mp=Math.round(mine/t*100);
+ return '<div class="vsrow"><span class="vsl">'+esc(label)+'</span><span class="vsbar"><span class="vsmine" style="width:'+mp+'%"></span></span><span class="vsv">'+mine+'<small>:'+opp+'</small></span></div>';}
+function matchupCard(v){const n=v.next;if(!n)return '';const me=v.ratings,wp=Math.round(_winProb(me.ovr,n.ovr,n.home)*100),edge=me.ovr-n.ovr;
+ return '<div class="card matchup"><div class="sec" style="margin-top:0">⚔️ Matchup-Analyse</div>'+
+  '<div class="mvs">'+
+    '<div class="mteam"><div class="crest sm" style="background:'+esc(v.color)+'">'+esc(v.abbr)+'</div><b>Du</b><span class="mut">OVR '+me.ovr+'</span></div>'+
+    '<div class="mvsmid"><span class="mut">'+(n.home?'Heim vs':'Auswärts @')+'</span><div class="wpbig">'+wp+'%</div><span class="mut">Sieg-Chance</span></div>'+
+    '<div class="mteam r"><span style="display:flex;align-items:center;gap:8px;flex-direction:row-reverse">'+teamLogo(n.abbr,n.color,'lg')+'<b>'+esc(n.name)+'</b></span><span class="mut">OVR '+n.ovr+'</span></div>'+
+  '</div>'+
+  _vsbar('Deine Offense → ihre Defense',me.off,n.def)+
+  _vsbar('Deine Defense → ihre Offense',me.def,n.off)+
+  '<div class="note">Ihr Schema: Off '+esc(n.off_scheme)+', Def '+esc(n.def_scheme)+' · '+(edge>=6?'Du bist Favorit.':edge<=-6?'Außenseiter — du brauchst einen guten Plan.':'Ausgeglichenes Spiel.')+'</div></div>';}
+function formStrip(v){const f=v.form||[];if(!f.length)return '';
+ const chips=f.map(g=>'<span class="formchip '+(g.won?'w':'l')+'" title="W'+g.week+' '+(g.home?'vs ':'@ ')+esc(g.opp)+' '+g.pf+':'+g.pa+'">'+(g.won?'S':'N')+'</span>').join('');
+ const wins=f.filter(g=>g.won).length,W=160,H=34,mx=Math.max(10,...f.map(g=>Math.max(g.pf,g.pa)));
+ const line=(key,col)=>{let d='';f.forEach((g,i)=>{const x=f.length>1?i/(f.length-1)*W:0,y=H-g[key]/mx*H;d+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1)+' ';});return '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2"/>';};
+ return '<div class="card"><div class="sec" style="margin-top:0">📈 Form & Verlauf</div>'+
+  '<div class="formrow"><span class="formchips">'+chips+'</span><span class="mut">'+wins+'–'+(f.length-wins)+' (letzte '+f.length+')</span></div>'+
+  '<svg class="spark" viewBox="0 0 '+W+' '+H+'" width="100%" height="42" preserveAspectRatio="none">'+line('pf','#19e08f')+line('pa','#ef5350')+'</svg>'+
+  '<div class="note"><span style="color:#19e08f">●</span> erzielt · <span style="color:#ef5350">●</span> kassiert</div></div>';}
+function injuryCard(v){const inj=(v.roster||[]).filter(p=>p.inj>0).sort((a,b)=>b.inj-a.inj);if(!inj.length)return '';
+ return '<div class="card"><div class="sec" style="margin-top:0">🩹 Verletzungs-Report ('+inj.length+')</div>'+
+  inj.map(p=>'<div class="reco mini" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)" style="cursor:pointer"><span style="display:flex;align-items:center;gap:8px">'+posBadge(p.pos)+esc(p.name)+'</span><span class="tag tg-inj">noch '+p.inj+' Wo</span></div>').join('')+
+  '<div class="note">„Regeneration"-Training verkürzt Ausfälle um 1 Woche.</div></div>';}
 let _kSort='ovr',_kFilter='all';
 function kSort(s){_kSort=s;renderMgr(lastView);}
 function kFilter(f){_kFilter=f;renderMgr(lastView);}

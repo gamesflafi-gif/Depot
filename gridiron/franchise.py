@@ -1565,6 +1565,32 @@ def _next_opponent(state: dict) -> dict | None:
     return None
 
 
+def _user_form(state: dict, n: int = 8) -> list[dict]:
+    """Letzte Spiele des Nutzer-Teams (für Form-Streak & Verlauf)."""
+    name = state["teams"][0]["name"]
+    out = []
+    for r in state.get("results", []):
+        for g in r["games"]:
+            if g["home"] == name or g["away"] == name:
+                home = g["home"] == name
+                pf = g["hs"] if home else g["as"]
+                pa = g["as"] if home else g["hs"]
+                out.append({"week": r["week"], "opp": g["away"] if home else g["home"],
+                            "home": home, "won": g["winner"] == name, "pf": pf, "pa": pa})
+    return out[-n:]
+
+
+def _trainings_view(state: dict) -> list[dict]:
+    """Trainingskarten inkl. erwartetem EXP-Ertrag (vom Equipment/Coach abhängig)."""
+    team = state["teams"][0]
+    m = _exp_mult(team)
+    grp = {"team": "ganzes Team", "offense": "Offense", "defense": "Defense",
+           "single": "Top-Talent", "regen": "Verletzte", "film": "Taktik"}
+    exp = {"team": round(150 * m), "offense": round(260 * m),
+           "defense": round(260 * m), "single": round(520 * m)}
+    return [{**t, "exp": exp.get(t["key"], 0), "group": grp.get(t["key"], "")} for t in TRAININGS]
+
+
 def view(state: dict) -> dict:
     team = state["teams"][0]
     last = state["results"][-1] if state["results"] else None
@@ -1613,7 +1639,8 @@ def view(state: dict) -> dict:
                    "target": g.get("target"), "progress": team["w"] if g["key"] == "wins" else None}
                   for g in state.get("goals", [])],
         "week_trained": bool(state.get("week_trained")),
-        "trainings": TRAININGS,
+        "trainings": _trainings_view(state),
+        "form": _user_form(state),
         "game_bonus": team.get("game_bonus", 0),
         "is_bye": state["phase"] == "regular" and state["week"] < len(state["schedule"])
         and _user_pair(state) is None,
