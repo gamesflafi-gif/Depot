@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v65-figures"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v66-tackle"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -817,7 +817,7 @@ function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p
  const side=(id&&id[0]==='d')?-1:1;
  const edge=_shade(color,-92),hel=_shade(color,-26),sleeve=_shade(color,-14),glove=_shade(color,92),stripe=_shade(color,104),cleat=_shade(color,-40),fm='#10191333';
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx+' '+sy+')');
- g.appendChild(el('ellipse',{cx:0,cy:4.0,rx:6.9,ry:2.5,fill:'#03100a',opacity:.34}));   // Schatten bleibt flach
+ g.appendChild(el('ellipse',{cx:0,cy:5.2,rx:8.0,ry:2.8,fill:'#03100a',opacity:.34}));   // Schatten bleibt flach (an größere Figur angepasst)
  const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate('+(side<0?180:0)+')');   // Blickrichtung
  const fig=el('g',{}); fig.setAttribute('class','fig');                                  // Animations-Gruppe (pop/spin/down/cel)
  if(o&&o.target)fig.appendChild(el('circle',{cx:0,cy:0,r:10.8,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.9,'class':'pulse'}));
@@ -841,8 +841,10 @@ function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p
  fig.appendChild(el('line',{x1:0,y1:-7.7,x2:0,y2:-4.7,stroke:fm,'stroke-width':.8}));                             // Facemask: Streben
  fig.appendChild(el('line',{x1:-1.45,y1:-7.1,x2:-1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
  fig.appendChild(el('line',{x1:1.45,y1:-7.1,x2:1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
- fc.appendChild(fig); g.appendChild(fc);
- const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:2.7,'text-anchor':'middle','font-size':5.2,fill:'#ffffff','font-weight':800,stroke:'#0a140f','stroke-width':.7,'paint-order':'stroke'});t.textContent=lbl;g.appendChild(t);}  // Label aufrecht & lesbar
+ fig.appendChild(el('path',{d:'M-2.7 -4.2 Q-1.5 -4.9 -0.5 -3.9',fill:'none',stroke:stripe,'stroke-width':.8,opacity:.95}));   // Helm-Logo (kleine Flügel-Decal)
+ fig.appendChild(el('path',{d:'M2.7 -4.2 Q1.5 -4.9 0.5 -3.9',fill:'none',stroke:stripe,'stroke-width':.8,opacity:.95}));
+ const sc=el('g',{}); sc.setAttribute('transform','scale(1.2)'); sc.appendChild(fig); fc.appendChild(sc); g.appendChild(fc);   // Figur etwas größer (besser sichtbar)
+ const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:3.4,'text-anchor':'middle','font-size':6.0,fill:'#ffffff','font-weight':800,stroke:'#0a140f','stroke-width':.8,'paint-order':'stroke'});t.textContent=lbl;g.appendChild(t);}  // Label aufrecht & lesbar
  svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
 // Figur dreht weich in ihre Laufrichtung (alle Figuren zeichnen nach oben -> einheitliche Formel)
@@ -925,7 +927,8 @@ function steer(o,tx,ty,maxspd,dt,resp){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx
 function routeStep(o,mx,dt,rp){if(!o.route)return;
  if(o.ri<o.route.length){const wp=o.route[o.ri];steer(o,wp[0],wp[1],mx(o.pos),dt,rp(o.pos));if(Math.hypot(wp[0]-o.x,wp[1]-o.y)<0.7)o.ri++;}
  else{if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=1;dd=1;}o._dir=[dx/dd,dy/dd];}
-   let dx=o._dir[0],dy=o._dir[1];if((o.x<6&&dx<0)||(o.x>47.3&&dx>0)){dx=(o.x>26.65?-0.3:0.3);dy=Math.abs(dy)+0.7;}
+   let dx=o._dir[0],dy=Math.max(o._dir[1],0.25);   // nie rückwärts weiterlaufen (kein Lauf in die eigene Endzone)
+   if((o.x<6&&dx<0)||(o.x>47.3&&dx>0)){dx=(o.x>26.65?-0.3:0.3);dy=Math.abs(dy)+0.7;}
    const dd=Math.hypot(dx,dy)||1;steer(o,o.x+dx/dd*5,o.y+dy/dd*5,mx(o.pos),dt,rp(o.pos));}}
 function _advance(o,mx){if(!o.route)return;let b=mx;while(b>0&&o.ri<o.route.length){const wp=o.route[o.ri],dx=wp[0]-o.x,dy=wp[1]-o.y,d=Math.hypot(dx,dy);if(d<=b){o.x=wp[0];o.y=wp[1];o.ri++;b-=d;}else{o.x+=dx/d*b;o.y+=dy/d*b;b=0;}}}
 // läuft die Route ab UND danach in deren Endrichtung weiter (kein Stehenbleiben am letzten Wegpunkt)
@@ -981,7 +984,7 @@ function playAnim(svg,d,res,onDone){
   const picked=(kind==='int'&&arrived);                        // nach Interception: Rollen drehen (Defense returnt)
   const pressure=isPass&&rushers.some(r=>(!r._ol||el>1.6)&&Math.hypot(r.x-qb.x,r.y-qb.y)<2.3);   // freier/durchgebrochener Rusher
   // ---- QB: Drop in die Pocket, Schritt nach vorn beim Wurf ----
-  if(isPass&&!sacked){const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.5);steer(qb,C,Math.max(-7.6,ty),mx('QB')*0.95,dt,rp('QB'));}
+  if(isPass&&!sacked){const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C,Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}
   else if(!isPass){steer(qb,C-0.4,-3.4,mx('QB')*0.7,dt,rp('QB'));}
   // ---- Offense: Blocker (Pocket/Run-Block), Ballträger, Routen ----
   O.forEach(o=>{if(o.pos==='QB')return;
@@ -996,10 +999,14 @@ function playAnim(svg,d,res,onDone){
        else steer(o,o.x+(lane-o.x)*0.25,Math.min(4.5,o.y+2.6),mx('OL'),dt,rp('OL'));}                                   // frei -> zum Second Level
      return;}
    if(o===tgt){if(fumbled){o.vx=o.vy=0;return;}   // nach Fumble bleibt der Ballträger liegen
-     if(isPass){if(!caught)routeStep(o,mx,dt,rp);else if(kind==='complete')steer(o,gain[0],gain[1],mx(o.pos),dt,rp(o.pos));}
-     else{routeStep(o,mx,dt,rp);if(o.route&&o.ri>=o.route.length&&runEnd)steer(o,runEnd[0],runEnd[1],mx(o.pos),dt,rp(o.pos));}
-     if((!isPass&&handoffDone)||caught){let near=null,nd=9;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nd){nd=dd;near=q;}});   // Loch lesen: weicher Cut in den freien Raum
-       if(near&&nd<2.0&&el>(o._jukeT||-9)+0.6){o._jukeT=el;let dir=(near.x>o.x)?-1:1;if(o.x<5)dir=1;else if(o.x>48)dir=-1;o.vx=(o.vx||0)+dir*3.2;if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}
+     if(isPass){if(!caught)routeStep(o,mx,dt,rp);else steer(o,gain[0],gain[1]+2.0,mx(o.pos),dt,rp(o.pos));}   // Fang -> upfield (YAC), läuft durch bis zum Tackle
+     else{   // Lauf: dem Loch folgen, aber um Verteidiger im Weg herum improvisieren (kein Stehenbleiben)
+       let tx,ty;
+       if(o.route&&o.ri<o.route.length){const wp=o.route[o.ri];tx=wp[0];ty=wp[1];if(Math.hypot(wp[0]-o.x,wp[1]-o.y)<0.8)o.ri++;}
+       else{tx=runEnd?runEnd[0]:C;ty=(runEnd?runEnd[1]:6)+2.0;}   // etwas über den Spot hinaus -> läuft weiter, wird getackelt
+       let block=null,bd=3.0;D.forEach(q=>{if(q.y<o.y+0.4)return;const dd=Math.hypot(q.x-o.x,(q.y-o.y)*0.6);if(dd<bd){bd=dd;block=q;}});  // Verteidiger im Weg nach vorn
+       if(block){const open=(block.x>=o.x)?-1:1;tx=Math.max(2,Math.min(51,o.x+open*2.4));ty=Math.max(ty,o.y+1.8);if(!o._spun&&bd<1.8){o._spun=1;spinFig(P,'o'+o.i);}}  // zur freien Seite cutten
+       steer(o,tx,ty,mx(o.pos),dt,rp(o.pos));}
      return;}
    if(o.route&&!caught)routeStep(o,mx,dt,rp);   // Mitläufer/FB-Lead laufen ihre Wege
   });
@@ -1076,7 +1083,7 @@ function playAnim(svg,d,res,onDone){
     let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-fumbleSpot[0],p.y-fumbleSpot[1]);if(dd<bd){bd=dd;recoverer=p;}});}
   if(fumbled&&!recovered&&recoverer){steer(recoverer,fumbleSpot[0],fumbleSpot[1],mx(recoverer.pos),dt,rp(recoverer.pos));
     if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
-  const tackled=!fumble&&atGain&&(contact||el>gainT+1.6);                              // normaler Tackle (bei Fumble übernimmt die Fumble-Logik)
+  const tackled=!fumble&&atGain&&(contact||el>gainT+1.0);                              // Tackle bei Kontakt (Läufer läuft durch, steht nicht)
   const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.6) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
@@ -1091,8 +1098,10 @@ function playAnim(svg,d,res,onDone){
     if(kind==='sack'){downFig(P,'o'+qb.i);D.filter(p=>p.role==='rush'&&Math.hypot(p.x-qb.x,p.y-qb.y)<1.9).sort((a,b)=>Math.hypot(a.x-qb.x,a.y-qb.y)-Math.hypot(b.x-qb.x,b.y-qb.y)).slice(0,2).forEach(p=>downFig(P,'d_'+p.i));}
     else if(kind==='int'&&intD){const hit=O.map(o=>[o,Math.hypot(o.x-intD.x,o.y-intD.y)]).filter(a=>a[1]<1.9).sort((a,b)=>a[1]-b[1]);   // Interceptor wird gestellt
       if(hit.length){downFig(P,'d_'+intD.i);hit.slice(0,2).forEach(a=>downFig(P,'o'+a[0].i));}}
-    else if(carrier&&kind!=='incomplete'&&!oob&&!fumble){const hit=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<1.8).sort((a,b)=>a[1]-b[1]);
-      if(hit.length){downFig(P,'o'+carrier.i);hit.slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}}      // nur bei echtem Kontakt zu Boden (kein Phantom-Tackle, kein Aus-Tackle; Fumble extra)
+    else if(carrier&&kind!=='incomplete'&&!oob&&!fumble){const near=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).sort((a,b)=>a[1]-b[1]);
+      downFig(P,'o'+carrier.i);const gang=near.filter(a=>a[1]<2.6).slice(0,2);   // Tackle: Ballträger + beteiligte Verteidiger
+      if(gang.length)gang.forEach(a=>downFig(P,'d_'+a[0].i));
+      else if(near[0]&&near[0][1]<6){moveP(P,'d_'+near[0][0].i,carrier.x+0.8,carrier.y-0.5);downFig(P,'d_'+near[0][0].i);}}   // sonst nächsten Verfolger heranziehen (kein Stehenbleiben, kein Allein-Flippen)
     if(!res.noResult)showResult(svg,{kind,yards,td,fum:fumble,pt:(fumble&&fumbleSpot?fumbleSpot:(carrier?[carrier.x,carrier.y]:(kind==='int'&&intD?[intD.x,intD.y]:(kind==='sack'?[qb.x,vy]:catchPt))))});
     if(onDone)setTimeout(onDone,res.noResult?900:1600);}
  }

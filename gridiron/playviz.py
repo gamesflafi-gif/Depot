@@ -57,10 +57,10 @@ def _route(name: str, start: tuple[float, float]) -> list[list[float]]:
         "stick":   [(sx, sy), (sx, 6), (sx + side * 3, 6)],
         "sail":    [(sx, sy), (sx, 9), (sx + side * 9, 13)],
         "snag":    [(sx, sy), (sx + ins * 6, 5), (sx + ins * 4, 4)],
-        "swing":   [(sx, sy), (sx + side * 7, -4)],
+        "swing":   [(sx, sy), (sx + side * 5, -2.5), (sx + side * 8, 1.5)],   # raus, kurz zurück, dann upfield
         "checkdown":[(sx, sy), (sx + ins * 3, 2)],
-        "bubble":  [(sx, sy), (sx + side * 3, -1.5), (sx + side * 7, -0.5)],
-        "screen":  [(sx, sy), (sx + 3.5, -2.5), (sx + 6, -2)],
+        "bubble":  [(sx, sy), (sx + side * 3, -1.5), (sx + side * 7, 0.5)],
+        "screen":  [(sx, sy), (sx + 3.5, -2.5), (sx + 6, -0.5)],
         "block":   [(sx, sy), (sx, sy)],
     }
     # x immer im Feld halten (Routen nahe der Seitenlinie liefen sonst ins Aus)
