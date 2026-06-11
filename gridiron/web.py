@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v34-scroll2"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v35-mgr1"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -353,6 +353,15 @@ _STYLE2 = """
  .arow .acap{position:absolute;top:-2px;bottom:-2px;width:2px;background:#dfe7e3;opacity:.8}
  .arow .aval{width:26px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
  .arow button{padding:4px 11px;border-radius:7px;font-size:15px;line-height:1}
+ .arow .aavg{position:absolute;top:0;bottom:0;width:2px;background:#7d93b5;opacity:.9}
+ .arow .alab.strong{color:var(--acc)} .arow .aval small{font-size:9.5px;color:var(--mut);margin-left:3px;font-weight:600}
+ .chip{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:linear-gradient(180deg,#27332e,#1f2a26);color:var(--mut);font-weight:700;font-size:12.5px;cursor:pointer;transition:color .12s,border-color .12s,background .12s}
+ .chip:hover{color:var(--fg)} .chip.on{background:var(--acc);color:#04140c;border-color:var(--acc);box-shadow:0 1px 6px rgba(22,199,132,.35)} .chip.sm{padding:5px 11px;font-size:12px}
+ .kbar{padding:11px 14px} .kbarrow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:3px 0}
+ .kbl{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-weight:700;min-width:62px}
+ .stepsel{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:4px 0 12px}
+ .tag.tg-start{background:linear-gradient(180deg,#1fd897,#12ac72);color:#04140c}
+ .tag.tg-inj{background:#3a1d1d;color:#ff8a8a;box-shadow:none}
  .ctraits{margin-top:8px} .ctrait{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13px}
  .ctrait>span:first-child{width:130px;color:var(--mut)}
  .ctrait .abar{flex:1} .ctrait .aval{width:26px;text-align:right;font-weight:700}
@@ -1089,23 +1098,40 @@ function secDash(v){
  h+='<div style="text-align:center;margin:16px 0 4px"><button class="ghost" onclick="resetFr()" style="opacity:.7;font-size:13px">Franchise zurücksetzen</button></div>';
  return h;
 }
+let _kSort='ovr',_kFilter='all';
+function kSort(s){_kSort=s;renderMgr(lastView);}
+function kFilter(f){_kFilter=f;renderMgr(lastView);}
+function _kApply(ps){let a=ps.slice();
+ if(_kFilter==='starter')a=a.filter(p=>p.starter);
+ else if(_kFilter==='bench')a=a.filter(p=>!p.starter);
+ else if(_kFilter==='injured')a=a.filter(p=>p.inj>0);
+ else if(_kFilter==='dev')a=a.filter(p=>p.ovr<p.pot);
+ const key={ovr:p=>p.ovr,pot:p=>p.pot,age:p=>-p.age,form:p=>playerImpact(p)}[_kSort]||(p=>p.ovr);
+ return a.sort((x,y)=>key(y)-key(x));}
 function secKader(v){
+ const total=v.roster.length,starters=v.roster.filter(p=>p.starter).length,inj=v.roster.filter(p=>p.inj>0).length;
+ const avgAge=total?Math.round(v.roster.reduce((s,p)=>s+p.age,0)/total):0;
  let h='<div class="card"><div class="sec" style="margin-top:0">Kader-Übersicht</div>'+
-   '<div class="kgrid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Equipment','St. '+v.equipment.level)+kpi('Kadergröße',v.roster.length)+kpi('Overall',v.ratings.ovr)+'</div>'+
+   '<div class="kgrid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Overall',v.ratings.ovr)+kpi('Starter',starters)+kpi('Ø Alter',avgAge)+kpi('Verletzt',inj)+kpi('Kader',total)+'</div>'+
    (v.skillpoints>0?'<div style="margin-top:12px"><button onclick="allocAll()">Alle Skillpunkte auto-verteilen ('+v.skillpoints+')</button></div>':'')+
-   '<div class="note">EXP kommt aus dem Wochen-Training (Dashboard) und aus Spiel-Leistung. Je 100 EXP = 1 Skillpunkt. Klick einen Spieler an, um Punkte auf Attribute zu verteilen.</div></div>';
+   '<div class="note">Je 100 EXP = 1 Skillpunkt (aus Wochen-Training & Spiel-Leistung). Tippe einen Spieler an, um Punkte auf Attribute zu verteilen.</div></div>';
+ // Sortier-/Filter-Leiste
+ h+='<div class="card kbar"><div class="kbarrow"><span class="kbl">Sortieren</span>'+
+   [['ovr','OVR'],['pot','Potenzial'],['age','Alter'],['form','Form']].map(s=>'<button class="chip'+(_kSort===s[0]?' on':'')+'" data-s="'+s[0]+'" onclick="kSort(this.dataset.s)">'+s[1]+'</button>').join('')+'</div>'+
+   '<div class="kbarrow"><span class="kbl">Filter</span>'+
+   [['all','Alle'],['starter','Starter'],['bench','Bank'],['injured','Verletzt'],['dev','Entwicklung']].map(f=>'<button class="chip'+(_kFilter===f[0]?' on':'')+'" data-f="'+f[0]+'" onclick="kFilter(this.dataset.f)">'+f[1]+'</button>').join('')+'</div></div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
-   h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
-   grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos);if(!ps.length)return;
-     h+='<div style="margin:12px 0 4px">'+posBadge(pos)+' <span class="mut" style="font-weight:700">'+pos+'</span></div>';
+   let body='';
+   grp[1].forEach(pos=>{const ps=_kApply(v.roster.filter(p=>p.pos===pos));if(!ps.length)return;
+     body+='<div style="margin:12px 0 4px">'+posBadge(pos)+' <span class="mut" style="font-weight:700">'+pos+'</span> <span class="mut" style="font-size:11px">· '+ps.length+'</span></div>';
      ps.forEach(p=>{const bar=Math.round(p.ovr/Math.max(p.pot,1)*100);
-       h+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
+       body+='<div class="prow" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
         '<span class="pfa">'+portrait(p,38,v.color)+'</span>'+ovrBadge(p.ovr)+
-        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag" style="background:#16c784;color:#04140c">START</span>':'')+(p.inj>0?' <span class="tag" style="background:#3a1d1d;color:#ff8a8a">VERLETZT '+p.inj+'W</span>':'')+
+        '<span class="pname">'+esc(p.name)+(p.starter?' <span class="tag tg-start">START</span>':'')+(p.inj>0?' <span class="tag tg-inj">VERLETZT '+p.inj+'W</span>':'')+
         '<span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+(p.season&&p.season.games?' · '+p.season.games+' Sp.':'')+'<div class="ovrbar"><div class="ovrfill" style="width:'+bar+'%"></div></div></span></span>'+
         (p.pts>0?'<span class="ptbadge">'+p.pts+' P</span>':'<span class="mut" style="font-size:12px">'+p.exp+'/100</span>')+'</div>';});
    });
-   h+='</div>';});
+   if(body)h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>'+body+'</div>';});
  return h;
 }
 async function setFocus(){const r=await api('/api/fr/focus?group='+encodeURIComponent($('foc').value),'POST');if(r.view)renderMgr(r.view);}
@@ -1117,19 +1143,29 @@ function openPlayer(id){_curPid=id;const p=lastView.roster.find(x=>String(x.id)=
 }
 function renderPlayer(p){
  const tc=(lastView&&lastView.color)||'#16c784';
+ const peak=p.age<25?'Aufsteigend':(p.age<=29?'Im Peak':'Routinier');
+ // Positions-Schnitt je Attribut (aus dem eigenen Kader)
+ const peers=(lastView&&lastView.roster||[]).filter(x=>x.pos===p.pos);
+ const avg={};peers.forEach(x=>(x.attrs||[]).forEach(a=>{(avg[a.key]=avg[a.key]||[]).push(a.val);}));
+ const avgOf=k=>avg[k]&&avg[k].length?Math.round(avg[k].reduce((s,n)=>s+n,0)/avg[k].length):null;
+ // Stärken (Top 2 Attribute)
+ const strong=new Set(p.attrs.slice().sort((a,b)=>b.val-a.val).slice(0,2).map(a=>a.key));
  let h='<div class="modalhead"><h3 style="display:flex;align-items:center;gap:10px"><span class="pfa">'+portrait(p,46,tc)+'</span>'+ovrBadge(p.ovr)+posBadge(p.pos)+esc(p.name)+devBadge(p.dev,p.dev_label)+
    '<span class="mut" style="font-weight:600;font-size:13px">'+(p.starter?'Starter':'Bank')+(p.inj>0?' · verletzt '+p.inj+'W':'')+'</span></h3>'+
    '<button class="ghost" onclick="closePlayer()">Schließen</button></div>'+
-   '<div class="kgrid">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age)+kpi('Skillpunkte',p.pts)+'</div>';
+   '<div class="kgrid">'+kpi('OVR',p.ovr)+kpi('Potenzial',p.pot)+kpi('Alter',p.age+' · '+peak)+kpi('Skillpunkte',p.pts)+'</div>';
+ if(p.pts>0)h+='<div class="stepsel"><span class="kbl">Punkte pro Klick</span>'+[1,5].map(n=>'<button class="chip sm'+(_allocStep===n?' on':'')+'" data-n="'+n+'" onclick="setStep(this.dataset.n)">×'+n+'</button>').join('')+'<button class="chip sm" onclick="autoAlloc()">Auto</button></div>';
  h+='<div class="pcols">';
- // Radar
- h+='<div class="radarwrap">'+radarSVG(p.attrs)+'</div>';
- // Attribut-Balken mit +
+ // Radar (Teamfarbe)
+ h+='<div class="radarwrap">'+radarSVG(p.attrs,tc)+'</div>';
+ // Attribut-Balken mit Positions-Schnitt-Marker + Stärke-Markierung
  h+='<div class="attrs">';
  p.attrs.forEach(a=>{const pc=Math.round(a.val/99*100),cap=Math.round(a.cap/99*100);const full=a.val>=a.cap;
-   h+='<div class="arow"><span class="alab">'+esc(a.label)+'</span>'+
-     '<span class="abar"><span class="afill" style="width:'+pc+'%"></span><span class="acap" style="left:'+cap+'%"></span></span>'+
-     '<span class="aval">'+a.val+'</span>'+
+   const av=avgOf(a.key),avp=av!=null?Math.round(av/99*100):null,st=strong.has(a.key);
+   h+='<div class="arow"><span class="alab'+(st?' strong':'')+'">'+(st?'★ ':'')+esc(a.label)+'</span>'+
+     '<span class="abar"><span class="afill" style="width:'+pc+'%"></span><span class="acap" style="left:'+cap+'%"></span>'+
+     (avp!=null?'<span class="aavg" style="left:'+avp+'%" title="Positions-Schnitt '+av+'"></span>':'')+'</span>'+
+     '<span class="aval">'+a.val+(av!=null?'<small>'+(a.val>=av?'+':'')+(a.val-av)+'</small>':'')+'</span>'+
      '<button data-k="'+a.key+'" onclick="allocAttr(this.dataset.k)" '+((p.pts<=0||full)?'disabled':'')+'>+</button></div>';});
  h+='</div></div>';
  const sl=statLine(p.season)||'noch keine Einsätze', cl=statLine(p.career)||'—';
@@ -1143,16 +1179,25 @@ function renderPlayer(p){
    '<div class="note">Weiße Linie = Potenzial-Limit des Attributs. Skillpunkte bekommst du über EXP.</div>';
  $('playermodal').innerHTML=h;
 }
-function radarSVG(attrs){const n=attrs.length,cx=85,cy=85,R=62;let pts='',axes='';
+function _rgba(hex,a){hex=(hex||'#16c784').replace('#','');if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');const n=parseInt(hex,16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+function radarSVG(attrs,col){col=col||'#16c784';const n=attrs.length,cx=85,cy=85,R=62;let pts='',axes='',rings='';
+ [0.33,0.66,1].forEach(f=>{let rp='';for(let i=0;i<n;i++){const ang=-Math.PI/2+i*2*Math.PI/n;rp+=(cx+Math.cos(ang)*R*f).toFixed(1)+','+(cy+Math.sin(ang)*R*f).toFixed(1)+' ';}rings+='<polygon points="'+rp.trim()+'" fill="none" stroke="#26352e" stroke-width="1"/>';});
  for(let i=0;i<n;i++){const ang=-Math.PI/2+i*2*Math.PI/n;const rr=R*Math.max(.12,attrs[i].val/99);
    const x=cx+Math.cos(ang)*rr,y=cy+Math.sin(ang)*rr;pts+=x.toFixed(1)+','+y.toFixed(1)+' ';
    const ex=cx+Math.cos(ang)*R,ey=cy+Math.sin(ang)*R;
    axes+='<line x1="'+cx+'" y1="'+cy+'" x2="'+ex.toFixed(1)+'" y2="'+ey.toFixed(1)+'" stroke="#26352e"/>'+
      '<text x="'+(cx+Math.cos(ang)*(R+10)).toFixed(1)+'" y="'+(cy+Math.sin(ang)*(R+10)+3).toFixed(1)+'" font-size="8" fill="#8d9d97" text-anchor="middle">'+esc(attrs[i].key)+'</text>';}
- return '<svg viewBox="0 0 170 170" width="170" height="170">'+
-   '<polygon points="'+pts.trim()+'" fill="rgba(22,199,132,.25)" stroke="#16c784" stroke-width="2"/>'+axes+'</svg>';
+ return '<svg viewBox="0 0 170 170" width="170" height="170">'+rings+axes+
+   '<polygon points="'+pts.trim()+'" fill="'+_rgba(col,.28)+'" stroke="'+col+'" stroke-width="2"/></svg>';
 }
-async function allocAttr(k){const p=curPlayer();const r=await api('/api/fr/alloc?pid='+p+'&attr='+k,'POST');if(r.result&&r.result.error)alert(r.result.error);afterPlayer(r);}
+let _allocStep=1;
+function setStep(n){_allocStep=+n;const p=lastView&&lastView.roster.find(x=>String(x.id)===String(_curPid));if(p)renderPlayer(p);}
+async function allocAttr(k){const p=curPlayer();let r=null;
+ for(let i=0;i<_allocStep;i++){r=await api('/api/fr/alloc?pid='+p+'&attr='+k,'POST');
+   if(r.result&&r.result.error){if(i===0)alert(r.result.error);break;}
+   const pl=r.view&&r.view.roster&&r.view.roster.find(x=>String(x.id)===String(p));
+   if(pl&&pl.pts<=0)break;}                                  // keine Punkte mehr -> stoppen
+ afterPlayer(r);}
 async function autoAlloc(){const r=await api('/api/fr/alloc_auto?pid='+curPlayer(),'POST');afterPlayer(r);}
 async function toggleStarter(){const r=await api('/api/fr/starter?pid='+curPlayer(),'POST');if(r.result&&r.result.error)alert(r.result.error);afterPlayer(r);}
 let _curPid=null;
