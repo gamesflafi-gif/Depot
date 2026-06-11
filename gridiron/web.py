@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v49-balance"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v50-refs"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -782,6 +782,8 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    [12,521].forEach(px=>{s+='<rect x="'+(px-2.5)+'" y="'+(gy-3)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';
      if(by>0)s+='<rect x="'+(px-2.5)+'" y="'+(by-3)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';});
    if(by>0)s+='<line x1="12" y1="'+by+'" x2="521" y2="'+by+'" stroke="#eef6f0" stroke-width="2" opacity="0.7"/>';}
+ // Kettencrew (Heim-Seitenlinie) + Schiedsrichter auf dem Feld
+ s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  svg.innerHTML=s;
@@ -812,6 +814,19 @@ function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p
  const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:2.9,'text-anchor':'middle','font-size':5.6,fill:'#03130c','font-weight':800});t.textContent=lbl;fig.appendChild(t);}
  g.appendChild(fig); svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
+// Kleine 2D-Figur (Sideline-Crew / Schiedsrichter)
+function _crewFig(x,y,vest,acc){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.3" ry="3" fill="'+vest+'" stroke="#06140d" stroke-width=".6"/><circle cy="-2.4" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+(acc||'')+'</g>';}
+function _refFig(x,y){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.4" ry="3.1" fill="#1c1c1c" stroke="#06140d" stroke-width=".5"/><rect x="-2.3" y="-0.9" width="4.6" height="1" fill="#f4f4f4"/><rect x="-2.3" y="1.1" width="4.6" height="1" fill="#f4f4f4"/><circle cy="-2.5" r="1.6" fill="#caa07a" stroke="#06140d" stroke-width=".5"/></g>';}
+// Kettencrew exakt an Line-of-Scrimmage und First-Down-Linie (Heim-Seitenlinie links)
+function _chainGang(ytg){const sx=4,losY=mapY(0);let g='';
+ g+=_crewFig(sx,losY+9,'#e08b1a','<rect x="-1.6" y="-9.5" width="3.2" height="5" rx=".6" fill="#ff7a1a" stroke="#06140d" stroke-width=".4"/>');   // Down-Box-Mann
+ g+=_crewFig(sx+5,losY,'#ff7a1a','<line x1="0" y1="-3" x2="0" y2="-12" stroke="#ffb15a" stroke-width="1.6"/>');                                  // Stab an der LOS
+ if(ytg<=24){const fdY=mapY(ytg);
+   g+='<line x1="'+(sx+5)+'" y1="'+(losY-7).toFixed(1)+'" x2="'+(sx+5)+'" y2="'+(fdY-7).toFixed(1)+'" stroke="#ffd34d" stroke-width="1" stroke-dasharray="3 2" opacity=".85"/>'+  // 10-Yard-Kette
+     _crewFig(sx+5,fdY,'#ff7a1a','<line x1="0" y1="-3" x2="0" y2="-12" stroke="#ffb15a" stroke-width="1.6"/>');}                                  // Stab an der First-Down-Linie
+ return g;}
+function _refsOnField(d){const qb=d.offense.find(o=>o.pos==='QB');const bx=qb?mapX(qb.x):266,by=qb?mapY(qb.y):270;
+ return _refFig(bx+44,by-6)+_refFig(486,mapY(7));}   // Referee hinter dem QB + Side Judge nahe rechter Seitenlinie
 function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;g.setAttribute('transform','translate('+mapX(x)+' '+mapY(y)+')');_ppos[P+id]=[x,y];}
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
@@ -1910,7 +1925,7 @@ function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div 
 let _preG=null;
 function renderGame(g,play){
  if(!g.over)playClock=15;                                    // jeder neue Snap: Play-Clock zurücksetzen
- const willAnimate=!!(play&&(play.concept||play.kind==='fg'||play.kind==='punt'));   // läuft eine Snap-/Kick-Animation?
+ const willAnimate=!!(play&&(play.concept||play.kind==='fg'||play.kind==='punt'||play.penalty));   // läuft eine Snap-/Kick-/Flaggen-Animation?
  if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern
  // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Kommentar) erst NACH der Animation
  const disp=(willAnimate&&_preG)?_preG:g;
@@ -1941,9 +1956,29 @@ function renderGame(g,play){
  h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);
- else if(play&&play.kind==='fg')animateFG(play);            // Field Goal / Extra-Punkt mit Kick-Animation
  else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
+ else if(play&&play.penalty)animatePenalty(play);          // Flagge — Schiedsrichter wirft, dann Ergebnis
  else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
+}
+function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
+ const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
+ let s='<rect width="533" height="360" fill="#0e4a2d"/>';
+ for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';
+ for(let i=0;i<8;i++)s+=_fgFig(120+i*40,205+(i%2)*16,i<4?cols.off:cols.def);
+ s+=_refFig(258,250);
+ svg.innerHTML=s;
+ const flag=el('rect',{id:P+'_flag',x:254,y:245,width:8,height:8,rx:1.5,fill:'#ffd34d',stroke:'#b9930a','stroke-width':1});svg.appendChild(flag);
+ const lbl=el('text',{x:266,y:58,'text-anchor':'middle','font-size':22,'font-weight':800,fill:'#ffd34d',opacity:0});lbl.textContent='🚩 STRAFE';svg.appendChild(lbl);
+ const t0=performance.now();
+ function frame(now){const e=(now-t0)/1000,t=Math.min(1,e/0.85);
+  const fx=258+t*64,fy=245-Math.sin(Math.PI*t)*132;
+  flag.setAttribute('x',(fx-4).toFixed(1));flag.setAttribute('y',Math.max(16,fy).toFixed(1));
+  flag.setAttribute('transform','rotate('+(t*620).toFixed(0)+' '+fx.toFixed(1)+' '+Math.max(16,fy).toFixed(1)+')');
+  if(e>0.5)lbl.setAttribute('opacity',Math.min(1,(e-0.5)/0.3).toFixed(2));
+  if(e<=1.5)_anim[P]=requestAnimationFrame(frame);
+  else setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},500);
+ }
+ _anim[P]=requestAnimationFrame(frame);
 }
 function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
 async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
