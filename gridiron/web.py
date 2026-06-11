@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v69-intfix"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v70-camera"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -761,39 +761,38 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   '<linearGradient id="turf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#125433"/><stop offset="1" stop-color="#0b3a22"/></linearGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
- s+='<rect x="0" y="0" width="533" height="360" fill="url(#turf_'+P+')"/>';
- for(let i=0;i<8;i++)if(i%2)s+='<rect x="0" y="'+(i*45)+'" width="533" height="45" fill="#ffffff" opacity="0.025"/>';
- // feines 5-Yard-Raster + Hashmarks (Textur)
- for(let fy=-5;fy<=25;fy+=5){const y=mapY(fy).toFixed(1);
+ // Welt-Höhe: bei echter Feldposition bis hinter die Endzone (Kamera kann mitfahren)
+ const goalY=(fpos!=null)?mapY(fpos):0, ezTopY=(fpos!=null)?mapY(fpos+10):0;
+ const topY=(fpos!=null)?Math.min(0,ezTopY-4):0, botY=(fpos!=null)?Math.max(360,mapY(-9)):360, wH=botY-topY;
+ s+='<rect x="0" y="'+topY.toFixed(1)+'" width="533" height="'+wH.toFixed(1)+'" fill="url(#turf_'+P+')"/>';
+ // 5-Yard-Raster + Hashmarks über die ganze Welt-Höhe
+ const hiFy=(fpos!=null)?Math.ceil(fpos)+1:25;
+ for(let fy=-5;fy<=hiFy;fy+=5){const y=mapY(fy).toFixed(1);
   s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="'+(fy===0?0:1)+'" opacity="0.16"/>';
   [23.58,29.72].forEach(hx=>{s+='<line x1="'+(mapX(hx)-3).toFixed(1)+'" y1="'+y+'" x2="'+(mapX(hx)+3).toFixed(1)+'" y2="'+y+'" stroke="#cdeede" stroke-width="1" opacity="0.30"/>';});}
  if(fpos!=null){
-  // Echte Feldposition: Endzone + reale Yard-Linien (Feld scrollt mit dem Ball)
-  if(fpos<=26){const ey=mapY(Math.min(fpos,26)),ty=mapY(26);
-   s+='<rect x="0" y="'+ty+'" width="533" height="'+(ey-ty).toFixed(1)+'" fill="'+defC+'" opacity="0.22"/>';
-   s+='<line x1="0" y1="'+ey+'" x2="533" y2="'+ey+'" stroke="#ffffff" stroke-width="2.5" opacity="0.85"/>';
-   s+='<text x="266" y="'+(ty+18)+'" font-size="13" font-weight="800" fill="#ffffff" opacity="0.55" text-anchor="middle" letter-spacing="4">END ZONE</text>';}
-  for(let g=0;g<=100;g+=10){const fy=fpos-g; if(fy<-7||fy>26.5)continue; const y=mapY(fy).toFixed(1);
+  // Endzone hinter der Torlinie (immer gezeichnet; Kamera enthüllt sie bei langen Läufen)
+  s+='<rect x="0" y="'+ezTopY.toFixed(1)+'" width="533" height="'+(goalY-ezTopY).toFixed(1)+'" fill="'+defC+'" opacity="0.22"/>';
+  s+='<line x1="0" y1="'+goalY.toFixed(1)+'" x2="533" y2="'+goalY.toFixed(1)+'" stroke="#ffffff" stroke-width="2.5" opacity="0.85"/>';
+  s+='<text x="266" y="'+(ezTopY+(goalY-ezTopY)/2+5).toFixed(1)+'" font-size="13" font-weight="800" fill="#ffffff" opacity="0.5" text-anchor="middle" letter-spacing="4">END ZONE</text>';
+  for(let g=0;g<=100;g+=10){const fy=fpos-g; if(fy<-7||fy>fpos+0.1)continue; const y=mapY(fy);
    const lab=(g<=50?g:100-g);
-   s+='<line x1="0" y1="'+y+'" x2="533" y2="'+y+'" stroke="#cdeede" stroke-width="1" opacity="0.30"/>';
-   if(lab>0){s+='<text x="15" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.45">'+lab+'</text>'+
-     '<text x="518" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.45" text-anchor="end">'+lab+'</text>';}}
+   s+='<line x1="0" y1="'+y.toFixed(1)+'" x2="533" y2="'+y.toFixed(1)+'" stroke="#cdeede" stroke-width="1" opacity="0.30"/>';
+   if(lab>0){s+='<text x="15" y="'+(y+4).toFixed(1)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.45">'+lab+'</text>'+
+     '<text x="518" y="'+(y+4).toFixed(1)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.45" text-anchor="end">'+lab+'</text>';}}
  }else{
-  // Sim-Tool ohne Feldkontext: Abstand vom LOS
   for(let fy=10;fy<=25;fy+=5)if(fy%10===0){const y=mapY(fy).toFixed(1);
    s+='<text x="13" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4">'+fy+'</text>'+
     '<text x="520" y="'+(parseFloat(y)+4)+'" font-size="11" font-weight="800" fill="#cdeede" opacity="0.4" text-anchor="end">'+fy+'</text>';}
  }
  s+='<line x1="0" y1="'+mapY(0)+'" x2="533" y2="'+mapY(0)+'" stroke="#5fa8ff" stroke-width="2.5" opacity="0.9"/>';
  if(ytg<=24)s+='<line x1="0" y1="'+mapY(ytg)+'" x2="533" y2="'+mapY(ytg)+'" stroke="#ffd34d" stroke-width="2" opacity="0.7" stroke-dasharray="7 5"/>';
- // Aus-Bereiche (dunkler) + weiße Seitenlinien (Feldbreite 53,3 Yd fest)
- s+='<rect x="0" y="0" width="12" height="360" fill="#06110a" opacity="0.6"/><rect x="521" y="0" width="12" height="360" fill="#06110a" opacity="0.6"/>'+
-   '<line x1="12" y1="0" x2="12" y2="360" stroke="#eef6f0" stroke-width="3" opacity="0.92"/><line x1="521" y1="0" x2="521" y2="360" stroke="#eef6f0" stroke-width="3" opacity="0.92"/>';
- // Pylonen an den Endzonen-Ecken + Endlinie hinten
- if(fpos!=null&&fpos<=26){const gy=mapY(Math.min(fpos,26)),by=mapY(Math.min(fpos,26)+10);
-   [12,521].forEach(px=>{s+='<rect x="'+(px-2.5)+'" y="'+(gy-3)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';
-     if(by>0)s+='<rect x="'+(px-2.5)+'" y="'+(by-3)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';});
-   if(by>0)s+='<line x1="12" y1="'+by+'" x2="521" y2="'+by+'" stroke="#eef6f0" stroke-width="2" opacity="0.7"/>';}
+ // Aus-Bereiche + weiße Seitenlinien über die ganze Welt-Höhe
+ s+='<rect x="0" y="'+topY.toFixed(1)+'" width="12" height="'+wH.toFixed(1)+'" fill="#06110a" opacity="0.6"/><rect x="521" y="'+topY.toFixed(1)+'" width="12" height="'+wH.toFixed(1)+'" fill="#06110a" opacity="0.6"/>'+
+   '<line x1="12" y1="'+topY.toFixed(1)+'" x2="12" y2="'+botY.toFixed(1)+'" stroke="#eef6f0" stroke-width="3" opacity="0.92"/><line x1="521" y1="'+topY.toFixed(1)+'" x2="521" y2="'+botY.toFixed(1)+'" stroke="#eef6f0" stroke-width="3" opacity="0.92"/>';
+ if(fpos!=null){const gy=goalY,by=ezTopY;   // Pylonen + Endlinie an der echten Torlinie
+   [12,521].forEach(px=>{s+='<rect x="'+(px-2.5)+'" y="'+(gy-3).toFixed(1)+'" width="5" height="7" rx="1" fill="#ff7a1a"/><rect x="'+(px-2.5)+'" y="'+(by-3).toFixed(1)+'" width="5" height="7" rx="1" fill="#ff7a1a"/>';});
+   s+='<line x1="12" y1="'+by.toFixed(1)+'" x2="521" y2="'+by.toFixed(1)+'" stroke="#eef6f0" stroke-width="2" opacity="0.7"/>';}
  // Kettencrew (Heim-Seitenlinie) + Schiedsrichter auf dem Feld
  s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
@@ -947,7 +946,10 @@ function playAnim(svg,d,res,onDone){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
  res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
  const yards=(res.yards!=null?res.yards:(res.mean_yards!=null?res.mean_yards:0));
- const td=!!res.td, vy=(td&&yards>24)?24:yards;   // bei Touchdown sichtbar in der Endzone enden, nicht getackelt
+ const cam=(res.fpos!=null);                              // Kamera fährt bei echter Feldposition mit
+ const td=!!res.td, vy=cam?yards:((td&&yards>24)?24:yards);   // mit Kamera bis zur echten Endzone laufen; sonst (Sim-Tool) begrenzt
+ const yMax=cam?(res.fpos+2):25.5;                        // Feld-Obergrenze (Welt-Höhe)
+ let camY=0;
  const fumble=!!res.fumble&&(kind==='run'||kind==='complete')&&!td;   // Fumble (Ballverlust) bei Lauf/Fang
  const isPass=(kind!=='run'),ball=$(P+'_pball'),C=26.65;
  const SP=res.spd||{off:1,def:1};                              // Tempo aus Spielerwerten (Offense-Skill / Defense-Coverage)
@@ -1054,8 +1056,12 @@ function playAnim(svg,d,res,onDone){
   // Out of bounds: Ballträger an der Seitenlinie -> Play tot am Spot (wie im echten Football)
   const LO=1.2,HI=52.1;
   if(carrier){if(carrier.x<LO){carrier.x=LO;oob=true;}else if(carrier.x>HI){carrier.x=HI;oob=true;}}
-  O.forEach(o=>{o.x=Math.max(1.5,Math.min(51.8,o.x));o.y=Math.max(-7.5,Math.min(25.5,o.y));});   // im Feld bleiben (kein Aus, keine Endlinie)
-  D.forEach(p=>{p.x=Math.max(1.5,Math.min(51.8,p.x));p.y=Math.max(-7.5,Math.min(25.5,p.y));});
+  O.forEach(o=>{o.x=Math.max(1.5,Math.min(51.8,o.x));o.y=Math.max(-7.5,Math.min(yMax,o.y));});   // im Feld bleiben (Welt-Höhe)
+  D.forEach(p=>{p.x=Math.max(1.5,Math.min(51.8,p.x));p.y=Math.max(-7.5,Math.min(yMax,p.y));});
+  // Kamera: folgt dem Ball/Ballträger downfield (lange Läufe, Pässe, INT-Returns)
+  if(cam){let fy=qb.y;if(carrier)fy=carrier.y;else if(picked&&intD)fy=intD.y;else if(thrown)fy=bp[1];
+   const tv=Math.min(0,mapY(fy)-185);camY+=(tv-camY)*Math.min(1,dt*6);
+   svg.setAttribute('viewBox','0 '+camY.toFixed(1)+' 533 360');}
   // schreiben
   O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,o);});
   D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,p);});
@@ -1089,12 +1095,13 @@ function playAnim(svg,d,res,onDone){
     if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
   const tackled=!fumble&&atGain&&(contact||el>gainT+1.0);                              // Tackle bei Kontakt (Läufer läuft durch, steht nicht)
   const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.6) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
-    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
+    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (td&&atGain) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
   if(!done)_anim[P]=requestAnimationFrame(frame);
   else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
+    if(cam)svg.setAttribute('viewBox','0 0 533 360');                                    // Kamera zurücksetzen für die Jubel-Szene
     celebrate(P,'o'+carrier.i);
-    showResult(svg,{kind,yards,td,pt:[carrier.x,carrier.y]});
+    if(!cam)showResult(svg,{kind,yards,td,pt:[carrier.x,carrier.y]});
     if(res.celColor)setTimeout(()=>tdCelebration(svg,res.celColor,res.celDef,onDone),750);          // Schwenk auf den tanzenden Spieler
     else if(onDone)setTimeout(onDone,2200);
   }
@@ -1115,7 +1122,7 @@ function showResult(svg,res){
  const td=res.td;
  const label=res.fum?'FUMBLE! Ball verloren':td?'TOUCHDOWN!':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
  const col=res.fum?'#ef5350':td?'#19e08f':(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
- const pt=res.pt||[26,5],px=mapX(pt[0]),py=mapY(pt[1]),w=td?108:72,x=Math.min(Math.max(px,54),480),y=Math.max(py-16,16);
+ const pt=res.pt||[26,5],px=mapX(pt[0]),py=mapY(pt[1]),w=td?108:72,x=Math.min(Math.max(px,54),480),y=py-20;   // Karte direkt am Ballträger (folgt der Kamera)
  const g=el('g',{});
  if(res.kind!=='incomplete'&&!td){g.appendChild(el('circle',{cx:px,cy:py,r:14,fill:'none',stroke:'#fff',opacity:.22,'stroke-width':2}));}  // Tackle-/Endpunkt (beim TD kein Tackle)
  g.appendChild(el('rect',{x:x-w/2,y:y-13,width:w,height:22,rx:6,fill:'#0a0f0d',stroke:col,'stroke-width':td?1.8:1.3}));
@@ -2128,7 +2135,7 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
- const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover};
+ const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0};
  _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}));}   // Cadence + Snap, dann das Play
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
