@@ -23,7 +23,7 @@ from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS, play_outc
 
 # Einheiten (Roster-Gruppen) und ihre Gewichte für Offense-/Defense-Stärke.
 GAME_DRIVES = 14                                          # Drives je Spiel (~7 Ballbesitze/Team) – nur Schnell-Sim der KI-Spiele
-QUARTER_SECONDS = 360                                     # Echte Spieluhr: 6:00 je Viertel (Madden-Standard, beschleunigte Uhr)
+QUARTER_SECONDS = 450                                     # Echte Spieluhr: 7:30 je Viertel (mehr Drives -> realistischere Punktzahl)
 OT_SECONDS = 600                                          # Overtime-Periode: 10:00 Sudden Death
 OFF_UNITS = {"QB": 0.34, "OL": 0.30, "WR": 0.20, "RB": 0.16}
 DEF_UNITS = {"DL": 0.40, "DB": 0.32, "LB": 0.28}
@@ -2053,11 +2053,12 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     if choice == "__PUNT__":                              # Punt — Ballbesitz wechselt
         return _attempt_punt(cfg, state, g, off, user_has_ball)
 
-    # KI-Offense entscheidet im 4. Versuch selbst (Field Goal in Reichweite / sonst Punt / knapp ausspielen)
+    # KI-Offense entscheidet im 4. Versuch selbst (kurze Distanz in Gegner-Hälfte ausspielen, sonst FG/Punt)
     if (not user_has_ball) and g["down"] == 4:
-        if g["ytz"] <= 40 and fg_make_prob(g["ytz"], kicker(off)) >= 0.55:
-            return _attempt_fg(cfg, state, g, off, user_off=False)
-        if g["ytz"] >= 48 or g["dist"] >= 4:
+        go = (g["ytz"] <= 48 and g["dist"] <= 2) or (g["ytz"] <= 30 and g["dist"] <= 4)
+        if not go:
+            if g["ytz"] <= 38 and fg_make_prob(g["ytz"], kicker(off)) >= 0.6:
+                return _attempt_fg(cfg, state, g, off, user_off=False)
             return _attempt_punt(cfg, state, g, off, user_off=False)
 
     philly = (choice == "__PHILLY__") and user_has_ball
@@ -2506,10 +2507,11 @@ def _auto_choice(state: dict) -> str:
     teams = state["teams"]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
     if user_has_ball:
-        if g["down"] == 4:                                # 4. Versuch: FG / Punt / knapp ausspielen
-            if g["ytz"] <= 40 and fg_make_prob(g["ytz"], kicker(teams[0])) >= 0.55:
-                return "__FG__"
-            if g["ytz"] >= 48 or g["dist"] >= 4:
+        if g["down"] == 4:                                # 4. Versuch: aggressiver coachen
+            go = (g["ytz"] <= 48 and g["dist"] <= 2) or (g["ytz"] <= 30 and g["dist"] <= 4)   # kurze Distanz in Gegner-Hälfte/Red Zone -> ausspielen
+            if not go:
+                if g["ytz"] <= 38 and fg_make_prob(g["ytz"], kicker(teams[0])) >= 0.6:
+                    return "__FG__"
                 return "__PUNT__"
         return _ai_offense_concept(teams[0], g)           # situatives eigenes Play-Calling
     return _ai_defense_coverage(teams[0], g)              # situative eigene Coverage

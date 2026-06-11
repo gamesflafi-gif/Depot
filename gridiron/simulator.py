@@ -218,9 +218,9 @@ def _pass_params(c: dict, cov: dict):
     Liefert (Matchup-Faktor, Tiefenband, Completion-, Sack-, Int-Wahrsch.)."""
     mf = _pass_matchup(c, cov)
     band = _depth_band(c["depth"])
-    comp_base = {"screen": 0.86, "short": 0.71, "inter": 0.60, "deep": 0.46}[band]
-    comp_p = float(np.clip(comp_base + 0.20 * (mf - 1.0), 0.20, 0.93))
-    sack_p = float(np.clip(0.055 + 0.10 * cov["blitz"] * (2.0 - c["beats_blitz"]), 0.01, 0.22))
+    comp_base = {"screen": 0.89, "short": 0.755, "inter": 0.65, "deep": 0.50}[band]   # realistischere Trefferquote (~64% gesamt)
+    comp_p = float(np.clip(comp_base + 0.20 * (mf - 1.0), 0.20, 0.95))
+    sack_p = float(np.clip(0.045 + 0.09 * cov["blitz"] * (2.0 - c["beats_blitz"]), 0.01, 0.20))
     int_p = float(np.clip(0.018 + 0.020 * (1 - comp_p) * (1.6 if band == "deep" else 1.0), 0.005, 0.07))
     return mf, band, comp_p, sack_p, int_p
 
@@ -262,7 +262,7 @@ def play_outcome(concept: str, coverage: str, situation: dict,
     y = rng.gamma(2.6, (mean_target + 1.6) / 2.6) - 1.6
     if rng.random() < 0.05 * c["expl"] * mf * (1.0 + 0.6 * max(0.0, e)):
         y += int(rng.integers(8, 45))
-    if rng.random() < (0.08 / mf) * max(0.3, 1.0 - 0.6 * e):              # bessere Offense -> seltener gestoppt
+    if rng.random() < (0.065 / mf) * max(0.3, 1.0 - 0.6 * e):             # Tackle-for-Loss seltener (Balance), bessere Offense -> seltener gestoppt
         y = -int(rng.integers(1, 4))
     fum = rng.random() < max(0.004, 0.011 * (1.0 - 0.5 * e))
     return {"yards": int(round(y)), "kind": "run", "turnover": fum, "pass": False}
