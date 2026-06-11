@@ -525,6 +525,11 @@ def overall(team: dict) -> int:
     return round((offense(team) + defense(team)) / 2)
 
 
+def _spd_factor(rating: float) -> float:
+    """Animations-Tempo aus dem Spielerwert: bessere Werte = sichtbar schneller (~0.80..1.18)."""
+    return round(max(0.80, min(1.18, 0.80 + (rating - 50) / 100.0 * 0.75)), 3)
+
+
 # --------------------------------------------------------------------------- #
 # Persistenz
 # --------------------------------------------------------------------------- #
@@ -1790,6 +1795,8 @@ def start_game(cfg: Config, state: dict) -> dict:
             _new_decision_options(state)
             save(cfg, state)
         return {"ok": True, "game": _game_view(state)}
+    if state.get("meeting"):
+        return {"error": "Erst das Vereinsmeeting abschließen (im Dashboard)."}
     if not state.get("week_trained"):
         return {"error": "Erst das Training dieser Woche absolvieren."}
     pair = _user_pair(state)
@@ -2098,9 +2105,12 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
 
     _new_decision_options(state)                          # Optionen für den nächsten Snap
     save(cfg, state)
+    spd = {"off": _spd_factor(off["units"].get("RB" if concept in RUN_CONCEPTS else "WR", 70)),
+           "def": _spd_factor(deff["units"].get("DB", 70))}     # Tempo aus den Spielerwerten
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored, "td": is_td,
                                  "kind": o["kind"], "concept": concept, "coverage": coverage,
-                                 "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0)},
+                                 "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0),
+                                 "spd": spd},
             "game": _game_view(state)}
 
 

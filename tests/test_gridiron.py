@@ -187,7 +187,7 @@ def test_franchise_full_season(tmp_path):
         if st.get("week_done"):
             F.next_week(cfg, st)
         else:
-            F.do_training(cfg, st, "team")
+            F.do_training(cfg, st, "team"); st.pop("meeting", None)
             F.sim_week(cfg, st)
         guard += 1
     assert st["phase"] == "done" and st["champion"]
@@ -257,15 +257,17 @@ def test_all_plays_stay_in_bounds():
     LO, HI = 1.2, 52.1
     for concept in list(PASS_CONCEPTS) + list(RUN_CONCEPTS):
         for cov in COVERAGES:
-            d = diagram(concept, cov)
-            for o in d["offense"]:
-                assert LO <= o["x"] <= HI, f"{concept}/{cov}: {o['pos']} x={o['x']} im Aus"
-                for pt in (o.get("route") or []):
-                    assert LO <= pt[0] <= HI, f"{concept}/{cov}: Route {o['pos']} x={pt[0]} im Aus"
-            for p in d["defense"]:
-                assert LO <= p["x"] <= HI, f"{concept}/{cov}: DEF {p['pos']} x={p['x']} im Aus"
-                if p.get("drop"):
-                    assert LO <= p["drop"][0] <= HI, f"{concept}/{cov}: Drop {p['pos']} x={p['drop'][0]} im Aus"
+            for variant in range(5):                       # alle Formations-Varianten (inkl. Shotgun/FB)
+                d = diagram(concept, cov, variant)
+                assert len(d["offense"]) == 11 and len(d["defense"]) == 11
+                for o in d["offense"]:
+                    assert LO <= o["x"] <= HI, f"{concept}/{cov}/v{variant}: {o['pos']} x={o['x']} im Aus"
+                    for pt in (o.get("route") or []):
+                        assert LO <= pt[0] <= HI, f"{concept}/{cov}/v{variant}: Route {o['pos']} x={pt[0]} im Aus"
+                for p in d["defense"]:
+                    assert LO <= p["x"] <= HI, f"{concept}/{cov}/v{variant}: DEF {p['pos']} x={p['x']} im Aus"
+                    if p.get("drop"):
+                        assert LO <= p["drop"][0] <= HI, f"{concept}/{cov}/v{variant}: Drop x={p['drop'][0]} im Aus"
 
 
 def test_diagram_open_receiver_varies_by_coverage():
@@ -328,7 +330,7 @@ def test_punt_flips_possession(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     g = st["active_game"]
     g["pos"] = 0 if g["user_is_home"] else 1
@@ -356,7 +358,7 @@ def test_kicker_fg_and_extra_point(tmp_path):
     assert F.fg_make_prob(40, 90) > F.fg_make_prob(40, 55)
     assert F.xp_make_prob(90) > F.xp_make_prob(55)
 
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     g = st["active_game"]
     g["pos"] = 0 if g["user_is_home"] else 1              # Nutzer am Ball
@@ -395,7 +397,7 @@ def test_two_point_play_selection(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     g = st["active_game"]
     g["pos"] = 0 if g["user_is_home"] else 1
@@ -429,7 +431,7 @@ def test_penalty_payload_carries_play(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     seen = None
     for _ in range(3000):
@@ -478,7 +480,7 @@ def test_choice_events(tmp_path):
     assert res.get("ok") and res["messages"]
     assert F.view(st)["pending_event"] is None             # Event abgeschlossen
     # Events sind getrennt vom Training und nicht jede Woche (process_events erzeugt kein Buff/Debuff-Event)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     assert F.view(st)["pending_event"] is None
 
 
@@ -488,7 +490,7 @@ def test_kickoff_and_start_ovr(tmp_path):
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Kicks", n_teams=8, seed=1)
     assert F.view(st)["ratings"]["ovr"] >= 70           # Start ~70+
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     r = F.start_game(cfg, st)
     g = r["game"]
     assert g["coin"] and "user_receives" in g["coin"]
@@ -503,7 +505,7 @@ def test_end_game_by_clock(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=12)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     res = F.end_game(cfg, st)
     assert res.get("result") and "winner" in res["result"]
@@ -515,7 +517,7 @@ def test_game_clock_real(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=7)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     gv = F.start_game(cfg, st)["game"]
     assert gv["quarter"] == 1 and gv["clock"] == F.QUARTER_SECONDS
     assert gv["timeouts"] == [3, 3]
@@ -584,7 +586,7 @@ def test_random_playcalls_and_philly(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=9)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     g = st["active_game"]
 
@@ -613,7 +615,7 @@ def test_franchise_detailed_game(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=2)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     out = F.sim_week(cfg, st)
     g = out.get("user_game")
     assert g and g["plays"] and "Adler" in (g["home"], g["away"])
@@ -663,7 +665,7 @@ def test_franchise_season_goals(tmp_path):
         if st.get("week_done"):
             F.next_week(cfg, st)
         else:
-            F.do_training(cfg, st, "team")
+            F.do_training(cfg, st, "team"); st.pop("meeting", None)
             F.sim_week(cfg, st)
         guard += 1
     assert any(g["done"] for g in st["goals"])
@@ -695,7 +697,7 @@ def test_franchise_game_sim_options(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=51)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     r = F.game_sim_drive(cfg, st)
     assert ("game" in r) or ("result" in r)                # weiter ODER schon vorbei
@@ -712,7 +714,7 @@ def test_franchise_player_season_career_stats(tmp_path):
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=71)
     for _ in range(3):
-        F.do_training(cfg, st, "team"); F.sim_week(cfg, st); F.next_week(cfg, st)
+        F.do_training(cfg, st, "team"); st.pop("meeting", None); F.sim_week(cfg, st); F.next_week(cfg, st)
     team = st["teams"][0]
     assert any(p["season"]["games"] > 0 for p in team["roster"])
     assert all(p["career"]["games"] >= p["season"]["games"] for p in team["roster"])
@@ -729,7 +731,7 @@ def test_franchise_box_scores(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=21)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     g = F.sim_week(cfg, st)["user_game"]
     assert g["box"] and len(g["box"]) >= 4
     assert any(s["pass_yds"] or s["rush_yds"] or s["rec_yds"] for s in g["box"])   # Offense
@@ -750,7 +752,7 @@ def test_franchise_events_injuries(tmp_path):
     assert F.overall(team) <= ov0                               # verletzter Starter schwächt
     seen = set()
     for _ in range(8):
-        F.do_training(cfg, st, "team")
+        F.do_training(cfg, st, "team"); st.pop("meeting", None)
         for e in F.sim_week(cfg, st).get("events", []):
             seen.add(e["type"])
         F.next_week(cfg, st)
@@ -828,7 +830,7 @@ def test_franchise_roster_attributes_exp(tmp_path):
     assert "starter" in F.depth_toggle(cfg, st, p["id"])
     assert F.set_focus(cfg, st, "QB")["focus"] == "QB"
     # EXP durch Wochentraining (Pflicht) + Spiel
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.sim_week(cfg, st)
     assert any(x["exp"] > 0 or x["pts"] > 0 for x in team["roster"])
     v = F.view(st)
@@ -841,7 +843,7 @@ def test_franchise_interactive_game(tmp_path):
     from gridiron import franchise as F
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=5)
-    F.do_training(cfg, st, "team")
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
     g = F.start_game(cfg, st)["game"]
     assert g["awaiting"] in ("offense", "defense") and g["options"]
     guard = 0
@@ -867,6 +869,7 @@ def test_franchise_game_web(tmp_path):
     client = TestClient(create_app(_cfg(tmp_path)))
     client.post("/api/fr/new", params={"team": "FC", "teams": 6})
     client.post("/api/fr/train_week", params={"kind": "team"})           # Training Pflicht vor Spiel
+    client.post("/api/fr/resolve_meeting", params={"idx": 0})            # Vereinsmeeting vor dem Spiel abschließen
     g = client.post("/api/fr/game/start").json()["game"]
     assert g["options"]
     r = client.post("/api/fr/game/play", params={"choice": g["options"][0]["key"]}).json()
