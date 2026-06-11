@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v61-slowmo"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v62-ballfix"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -938,7 +938,7 @@ function playAnim(svg,d,res,onDone){
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
  const BALLSPD=23;                                  // Ballgeschwindigkeit (Yd/s) — Flug sichtbar, Receiver fängt im Lauf
  const TS=0.58;                                     // Spiel-Zeitlupe: Play läuft langsamer & lesbarer ab (real bleibt die Logik)
- const t0=performance.now();let last=t0,pt=0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false;
+ const t0=performance.now();let last=t0,pt=0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false,throwAng=0,gainT=-1;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/BALLSPD);
  const RESP={QB:8,RB:10,WR:10.5,TE:8.5,OL:6,FB:8.5,DE:7.5,DT:6.5,LB:8.5,CB:10.5,DB:10,S:9};   // Wendigkeit je Position
  const rp=pos=>RESP[pos]||8;
@@ -981,7 +981,7 @@ function playAnim(svg,d,res,onDone){
      const recvTime=tgt?Math.hypot(dest[0]-tgt.x,dest[1]-tgt.y)/Math.max(4,_spd(tgt.pos)):0;  // Zeit des Receivers zum Punkt
      const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
      const timed=tgt&&el>0.5&&recvTime<=ballTime+0.05;                      // jetzt werfen -> Receiver läuft den Ball an
-     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];}
+     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;}   // Ball zeigt in Flugrichtung
    }
    if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
      if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
@@ -1019,19 +1019,23 @@ function playAnim(svg,d,res,onDone){
   if(ball){
    if(!isPass){
      if(!handoffDone){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(qb.x));ball.setAttribute('cy',mapY(qb.y));ball.setAttribute('transform','');}   // Ball in QB-Hand bis zum Handoff
-     else if(carrier){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(carrier.x));ball.setAttribute('cy',mapY(carrier.y));ball.setAttribute('transform','rotate('+(carrier.x*40).toFixed(0)+' '+mapX(carrier.x)+' '+mapY(carrier.y)+')');}
+     else if(carrier){const cbx=mapX(carrier.x),cby=mapY(carrier.y),ca=Math.atan2(-(carrier.vy||0),(carrier.vx||0))*180/Math.PI;   // getragen: zeigt in Laufrichtung, kein Trudeln
+       ball.setAttribute('opacity',1);ball.setAttribute('cx',cbx);ball.setAttribute('cy',cby);ball.setAttribute('transform','rotate('+ca.toFixed(0)+' '+cbx+' '+cby+')');}
      else ball.setAttribute('opacity',0);}
    else if(kind==='sack'){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(qb.x));ball.setAttribute('cy',mapY(qb.y));ball.setAttribute('transform','');}   // Ball bleibt beim bedrängten QB
    else if(thrown){const fp=arrived?1:Math.min(1,(el-tAt)/flightDur);const arc=Math.sin(fp*Math.PI)*14;
      const bx=mapX(bp[0]),by=mapY(bp[1])-arc;ball.setAttribute('cx',bx);ball.setAttribute('cy',by);
-     ball.setAttribute('transform','rotate('+(fp*900).toFixed(0)+' '+bx+' '+by+')');                  // Football-Spirale im Flug
+     ball.setAttribute('transform','rotate('+(throwAng+Math.sin(fp*26)*4).toFixed(1)+' '+bx+' '+by+')');   // zeigt in Flugrichtung + feiner Spiral-Wobble
      ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
    else {ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(qb.x));ball.setAttribute('cy',mapY(qb.y));ball.setAttribute('transform','');}   // Pass: Ball in QB-Hand bis zum Wurf
   }
-  // Ende: erst wenn der Raumgewinn erreicht ist (Verteidiger treffen dort ein = Tackle), Pass aufgelöst, Sack oder Timeout
+  // Ende: Lauf/Fang endet bei ECHTEM Kontakt am Raumgewinn-Spot (kein Phantom-Tackle); sonst Pass/Sack/Aus/Timeout
   const atGain=carrier&&((kind==='complete'&&Math.hypot(carrier.x-gain[0],carrier.y-gain[1])<0.9)||(!isPass&&runEnd&&Math.abs(carrier.y-runEnd[1])<0.9));
-  const done=el>6.5 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
-    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (atGain&&el>1.0) || (oob&&!td&&el>0.8&&(caught||!isPass));
+  if(atGain&&gainT<0)gainT=el;
+  const contact=carrier&&D.some(p=>Math.hypot(p.x-carrier.x,p.y-carrier.y)<1.45);     // Verteidiger wirklich am Ballträger?
+  const tackled=atGain&&(contact||el>gainT+2.2);                                       // bei Kontakt getackelt, sonst kurze Wartezeit (Safety)
+  const done=el>8.0 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&el>arrTime+0.8)
+    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass));
   if(!done)_anim[P]=requestAnimationFrame(frame);
   else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
     celebrate(P,'o'+carrier.i);
@@ -1040,9 +1044,9 @@ function playAnim(svg,d,res,onDone){
     else if(onDone)setTimeout(onDone,2200);
   }
   else{
-    if(kind==='sack'){downFig(P,'o'+qb.i);D.filter(p=>p.role==='rush').sort((a,b)=>Math.hypot(a.x-qb.x,a.y-qb.y)-Math.hypot(b.x-qb.x,b.y-qb.y)).slice(0,2).forEach(p=>downFig(P,'d_'+p.i));}
-    else if(carrier&&kind!=='incomplete'){downFig(P,'o'+carrier.i);                     // Tackle: Ballträger + nächste Verteidiger gehen zu Boden (Gang-Tackle)
-      D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<2.6).sort((a,b)=>a[1]-b[1]).slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}
+    if(kind==='sack'){downFig(P,'o'+qb.i);D.filter(p=>p.role==='rush'&&Math.hypot(p.x-qb.x,p.y-qb.y)<1.9).sort((a,b)=>Math.hypot(a.x-qb.x,a.y-qb.y)-Math.hypot(b.x-qb.x,b.y-qb.y)).slice(0,2).forEach(p=>downFig(P,'d_'+p.i));}
+    else if(carrier&&kind!=='incomplete'&&!oob){const hit=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<1.8).sort((a,b)=>a[1]-b[1]);
+      if(hit.length){downFig(P,'o'+carrier.i);hit.slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}}      // nur bei echtem Kontakt zu Boden (kein Phantom-Tackle, kein Aus-Tackle)
     if(!res.noResult)showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
     if(onDone)setTimeout(onDone,res.noResult?900:1600);}
  }
