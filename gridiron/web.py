@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v60-movement"       # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v61-slowmo"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -937,7 +937,8 @@ function playAnim(svg,d,res,onDone){
  const runEnd=(!isPass&&tgt)?[catchPt[0],vy]:null;
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
  const BALLSPD=23;                                  // Ballgeschwindigkeit (Yd/s) — Flug sichtbar, Receiver fängt im Lauf
- const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false;
+ const TS=0.58;                                     // Spiel-Zeitlupe: Play läuft langsamer & lesbarer ab (real bleibt die Logik)
+ const t0=performance.now();let last=t0,pt=0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/BALLSPD);
  const RESP={QB:8,RB:10,WR:10.5,TE:8.5,OL:6,FB:8.5,DE:7.5,DT:6.5,LB:8.5,CB:10.5,DB:10,S:9};   // Wendigkeit je Position
  const rp=pos=>RESP[pos]||8;
@@ -945,8 +946,8 @@ function playAnim(svg,d,res,onDone){
  const olsX=ols.slice().sort((a,b)=>a.x-b.x);
  if(isPass){const rs=rushers.slice().sort((a,b)=>a.x-b.x);     // Pass-Schutz: jeder Blocker nimmt einen Rusher (Überzahl = freier Rusher = Druck)
    rs.forEach((r,i)=>{const o=olsX[i];if(o){r._ol=o;o._asg=r;}});}
- function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;
-  const ramp=Math.min(1,0.34+el*1.7);                          // explosiver Antritt aus dem Stand
+ function frame(now){const rdt=Math.min(0.05,(now-last)/1000);last=now;const dt=rdt*TS;pt+=dt;const el=pt;   // el = Spielzeit (verlangsamt)
+  const ramp=Math.min(1,0.22+el*0.95);                         // realistischer Antritt: Tempo über ~0.8s aufbauen
   const mx=pos=>_spd(pos)*sf(pos)*ramp;                        // Maximaltempo (Yd/s) dieses Frames
   if(!isPass&&!handoffDone&&tgt&&(Math.hypot(tgt.x-qb.x,tgt.y-qb.y)<1.6||el>1.0))handoffDone=true;   // Handoff am Mesh-Punkt
   const carrier=(kind==='complete'&&caught)?tgt:(!isPass?(handoffDone?tgt:null):null);
@@ -980,7 +981,7 @@ function playAnim(svg,d,res,onDone){
      const recvTime=tgt?Math.hypot(dest[0]-tgt.x,dest[1]-tgt.y)/Math.max(4,_spd(tgt.pos)):0;  // Zeit des Receivers zum Punkt
      const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
      const timed=tgt&&el>0.5&&recvTime<=ballTime+0.05;                      // jetzt werfen -> Receiver läuft den Ball an
-     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=now;bp=[qb.x,qb.y];}
+     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];}
    }
    if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
      if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
@@ -1021,7 +1022,7 @@ function playAnim(svg,d,res,onDone){
      else if(carrier){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(carrier.x));ball.setAttribute('cy',mapY(carrier.y));ball.setAttribute('transform','rotate('+(carrier.x*40).toFixed(0)+' '+mapX(carrier.x)+' '+mapY(carrier.y)+')');}
      else ball.setAttribute('opacity',0);}
    else if(kind==='sack'){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(qb.x));ball.setAttribute('cy',mapY(qb.y));ball.setAttribute('transform','');}   // Ball bleibt beim bedrängten QB
-   else if(thrown){const fp=arrived?1:Math.min(1,(now-tAt)/1000/flightDur);const arc=Math.sin(fp*Math.PI)*14;
+   else if(thrown){const fp=arrived?1:Math.min(1,(el-tAt)/flightDur);const arc=Math.sin(fp*Math.PI)*14;
      const bx=mapX(bp[0]),by=mapY(bp[1])-arc;ball.setAttribute('cx',bx);ball.setAttribute('cy',by);
      ball.setAttribute('transform','rotate('+(fp*900).toFixed(0)+' '+bx+' '+by+')');                  // Football-Spirale im Flug
      ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
@@ -1043,7 +1044,7 @@ function playAnim(svg,d,res,onDone){
     else if(carrier&&kind!=='incomplete'){downFig(P,'o'+carrier.i);                     // Tackle: Ballträger + nächste Verteidiger gehen zu Boden (Gang-Tackle)
       D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<2.6).sort((a,b)=>a[1]-b[1]).slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}
     if(!res.noResult)showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
-    if(onDone)setTimeout(onDone,res.noResult?700:1200);}
+    if(onDone)setTimeout(onDone,res.noResult?900:1600);}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
