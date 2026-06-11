@@ -1340,13 +1340,19 @@ def _advance_playoff(state: dict) -> None:
 
 
 def new_season(cfg: Config, state: dict) -> dict:
-    """Nächste Saison: Bilanzen zurücksetzen, KI driftet leicht, neuer Spielplan."""
+    """Nächste Saison: Bilanzen zurücksetzen, Liga skaliert MIT dem Nutzer (immer fordernd, aber nicht davonlaufend), neuer Spielplan."""
     rng = random.Random()
+    user_ovr = overall(state["teams"][0])            # die KI orientiert sich an deiner Stärke
+    diff_band = {"leicht": -3, "normal": 1, "schwer": 5}.get(state.get("difficulty", "normal"), 1)
     for t in state["teams"]:
         t["w"] = t["l"] = t["t"] = t["pf"] = t["pa"] = 0
-        if not t["user"]:                                # KI wird jede Saison stärker (bleibt eine Herausforderung)
+        if not t["user"]:
+            tier = t.setdefault("_tier", rng.randint(-7, 7))     # feste Klub-Identität (starke/schwache Teams)
+            target = user_ovr + diff_band + tier                 # Ziel-Stärke nahe deinem Niveau ± Identität
             for u in ALL_UNITS:
-                t["units"][u] = max(50, min(97, t["units"][u] + rng.randint(3, 7)))
+                cur = t["units"][u]
+                step = max(-3, min(3, round((target - cur) * 0.6))) + rng.randint(-1, 1)  # driftet sanft Richtung Ziel, gedeckelt
+                t["units"][u] = max(48, min(96, cur + step))
             if rng.random() < 0.4:
                 t["off_scheme"] = rng.choice(list(OFF_SCHEMES))
             if rng.random() < 0.4:
