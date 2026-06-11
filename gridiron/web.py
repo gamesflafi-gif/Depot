@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v30-smooth"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v31-portraits"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -577,24 +577,47 @@ function posBadge(p){return '<span class="posb p-'+p+'">'+p+'</span>';}
 function teamLogo(abbr,color,cls){return '<span class="tlogo'+(cls?' '+cls:'')+'" style="--lc:'+esc(color||'#16c784')+'">'+esc(((abbr||'?')+'').slice(0,3))+'</span>';}
 function _hash(s){s=''+s;let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 function portrait(p,sz,teamColor){sz=sz||38;const h=_hash((p.id!=null?p.id:0)+'_'+(p.name||''));
- const skin=['#f2cba5','#e3b183','#cd9b67','#a96f44','#7a4a28','#5a3620'][h%6];
- const hairC=['#15110d','#2e1d12','#5b3a1e','#0b0b0b','#3a3a3a','#b9933f'][(h>>4)%6];
- const bg=teamColor?'#16201c':['#22304d','#27343d','#2c2547','#1f3b30'][(h>>7)%4];
- const jersey=teamColor||'#3a4750';const style=(h>>10)%4,beard=((h>>13)%4===0);
- let s='<svg class="ptr" viewBox="0 0 40 42" width="'+sz+'" height="'+Math.round(sz*1.05)+'" preserveAspectRatio="xMidYMid meet">';
- s+='<rect x="0" y="0" width="40" height="42" rx="9" fill="'+bg+'"/>';
- s+='<path d="M5 42 Q20 30 35 42 Z" fill="'+jersey+'"/><ellipse cx="20" cy="37" rx="8.5" ry="6" fill="'+jersey+'"/>';
- s+='<rect x="16" y="26" width="8" height="8" fill="'+skin+'"/>';
- s+='<circle cx="11" cy="19" r="1.8" fill="'+skin+'"/><circle cx="29" cy="19" r="1.8" fill="'+skin+'"/>';
- s+='<ellipse cx="20" cy="19" rx="9" ry="10.5" fill="'+skin+'"/>';
- if(beard)s+='<path d="M12 20 Q20 33 28 20 Q26 28 20 29 Q14 28 12 20 Z" fill="'+hairC+'" opacity="0.9"/>';
- if(style===0)s+='<path d="M10.5 14 Q20 3 29.5 14 L29.5 11 Q20 5 10.5 11 Z" fill="'+hairC+'"/>';
- else if(style===1)s+='<ellipse cx="20" cy="10.5" rx="11" ry="8.5" fill="'+hairC+'"/>';
- else if(style===3){s+='<path d="M10.5 13 Q20 4 29.5 13 L29.5 11 Q20 5 10.5 11 Z" fill="'+hairC+'"/><rect x="9.5" y="11.5" width="21" height="3" rx="1.5" fill="#e7e7e7"/>';}
- else s+='<path d="M12 12.5 Q20 7 28 12.5" stroke="'+hairC+'" stroke-width="2.4" fill="none"/>';
- s+='<rect x="14.3" y="16" width="4" height="1.1" rx="0.5" fill="'+hairC+'"/><rect x="21.7" y="16" width="4" height="1.1" rx="0.5" fill="'+hairC+'"/>';
- s+='<circle cx="16.5" cy="19" r="1.3" fill="#1a1a1a"/><circle cx="23.5" cy="19" r="1.3" fill="#1a1a1a"/>';
- s+='<path d="M19 20 l-1 3 h2 Z" fill="rgba(0,0,0,.16)"/><path d="M17 24.5 Q20 26.5 23 24.5" stroke="#7a3b2e" stroke-width="1" fill="none"/>';
+ const id='pt'+h.toString(36)+'_'+sz;
+ const SK=[['#f6d3ad','#e3b98e'],['#ecbf94','#d3a072'],['#d3a06e','#b98453'],['#b07a48','#925d32'],['#8a5a32','#6e4424'],['#5f3c22','#472b17']][h%6];
+ const skin=SK[0],sh=SK[1];
+ const hairC=['#1a130d','#2e1d12','#5b3a1e','#0b0b0b','#3a3a3a','#caa24a','#7a4a22'][(h>>>4)%7];
+ const tc=teamColor||'#3a4750';
+ const bg0=teamColor?'#1c2823':['#1d2a40','#243038','#291f3e','#1b3329'][(h>>>7)%4];
+ const hstyle=(h>>>10)%5, beardT=(h>>>13)%5, eyeblack=((h>>>17)%3===0);
+ const W=sz,Hh=Math.round(sz*1.08);
+ let s='<svg class="ptr" viewBox="0 0 40 44" width="'+W+'" height="'+Hh+'" preserveAspectRatio="xMidYMid meet">';
+ s+='<defs><radialGradient id="'+id+'" cx="0.5" cy="0.3" r="0.9"><stop offset="0" stop-color="'+bg0+'"/><stop offset="1" stop-color="#0c130f"/></radialGradient></defs>';
+ s+='<rect width="40" height="44" rx="10" fill="url(#'+id+')"/>';
+ // Trikot/Schultern + Kragen
+ s+='<path d="M3 44 Q4 32 14 29 L26 29 Q36 32 37 44 Z" fill="'+tc+'"/>';
+ s+='<path d="M3 44 Q4 32 14 29 L20 33 L9 40 Z" fill="#000" opacity=".12"/>';
+ s+='<path d="M15.5 29.5 L20 34 L24.5 29.5 L23 28 L17 28 Z" fill="#ffffff" opacity=".88"/>';
+ // Hals mit Schatten
+ s+='<path d="M16 24 h8 v6 q-4 3 -8 0 Z" fill="'+skin+'"/><path d="M16 28 q4 3 8 0 v1.6 q-4 3 -8 0 Z" fill="'+sh+'" opacity=".7"/>';
+ // Kopf + Wangenschatten + Ohren
+ s+='<path d="M11 18 Q11 8.5 20 8.5 Q29 8.5 29 18 Q29 25.6 24 28 Q20 29.7 16 28 Q11 25.6 11 18 Z" fill="'+skin+'"/>';
+ s+='<path d="M20 8.5 Q29 8.5 29 18 Q29 25.6 24 28 L22.4 27.1 Q26 24.2 26 17.4 Q26 11.2 20 10.6 Z" fill="'+sh+'" opacity=".4"/>';
+ s+='<circle cx="11" cy="19.5" r="1.9" fill="'+skin+'"/><circle cx="29" cy="19.5" r="1.9" fill="'+sh+'"/>';
+ // Haar (5 Stile)
+ if(hstyle===0)s+='<path d="M10.5 17 Q10 6 20 6 Q30 6 29.5 17 Q26 9.5 20 9.5 Q14 9.5 10.5 17 Z" fill="'+hairC+'"/>';
+ else if(hstyle===1)s+='<path d="M10.8 16 Q11 7 20 7 Q29 7 29.2 16 L29.2 13 Q20 9.5 10.8 13 Z" fill="'+hairC+'"/>';
+ else if(hstyle===2)s+='<path d="M12 13.2 Q13 7.6 20 7.6 Q27 7.6 28 13.2 Q20 10.9 12 13.2 Z" fill="'+hairC+'"/>';
+ else if(hstyle===3)s+='<ellipse cx="20" cy="11" rx="11" ry="8.6" fill="'+hairC+'"/>';
+ else s+='<path d="M10.5 16 Q10 6.5 20 6.5 Q30 6.5 29.5 16 L29.5 12 Q20 9 10.5 12 Z" fill="'+hairC+'"/><rect x="9.6" y="12" width="20.8" height="3" rx="1.5" fill="#e7e7e7" opacity=".85"/>';
+ // Brauen + Augen
+ s+='<path d="M14.4 16.5 Q16.4 15.5 18.3 16.4" stroke="'+hairC+'" stroke-width="1.2" fill="none" stroke-linecap="round"/><path d="M21.7 16.4 Q23.6 15.5 25.6 16.5" stroke="'+hairC+'" stroke-width="1.2" fill="none" stroke-linecap="round"/>';
+ s+='<ellipse cx="16.6" cy="19" rx="1.7" ry="1.5" fill="#fbfbfb"/><ellipse cx="23.4" cy="19" rx="1.7" ry="1.5" fill="#fbfbfb"/>';
+ s+='<circle cx="16.8" cy="19.1" r="1" fill="#2a1c12"/><circle cx="23.2" cy="19.1" r="1" fill="#2a1c12"/>';
+ if(eyeblack)s+='<rect x="15" y="21.1" width="3" height="1.4" rx="0.6" fill="#161616"/><rect x="22" y="21.1" width="3" height="1.4" rx="0.6" fill="#161616"/>';
+ // Nase + Mund
+ s+='<path d="M20 19.6 Q19 22 18.4 23 Q20 23.8 21.6 23 Q21 22 20 19.6 Z" fill="'+sh+'" opacity=".55"/>';
+ s+='<path d="M17.4 25 Q20 26.4 22.6 25" stroke="#8a4034" stroke-width="1.1" fill="none" stroke-linecap="round"/>';
+ // Bart (4 Varianten)
+ if(beardT===1)s+='<path d="M13 22 Q20 31 27 22 Q26.5 27.5 20 28.7 Q13.5 27.5 13 22 Z" fill="'+hairC+'" opacity=".92"/>';
+ else if(beardT===2)s+='<path d="M16.4 25 Q20 26.6 23.6 25 L23.6 26.4 Q20 28 16.4 26.4 Z" fill="'+hairC+'" opacity=".9"/>';
+ else if(beardT===3)s+='<g fill="'+hairC+'" opacity=".3"><circle cx="15" cy="24" r=".5"/><circle cx="17" cy="25.5" r=".5"/><circle cx="19" cy="26.3" r=".5"/><circle cx="21" cy="26.3" r=".5"/><circle cx="23" cy="25.5" r=".5"/><circle cx="25" cy="24" r=".5"/><circle cx="16" cy="22.6" r=".5"/><circle cx="24" cy="22.6" r=".5"/></g>';
+ // Glanzkante
+ s+='<path d="M11 18 Q11 8.5 20 8.5" stroke="#ffffff" stroke-opacity=".12" stroke-width="1.2" fill="none"/>';
  return s+'</svg>';}
 function ovrTier(o){return o>=88?'elite':o>=80?'good':o>=72?'ok':o>=62?'avg':'low';}
 function ovrBadge(o){return '<span class="ovrb ovr-'+ovrTier(o)+'">'+o+'</span>';}
@@ -1152,7 +1175,7 @@ function secTransfer(v){
      const ovrTxt=(p.ovr!=null)?('OVR '+p.ovr+' · Pot '+p.pot):('OVR '+p.ovr_lo+'–'+p.ovr_hi);
      const dev=(p.ovr!=null)?(' '+devBadge(p.dev,p.dev_label)):'';
      const extra=(p.grade&&p.grade!=='?'?' · '+esc(p.grade):'')+(p.strength?' · '+esc(p.strength):'');
-     h+='<div class="reco prospect"><span style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">'+posBadge(p.pos)+
+     h+='<div class="reco prospect"><span style="display:flex;align-items:center;gap:9px;flex:1;min-width:0"><span class="pfa">'+portrait(p,34,v.color)+'</span>'+posBadge(p.pos)+
        '<span style="min-width:0"><span class="nm">'+esc(p.name)+'</span>'+dev+
        '<span class="mut sub">'+ovrTxt+' · Alter '+p.age+' · '+esc(p.round)+extra+'</span>'+
        scoutDots(p.scout,p.scout_max)+'</span></span>'+
@@ -1168,7 +1191,7 @@ function secTransfer(v){
    const ps=v.market_players.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];
-     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px">'+ovrBadge(p.ovr)+posBadge(p.pos)+'<span><b>'+esc(p.name)+'</b> <span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'</span></span></span>'+
+     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px"><span class="pfa">'+portrait(p,34,v.color)+'</span>'+ovrBadge(p.ovr)+posBadge(p.pos)+'<span><b>'+esc(p.name)+'</b> <span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'</span></span></span>'+
        '<button data-i="'+p.id+'" onclick="signP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Verpflichten ('+p.cost+' Mio)')+'</button></div>';});
    h+='</div>';});
  return h;
