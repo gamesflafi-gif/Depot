@@ -431,6 +431,40 @@ def test_end_game_by_clock(tmp_path):
     assert st.get("active_game") is None            # Spiel abgeschlossen
 
 
+def test_game_clock_real(tmp_path):
+    """Echte Spieluhr: Start bei voller Viertelzeit, läuft pro Snap ab, Viertel/Halbzeit/Ende sauber."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=7)
+    F.do_training(cfg, st, "team")
+    gv = F.start_game(cfg, st)["game"]
+    assert gv["quarter"] == 1 and gv["clock"] == F.QUARTER_SECONDS
+    assert gv["timeouts"] == [3, 3]
+
+    g = st["active_game"]
+    first_receiver = g["pos"]
+    saw_q2 = saw_q3 = saw_two_min = False
+    guard = 0
+    while not st["active_game"]["over"] and guard < 800:
+        gg = st["active_game"]
+        assert gg["clock"] >= 0 and gg["clock"] <= max(F.QUARTER_SECONDS, F.OT_SECONDS)
+        assert gg["quarter"] >= 1 and gg["down"] in (1, 2, 3, 4)
+        assert 0 <= gg["timeouts"][0] <= 3 and 0 <= gg["timeouts"][1] <= 3
+        if gg["quarter"] == 2:
+            saw_q2 = True
+        if gg["quarter"] == 3 and not saw_q3:
+            saw_q3 = True
+            assert gg["pos"] == (first_receiver ^ 1)      # zweite Hälfte: anderes Team bekommt Kickoff
+            assert gg["timeouts"] == [3, 3]               # Auszeiten zur Halbzeit zurückgesetzt
+        if any("Zwei-Minuten" in L["desc"] for L in gg["log"]):
+            saw_two_min = True
+        F.game_play(cfg, st, F._auto_choice(st))
+        guard += 1
+    over = st["active_game"]
+    assert over["over"] and over["quarter"] >= 4          # über die Uhr beendet (regulär nach Q4 / evtl. OT)
+    assert saw_q2 and saw_q3 and saw_two_min               # alle Viertel-/Halbzeit-/2-Min-Mechaniken liefen
+
+
 def test_penalties_apply_rules(tmp_path):
     """Strafen: Vor-Snap-Foul wiederholt den Down, Defensiv-Foul gibt Yards/automatisches First Down."""
     from gridiron import franchise as F
@@ -732,10 +766,13 @@ def test_franchise_interactive_game(tmp_path):
     g = F.start_game(cfg, st)["game"]
     assert g["awaiting"] in ("offense", "defense") and g["options"]
     guard = 0
-    while not g["over"] and guard < 300:
+    while not g["over"] and guard < 600:
+        # Spieluhr-Invarianten bei jedem Snap
+        assert g["clock"] >= 0 and g["quarter"] >= 1
+        assert 0 <= g["timeouts"][0] <= 3 and 0 <= g["timeouts"][1] <= 3
         g = F.game_play(cfg, st, g["options"][0]["key"])["game"]
         guard += 1
-    assert g["over"] and g["drive"] >= F.MAX_DRIVES
+    assert g["over"] and g["quarter"] >= 4                 # Spiel endet über die echte Spieluhr (regulär nach Q4, evtl. OT)
     fin = F.finish_game(cfg, st)
     assert fin["ok"] and fin["view"]["week_done"] is True    # Woche ausgewertet
     assert not F.load(cfg).get("active_game")                # Spiel abgeschlossen
