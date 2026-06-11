@@ -367,9 +367,10 @@ def test_kicker_fg_and_extra_point(tmp_path):
     F._new_decision_options(st)
     opts = F._game_view(st)["options"]
     assert any(o["key"] == "__FG__" for o in opts)
-    # 4 zufällige Offense-Plays mit mindestens 1 Lauf und 1 Pass
+    # 6 Offense-Plays pro Snap: genau 2 Läufe und 4 Pässe
     plays = [o for o in opts if o["type"] in ("Pass", "Lauf")]
-    assert len(plays) == 4 and any(o["type"] == "Lauf" for o in plays) and any(o["type"] == "Pass" for o in plays)
+    assert len(plays) == 6
+    assert sum(o["type"] == "Lauf" for o in plays) == 2 and sum(o["type"] == "Pass" for o in plays) == 4
     r = F.game_play(cfg, st, "__FG__")
     assert r["play"]["kind"] == "fg" and r["game"]["awaiting"] != "pat"
 
@@ -582,19 +583,24 @@ def test_penalties_apply_rules(tmp_path):
 
 
 def test_random_playcalls_and_philly(tmp_path):
-    """Eigene Plays: 4 zufällige Offense-Calls, 4 Coverages; Philly Special genau 1×."""
+    """Eigene Plays: 6 Offense-Calls (2 Lauf/4 Pass), 6 gemischte Coverages; Philly genau 1×."""
     from gridiron import franchise as F
+    from gridiron.simulator import COVERAGES
     cfg = _cfg(tmp_path)
     st = F.new_franchise(cfg, "Adler", n_teams=6, seed=9)
     F.do_training(cfg, st, "team"); st.pop("meeting", None)
     F.start_game(cfg, st)
     g = st["active_game"]
 
-    # Defense: 4 zufällige Coverages
+    # Defense: 6 gut gemischte Coverages (Mann UND Zone vertreten)
     g["pos"] = 1 if g["user_is_home"] else 0             # Gegner am Ball -> Nutzer verteidigt
+    g["clock_running"] = False                            # kein Auszeit-Button -> nur Coverages
     F._new_decision_options(st)
     dopts = F._game_view(st)["options"]
-    assert len(dopts) == 4 and all(o["type"] == "Coverage" for o in dopts)
+    assert len(dopts) == 6 and all(o["type"] == "Coverage" for o in dopts)
+    assert len({o["key"] for o in dopts}) == 6           # keine Duplikate
+    keys = {o["key"] for o in dopts}
+    assert any(COVERAGES[k].get("man") for k in keys) and any(not COVERAGES[k].get("man") for k in keys)
 
     # Philly Special wird genau einmal angeboten
     g["pos"] = 0 if g["user_is_home"] else 1             # Nutzer am Ball

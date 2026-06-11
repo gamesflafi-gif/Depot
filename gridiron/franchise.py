@@ -1837,15 +1837,29 @@ def start_game(cfg: Config, state: dict) -> dict:
 
 
 def _random_off_options() -> list[dict]:
-    """4 zufällige Offense-Plays, immer mindestens 1 Lauf und 1 Pass."""
+    """6 Offense-Plays pro Snap: genau 4 Pässe und 2 Läufe (zufällig gemischt)."""
     passes, runs = list(PASS_CONCEPTS), list(RUN_CONCEPTS)
-    chosen = [random.choice(passes), random.choice(runs)]
-    pool = [k for k in passes + runs if k not in chosen]
-    random.shuffle(pool)
-    chosen += pool[:2]
+    random.shuffle(passes)
+    random.shuffle(runs)
+    chosen = passes[:4] + runs[:2]
     random.shuffle(chosen)
     return [{"key": k, "label": (PASS_CONCEPTS.get(k) or RUN_CONCEPTS[k])["label"],
              "type": "Pass" if k in PASS_CONCEPTS else "Lauf"} for k in chosen]
+
+
+def _def_options() -> list[str]:
+    """6 Coverages pro Snap, gut gemischt (mind. 2 Mann + 2 Zone) für echte Variabilität —
+    so hat man eine faire Chance, die richtige Deckung gegen die Offense zu wählen."""
+    man = [k for k, v in COVERAGES.items() if v.get("man")]
+    zone = [k for k, v in COVERAGES.items() if not v.get("man")]
+    random.shuffle(man)
+    random.shuffle(zone)
+    picks = man[:2] + zone[:2]                            # Grundmischung: Mann & Zone garantiert
+    rest = man[2:] + zone[2:]
+    random.shuffle(rest)
+    picks += rest[:6 - len(picks)]
+    random.shuffle(picks)
+    return picks
 
 
 def _new_decision_options(state: dict) -> None:
@@ -1872,8 +1886,8 @@ def _new_decision_options(state: dict) -> None:
         if not g.get("philly_used") and g["off_snaps"] == g.get("philly_at", 2):   # 🦅 genau einmal anbieten
             opts.append({"key": "__PHILLY__", "label": "🦅 Philly Special", "type": "Trick"})
         g["opts"] = _with_timeout(g, opts)
-    else:                                                 # Defense: 4 zufällige Coverages
-        covs = random.sample(list(COVERAGES), min(4, len(COVERAGES)))
+    else:                                                 # Defense: 6 gut gemischte Coverages
+        covs = _def_options()
         g["opts"] = _with_timeout(g, [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in covs])
 
 
