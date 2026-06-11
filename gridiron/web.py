@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v53-flags"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v54-fieldfit"       # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -915,8 +915,9 @@ function playAnim(svg,d,res,onDone){
  const gain=[catchPt[0],(kind==='complete')?Math.max(catchPt[1],vy):vy];   // complete: YAC bis Yards; Lauf: genau Yards
  const runEnd=(!isPass&&tgt)?[catchPt[0],vy]:null;
  let intD=null;if(kind==='int'){let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-catchPt[0],p.y-catchPt[1]);if(dd<bd){bd=dd;intD=p;}});}
+ const BALLSPD=23;                                  // Ballgeschwindigkeit (Yd/s) — Flug sichtbar, Receiver fängt im Lauf
  const t0=performance.now();let last=t0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false;
- const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/26);
+ const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/BALLSPD);
  function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;const el=(now-t0)/1000;const acc=Math.min(1,0.4+el*1.5);const M=p=>_spd(p)*dt*acc;  // Beschleunigung vom Snap weg
   const carrier=(kind==='complete'&&caught)?tgt:(!isPass?tgt:null);
   // QB
@@ -944,18 +945,18 @@ function playAnim(svg,d,res,onDone){
      return;}
    if(o.route&&!caught)_routeRun(o,M(o.pos)*0.94);   // Mitläufer laufen ihre Routen voll aus und danach weiter (kein Einfrieren)
   });
-  // Ball / Wurf
+  // Ball / Wurf — fester Fangpunkt, Release so getimt, dass Ball und Receiver zusammen ankommen
   if(isPass&&kind!=='sack'){
-   // QB wirft, sobald der Receiver frei ist (kein Verteidiger nah), nicht erst am Routenende.
-   const openDist=tgt?D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-tgt.x,q.y-tgt.y)),9):9;
-   const downfield=tgt?Math.abs(tgt.y-tgt.sy):0;                           // wie weit der Receiver schon gelaufen ist
-   const reach=tgt?Math.max(2,Math.abs(catchPt[1]-tgt.sy)):2;              // Tiefe bis zum Fangpunkt
-   const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
-   const open=tgt&&openDist>=2.0&&downfield>=Math.max(1.4,reach*0.55)&&el>0.55;  // frei UND Route zu gut der Hälfte gelaufen
-   if(!thrown&&(open||(qbPressed&&el>0.7)||el>2.3)){thrown=true;tAt=now;bp=[qb.x,qb.y];}
-   if(thrown&&!arrived){const dest=intD?[intD.x,intD.y]:(kind==='complete'&&tgt?[tgt.x,tgt.y]:catchPt);  // Ball peilt den laufenden Receiver an (Vorlage)
-     const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],26*dt);bp=[o2.x,o2.y];
-     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.7){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
+   const dest=intD?[intD.x,intD.y]:catchPt;                                 // fester Zielpunkt (keine homing-Kurve)
+   if(!thrown){
+     const ballTime=Math.hypot(dest[0]-qb.x,dest[1]-qb.y)/BALLSPD;          // Flugzeit des Balls zum Punkt
+     const recvTime=tgt?Math.hypot(dest[0]-tgt.x,dest[1]-tgt.y)/Math.max(4,_spd(tgt.pos)):0;  // Zeit des Receivers zum Punkt
+     const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
+     const timed=tgt&&el>0.5&&recvTime<=ballTime+0.05;                      // jetzt werfen -> Receiver läuft den Ball an
+     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=now;bp=[qb.x,qb.y];}
+   }
+   if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
+     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
    else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[intD.x,intD.y];}
   }
   // Defense (geschwindigkeitsbasiert)
@@ -985,8 +986,8 @@ function playAnim(svg,d,res,onDone){
   // Out of bounds: Ballträger an der Seitenlinie -> Play tot am Spot (wie im echten Football)
   const LO=1.2,HI=52.1;
   if(carrier){if(carrier.x<LO){carrier.x=LO;oob=true;}else if(carrier.x>HI){carrier.x=HI;oob=true;}}
-  O.forEach(o=>{o.x=Math.max(0.2,Math.min(53.1,o.x));});   // niemand rendert im Aus außerhalb des Feldes
-  D.forEach(p=>{p.x=Math.max(0.2,Math.min(53.1,p.x));});
+  O.forEach(o=>{o.x=Math.max(1.5,Math.min(51.8,o.x));o.y=Math.max(-7.5,Math.min(25.5,o.y));});   // im Feld bleiben (kein Aus, keine Endlinie)
+  D.forEach(p=>{p.x=Math.max(1.5,Math.min(51.8,p.x));p.y=Math.max(-7.5,Math.min(25.5,p.y));});
   // schreiben
   O.forEach(o=>moveP(P,'o'+o.i,o.x,o.y));
   D.forEach(p=>moveP(P,'d_'+p.i,p.x,p.y));
@@ -1957,6 +1958,7 @@ function renderGame(g,play){
  h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">'+qLabel(p.q)+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);
+ else if(play&&play.kind==='fg')animateFG(play);           // Field Goal / Extra-Punkt — Kick-Animation
  else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
  else if(play&&play.penalty)animatePenalty(play);          // Flagge — Schiedsrichter wirft, dann Ergebnis
  else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar

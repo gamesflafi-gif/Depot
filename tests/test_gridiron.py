@@ -249,6 +249,25 @@ def test_playviz_diagram():
         diagram("Nope", "Cover 3")
 
 
+def test_all_plays_stay_in_bounds():
+    """JEDER Spielzug gegen JEDE Coverage: alle Spieler, Routen-Punkte und Zonen-Drops
+    bleiben innerhalb der Seitenlinien (x≈1.2..52.1) — Receiver liefen sonst ins Aus."""
+    from gridiron.playviz import diagram
+    from gridiron.simulator import PASS_CONCEPTS, RUN_CONCEPTS, COVERAGES
+    LO, HI = 1.2, 52.1
+    for concept in list(PASS_CONCEPTS) + list(RUN_CONCEPTS):
+        for cov in COVERAGES:
+            d = diagram(concept, cov)
+            for o in d["offense"]:
+                assert LO <= o["x"] <= HI, f"{concept}/{cov}: {o['pos']} x={o['x']} im Aus"
+                for pt in (o.get("route") or []):
+                    assert LO <= pt[0] <= HI, f"{concept}/{cov}: Route {o['pos']} x={pt[0]} im Aus"
+            for p in d["defense"]:
+                assert LO <= p["x"] <= HI, f"{concept}/{cov}: DEF {p['pos']} x={p['x']} im Aus"
+                if p.get("drop"):
+                    assert LO <= p["drop"][0] <= HI, f"{concept}/{cov}: Drop {p['pos']} x={p['drop'][0]} im Aus"
+
+
 def test_diagram_open_receiver_varies_by_coverage():
     """QB wirft auf die offene Route – die Anspielstation hängt von der Coverage ab."""
     from gridiron.playviz import diagram
