@@ -18,20 +18,21 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v29-polish"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v30-smooth"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
    --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
- *{box-sizing:border-box}
- html{overflow-x:hidden;overscroll-behavior:none}
+ *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+ html{overflow-x:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+ button,a,.tab,.s,.optbtn,.prow,.reco,.facb,.citypreview,.worldzoom button,select,input,label{touch-action:manipulation}
  body{margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;
    font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
    /* Seite lässt sich nur vertikal scrollen – kein seitliches Verschieben/Wackeln */
    overflow-x:hidden;overscroll-behavior:none;width:100%;max-width:100%;position:relative;touch-action:pan-y}
  img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
- .top{background:rgba(10,14,13,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+ .top{background:#0d1411;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
  .topin{max-width:1040px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
  .brand{font-size:18px;font-weight:800;letter-spacing:.04em;display:flex;align-items:center;gap:14px}
  .brand .mk{width:4px;height:20px;background:var(--acc);border-radius:1px;
@@ -147,7 +148,7 @@ _STYLE2 = """
  .heat td.val{color:#06140d;font-weight:700;border-radius:5px;min-width:46px;font-variant-numeric:tabular-nums}
  .tbl td,.tbl th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right}
  .tbl td.cn,.tbl th.cn{text-align:left} .tbl tr.me td{background:var(--accsoft)}
- .scroll{overflow-x:auto;touch-action:pan-x} .note{color:var(--mut);font-size:13px;margin-top:8px}
+ .scroll{overflow-x:auto;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior:contain} .note{color:var(--mut);font-size:13px;margin-top:8px}
  .reco{padding:11px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;margin:7px 0;font-size:14px;
    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
  .reco>span:first-child{min-width:0}
@@ -190,13 +191,13 @@ _STYLE2 = """
  /* Vereinswelt-Vorschau + Pop-up */
  .citypreview{position:relative;cursor:pointer;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:12px;transition:border-color .15s}
  .citypreview:hover{border-color:var(--acc)} .citypreview .complex{margin-top:0;border:0;pointer-events:none}
- .cpbadge{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:linear-gradient(180deg,rgba(16,30,22,.92),rgba(9,16,12,.92));border:1px solid rgba(25,224,143,.5);color:#eaf6ef;font-weight:800;font-size:13px;padding:9px 18px;border-radius:999px;box-shadow:0 8px 22px -8px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.1);backdrop-filter:blur(5px);pointer-events:none}
+ .cpbadge{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:linear-gradient(180deg,rgba(16,30,22,.92),rgba(9,16,12,.92));border:1px solid rgba(25,224,143,.5);color:#eaf6ef;font-weight:800;font-size:13px;padding:9px 18px;border-radius:999px;box-shadow:0 8px 22px -8px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.1);pointer-events:none}
  .citypreview:hover .cpbadge{border-color:var(--acc)}
  .worldwrap{max-width:760px;width:96vw}
  .worldview{position:relative;height:54vh;min-height:300px;overflow:hidden;background:#0a120c;border:1px solid var(--line);border-radius:12px;margin-top:6px;touch-action:none;cursor:grab}
  .worldview:active{cursor:grabbing} .worldcanvas{position:absolute;top:0;left:0;width:100%;transform-origin:0 0;will-change:transform} .worldcanvas .complex{margin-top:0;border:0}
  .worldzoom{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
- .worldzoom button{width:42px;height:42px;padding:0;font-size:21px;font-weight:800;border-radius:50%;background:rgba(11,20,16,.72);color:#eaf6ef;border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 16px -4px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12);backdrop-filter:blur(7px)}
+ .worldzoom button{width:42px;height:42px;padding:0;font-size:21px;font-weight:800;border-radius:50%;background:rgba(11,20,16,.72);color:#eaf6ef;border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 16px -4px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12)}
  .worldzoom button:hover{border-color:var(--acc);color:var(--acc);filter:none}
  .worldhint{position:absolute;left:10px;bottom:12px;font-size:11px;color:#9fb0a8;background:rgba(8,16,11,.6);padding:4px 9px;border-radius:8px;pointer-events:none}
  .expgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -301,7 +302,7 @@ _STYLE2 = """
  .ball{position:absolute;top:50%;width:15px;height:15px;margin:-8px 0 0 -8px;border-radius:50%;
    background:radial-gradient(circle at 35% 30%,#ffe486,#e0a813);border:1.5px solid #5e4500;
    box-shadow:0 0 12px rgba(255,211,77,.75);transition:left .17s linear;z-index:2}
- .commentary{max-height:230px;overflow-y:auto;margin-top:10px;border:1px solid var(--line);border-radius:9px;touch-action:pan-y;overscroll-behavior:contain}
+ .commentary{max-height:230px;overflow-y:auto;margin-top:10px;border:1px solid var(--line);border-radius:9px;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
  .cmt{padding:8px 11px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:10px;align-items:center}
  .cmt:last-child{border-bottom:0}.cmt .q{color:var(--mut);min-width:26px;font-size:11px;font-variant-numeric:tabular-nums}
  .cmt.big{background:var(--accsoft)}
@@ -313,9 +314,9 @@ _STYLE2 = """
  .oseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#06140d;min-width:0}
  .o-ok{background:#16c784}.o-ok2{background:#0e9f6a;color:#eafff5}.o-mid{background:#3a4a44;color:#d6efe4}
  .o-warn{background:#e9b949}.o-bad{background:#ef5350;color:#fff}
- body.noscroll{overflow:hidden}
- .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overscroll-behavior:contain}
- .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px;touch-action:pan-y;overscroll-behavior:contain}
+ body.noscroll{position:fixed;left:0;right:0;width:100%;overflow:hidden}
+ .overlay{position:fixed;inset:0;background:rgba(4,8,6,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
+ .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow-y:auto;overflow-x:hidden;padding:18px 20px;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
  .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
  .livedot{width:8px;height:8px;border-radius:50%;background:var(--bad);animation:pulse 1s infinite}
  .modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
@@ -473,13 +474,15 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
-function lockBody(){document.body.classList.add('noscroll');}
-function unlockBodyIfNone(){if(!document.querySelector('.overlay'))document.body.classList.remove('noscroll');}
+let _lockY=0;
+function lockBody(){if(document.body.classList.contains('noscroll'))return;_lockY=window.scrollY||window.pageYOffset||0;document.body.style.top=(-_lockY)+'px';document.body.classList.add('noscroll');}
+function _releaseBody(){if(!document.body.classList.contains('noscroll'))return;document.body.classList.remove('noscroll');document.body.style.top='';window.scrollTo(0,_lockY);}
+function unlockBodyIfNone(){if(!document.querySelector('.overlay'))_releaseBody();}
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
 function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay','awoverlay','worldoverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
- stopClock();liveG=null;playBusy=false;document.body.classList.remove('noscroll');}   // nichts darf den Bildschirm blockieren
+ stopClock();liveG=null;playBusy=false;_releaseBody();}   // nichts darf den Bildschirm blockieren
 function tab(s){closeAllOverlays();                                                     // beim Tab-Wechsel offene Overlays/Sperren lösen
  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
  document.querySelectorAll('.sect').forEach(e=>e.classList.remove('on'));$('s-'+s).classList.add('on');
