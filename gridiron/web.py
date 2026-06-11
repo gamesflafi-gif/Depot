@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v42-draftboard"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v43-routes"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -862,8 +862,13 @@ function _toward(o,tx,ty,mx){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx,dy);if(d<
 function _advance(o,mx){if(!o.route)return;let b=mx;while(b>0&&o.ri<o.route.length){const wp=o.route[o.ri],dx=wp[0]-o.x,dy=wp[1]-o.y,d=Math.hypot(dx,dy);if(d<=b){o.x=wp[0];o.y=wp[1];o.ri++;b-=d;}else{o.x+=dx/d*b;o.y+=dy/d*b;b=0;}}}
 // läuft die Route ab UND danach in deren Endrichtung weiter (kein Stehenbleiben am letzten Wegpunkt)
 function _routeRun(o,mx,fwd){if(!o.route)return;_advance(o,mx);
- if(o.ri>=o.route.length){if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=-1;dd=1;}o._dir=[dx/dd,dy/dd];}
-   o.x+=o._dir[0]*mx*(fwd||1);o.y+=o._dir[1]*mx*(fwd||1);}}
+ if(o.ri>=o.route.length){if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=1;dd=1;}o._dir=[dx/dd,dy/dd];}
+   let dx=o._dir[0],dy=o._dir[1];
+   // nicht ins Aus laufen: nahe der Seitenlinie zur Mitte & nach vorne (upfield) drehen
+   if((o.x<6&&dx<0)||(o.x>47.3&&dx>0)){dx=(o.x>26.65?-0.25:0.25);dy=Math.abs(dy)+0.7;}
+   const dd=Math.hypot(dx,dy)||1;
+   o.x+=dx/dd*mx*(fwd||1);o.y+=dy/dd*mx*(fwd||1);
+   o.x=Math.max(2,Math.min(51.3,o.x));}}
 function playAnim(svg,d,res,onDone){
  const P=svg.id; if(_anim[P])cancelAnimationFrame(_anim[P]);
  res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
@@ -929,7 +934,9 @@ function playAnim(svg,d,res,onDone){
    else if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                       // Verfolgungswinkel: leicht vor den Läufer zielen
      const ahead=Math.min(0.34,Math.max(0,(carrier.y-p.y))/20);tx=carrier.x+(dest[0]-carrier.x)*ahead;ty=carrier.y+(dest[1]-carrier.y)*ahead;}
    else if(p.role==='rush'){tx=qb.x+Math.sin(el*7+p.i)*0.5;ty=qb.y;mx*=0.92;}  // drückt zum QB – wird von der O-Line geblockt (Kollision)
-   else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){tx=r.x+(p.x<r.x?-0.8:0.8);ty=r.y+0.7;}else{tx=p.x;ty=p.y;}}
+   else if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);
+     if(r){const trail=Math.min(3,0.8+el*0.9);tx=r.x+(p.x<r.x?-0.5:0.5);ty=r.y-trail;mx*=0.95;}  // läuft hinterher -> Receiver bekommt Separation und wird frei
+     else{tx=p.x;ty=p.y;}}
    else if(p.drop){tx=p.drop[0];ty=p.drop[1];                              // Zone: zur Landmarke, dann auf nächsten Receiver in der Zone reagieren
      let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});
      if(bestR){tx=p.drop[0]+(bestR.x-p.drop[0])*0.45;ty=p.drop[1]+(bestR.y-p.drop[1])*0.30;}mx*=0.85;}
