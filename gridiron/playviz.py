@@ -108,6 +108,12 @@ _PASS_ROUTES = {
     "Spacing":    ({"X": "hitch", "SL": "snag", "TE": "flat", "Z": "hitch", "RB": "flat"}, "SL"),
     "RB Screen":  ({"RB": "screen", "X": "hitch", "Z": "hitch", "SL": "block", "TE": "block"}, "RB"),
     "WR Screen":  ({"Z": "bubble", "SL": "block", "TE": "block", "X": "hitch", "RB": "block"}, "Z"),
+    "Curls":      ({"X": "comeback", "Z": "hitch", "SL": "stick", "TE": "hitch", "RB": "flat"}, "X"),
+    "Levels":     ({"SL": "drag", "X": "dig", "Z": "go", "TE": "block", "RB": "checkdown"}, "X"),
+    "Post-Wheel": ({"Z": "post", "RB": "wheel", "X": "go", "SL": "dig", "TE": "block"}, "RB"),
+    "Shallow":    ({"X": "drag", "TE": "dig", "SL": "go", "Z": "comeback", "RB": "checkdown"}, "X"),
+    "Double Outs":({"X": "out", "Z": "out", "SL": "hitch", "TE": "stick", "RB": "flat"}, "X"),
+    "PA Boot":    ({"TE": "flat", "SL": "corner", "X": "comeback", "Z": "go", "RB": "swing"}, "SL"),
 }
 
 # Aufstellungen: pro Play eine echte Formation (verschiebt Skill-Spieler/QB-Tiefe).
@@ -140,8 +146,13 @@ def _run_path(concept: str, rb: tuple[float, float]) -> dict:
         "Draw":         [(rbx, rby), (C, -4), (C, 1), (C, 6)],
         "Toss":         [(rbx, rby), (18, -5), (12, 0), (12, 7)],
         "Trap":         [(rbx, rby), (C + 0.5, 0.5), (C + 0.8, 6)],
+        "Dive":         [(rbx, rby), (C + 0.8, 0.4), (C + 1.0, 6)],
+        "Sweep":        [(rbx, rby), (C + 5, -0.8), (40, 1), (43, 7)],
+        "Iso":          [(rbx, rby), (C + 1.6, 0), (C + 1.8, 7)],
+        "Pin & Pull":   [(rbx, rby), (C + 4, -0.5), (39, 2), (41, 8)],
     }
-    pull = {"Power": ["LG"], "Counter": ["RG", "TE"], "Toss": ["RT"]}.get(concept, [])
+    pull = {"Power": ["LG"], "Counter": ["RG", "TE"], "Toss": ["RT"],
+            "Sweep": ["LG", "RG"], "Pin & Pull": ["RT", "RG"]}.get(concept, [])
     return {"path": [[round(x, 2), round(y, 2)] for x, y in paths[concept]], "pull": pull}
 
 

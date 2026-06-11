@@ -35,6 +35,10 @@ COVERAGES: dict[str, dict] = {
     "Cover 3":    {"label": "Cover 3 (3 Deep Zone)",          "deep": .50, "inter": .55, "short": .58, "flat": .66, "man": 0, "blitz": .20, "box": 7, "deep_def": 1},
     "Cover 4":    {"label": "Cover 4 / Quarters",             "deep": .40, "inter": .58, "short": .62, "flat": .60, "man": 0, "blitz": .05, "box": 6, "deep_def": 2},
     "Cover 6":    {"label": "Cover 6 (Quarter-Quarter-Half)", "deep": .46, "inter": .56, "short": .60, "flat": .58, "man": 0, "blitz": .08, "box": 6, "deep_def": 2},
+    "Cover 1 Robber":{"label": "Cover 1 Robber (Mann + Lauerer)", "deep": .50, "inter": .40, "short": .55, "flat": .58, "man": 1, "blitz": .30, "box": 7, "deep_def": 1},
+    "Cover 3 Buzz":{"label": "Cover 3 Buzz (Safety sinkt)",   "deep": .50, "inter": .50, "short": .56, "flat": .60, "man": 0, "blitz": .18, "box": 7, "deep_def": 1},
+    "Cover 2 Sink":{"label": "Cover 2 Sink (tiefe Hälften)",   "deep": .62, "inter": .58, "short": .52, "flat": .45, "man": 0, "blitz": .08, "box": 6, "deep_def": 2},
+    "Cover 9":    {"label": "Cover 9 (Match-Quarters)",        "deep": .44, "inter": .57, "short": .61, "flat": .59, "man": 0, "blitz": .06, "box": 6, "deep_def": 2},
 }
 
 # Konzepte: zone = Hauptangriffszone, depth = Ziel-Air-Yards-Profil,
@@ -54,6 +58,12 @@ PASS_CONCEPTS: dict[str, dict] = {
     "Spacing":     _C(label="Spacing", zone="short", depth=5, beats_man=0.90, beats_blitz=1.15, expl=0.7, note="Underneath-Raumaufteilung — frisst weiche Zone."),
     "RB Screen":   _C(label="RB Screen", zone="short", depth=-2, beats_man=0.95, beats_blitz=1.40, expl=1.3, note="Screen — bestraft aggressiven Pass-Rush/Blitz."),
     "WR Screen":   _C(label="WR Screen / Bubble", zone="flat", depth=-1, beats_man=0.85, beats_blitz=1.20, expl=1.1, note="Schneller Perimeter-Wurf gegen weiche Corners."),
+    "Curls":       _C(label="Curls / Hitch", zone="short", depth=8, beats_man=1.00, beats_blitz=0.90, expl=0.8, note="Curl/Hitch-Kombi — sicherer Raumgewinn gegen weiche Zone."),
+    "Levels":      _C(label="Levels", zone="inter", depth=12, beats_man=1.15, beats_blitz=0.85, expl=1.1, note="Zwei In-Breaker auf zwei Tiefen — Mann-Beater über die Mitte."),
+    "Post-Wheel":  _C(label="Post-Wheel", zone="deep", depth=20, beats_man=1.20, beats_blitz=0.95, expl=1.7, note="Post hält den Safety, Wheel läuft an der Sideline frei."),
+    "Shallow":     _C(label="Shallow Cross", zone="short", depth=3, beats_man=1.25, beats_blitz=1.15, expl=0.9, note="Tiefe Querung von der Backside — klassischer Mann-Killer."),
+    "Double Outs": _C(label="Double Outs", zone="flat", depth=11, beats_man=1.00, beats_blitz=0.85, expl=1.0, note="Zwei Out-Routen — schneller Sideline-Wurf gegen Off-Coverage."),
+    "PA Boot":     _C(label="Play-Action Bootleg", zone="inter", depth=14, beats_man=1.05, beats_blitz=0.70, expl=1.4, note="Play-Action + Rollout — Hi-Lo auf einer Seite, bestraft Run-Fits."),
 }
 RUN_CONCEPTS: dict[str, dict] = {
     "Inside Zone": _C(label="Inside Zone", gap="inside", expl=1.0, note="Zonenblock A/B-Gap — Brot & Butter."),
@@ -63,6 +73,10 @@ RUN_CONCEPTS: dict[str, dict] = {
     "Draw":        _C(label="Draw", gap="inside", expl=1.3, note="Verzögert — bestraft Pass-Rush/leichte Box."),
     "Toss":        _C(label="Toss / Pitch", gap="outside", expl=1.3, note="Schnell zum Rand, Speed in Space."),
     "Trap":        _C(label="Trap", gap="inside", expl=1.1, note="Lädt Penetrator ein, blockt ihn weg."),
+    "Dive":        _C(label="Dive", gap="inside", expl=0.8, note="Schneller A-Gap-Hit — vor dem Blitz."),
+    "Sweep":       _C(label="Sweep", gap="outside", expl=1.3, note="Pulling Guards zum Rand — Speed in Space."),
+    "Iso":         _C(label="Iso", gap="inside", expl=0.9, note="Fullback-Lead direkt durch das Loch."),
+    "Pin & Pull":  _C(label="Pin & Pull", gap="outside", expl=1.2, note="Down-Blocks + Puller — Stretch mit Wucht."),
 }
 
 # Standard-Air-Yards-Streuung je Tiefe (für realistische Wurfverteilung).

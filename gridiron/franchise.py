@@ -453,16 +453,16 @@ def _epa(concept: str, coverage: str) -> float:
 
 # Team-Schemata (wirken übers ganze Spiel, nicht ein einzelner Spielzug).
 OFF_SCHEMES = {
-    "Vertikal": ["Four Verts", "Y-Cross", "Dagger", "Flood"],
-    "Quick Game": ["Slant-Flat", "Mesh", "Stick", "Drive", "Spacing"],
-    "Ausgeglichen": ["Smash", "Stick", "Inside Zone", "Y-Cross", "Slant-Flat"],
-    "Lauflastig": ["Inside Zone", "Outside Zone", "Power", "Counter", "Toss"],
+    "Vertikal": ["Four Verts", "Y-Cross", "Dagger", "Flood", "Post-Wheel", "Levels"],
+    "Quick Game": ["Slant-Flat", "Mesh", "Stick", "Drive", "Spacing", "Curls", "Shallow", "Double Outs"],
+    "Ausgeglichen": ["Smash", "Stick", "Inside Zone", "Y-Cross", "Slant-Flat", "Levels", "PA Boot", "Dive"],
+    "Lauflastig": ["Inside Zone", "Outside Zone", "Power", "Counter", "Toss", "Sweep", "Iso", "Pin & Pull", "PA Boot"],
 }
 DEF_SCHEMES = {
-    "Aggressiv (Blitz)": ["Cover 0", "Cover 1"],
-    "Ausgeglichen": ["Cover 1", "Cover 3", "Cover 2"],
-    "Zone": ["Cover 2", "Cover 3", "Cover 4", "Tampa 2"],
-    "Quarters": ["Cover 4", "Cover 6", "Cover 2"],
+    "Aggressiv (Blitz)": ["Cover 0", "Cover 1", "Cover 1 Robber"],
+    "Ausgeglichen": ["Cover 1", "Cover 3", "Cover 2", "Cover 1 Robber", "Cover 3 Buzz"],
+    "Zone": ["Cover 2", "Cover 3", "Cover 4", "Tampa 2", "Cover 3 Buzz", "Cover 2 Sink"],
+    "Quarters": ["Cover 4", "Cover 6", "Cover 2", "Cover 9", "Cover 2 Sink"],
 }
 _SCHEME_CACHE: dict[tuple, float] = {}
 
