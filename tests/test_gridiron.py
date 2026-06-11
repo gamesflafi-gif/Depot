@@ -119,7 +119,7 @@ def test_web_endpoints(tmp_path):
 def test_simulator_football_logic():
     """Deterministische Engine bildet bekannte Matchups korrekt ab."""
     from gridiron.simulator import simulate, list_concepts, list_coverages
-    assert len(list_concepts()) == 19 and len(list_coverages()) == 8
+    assert len(list_concepts()) == 29 and len(list_coverages()) == 12
     sit = {"down": 3, "ydstogo": 8, "yardline_100": 60}
     # Four Verts schlagen Single-High (Cover 3) deutlich besser als Quarters (Cover 4)
     verts3 = simulate(None, "Four Verts", "Cover 3", sit)
@@ -140,10 +140,10 @@ def test_simulator_advisors():
     assert len(best) == 5
     assert best[0].expected_epa >= best[-1].expected_epa          # absteigend sortiert
     stop = stopping_coverages(None, "Four Verts", sit)
-    assert len(stop) == 8 and stop[0].expected_epa <= stop[-1].expected_epa
+    assert len(stop) == 12 and stop[0].expected_epa <= stop[-1].expected_epa
     m = matrix(None, sit)
-    assert len(m["rows"]) == 19 and len(m["coverages"]) == 8
-    assert all(len(row["epa"]) == 8 for row in m["rows"])
+    assert len(m["rows"]) == 29 and len(m["coverages"]) == 12
+    assert all(len(row["epa"]) == 12 for row in m["rows"])
 
 
 def test_simulator_invalid():
@@ -159,10 +159,10 @@ def test_sim_web_endpoints(tmp_path):
     from fastapi.testclient import TestClient
     from gridiron.web import create_app
     client = TestClient(create_app(_cfg(tmp_path)))   # ohne Daten: Defaults
-    assert len(client.get("/api/sim/meta").json()["concepts"]) == 19
+    assert len(client.get("/api/sim/meta").json()["concepts"]) == 29
     r = client.get("/api/sim/run", params={"concept": "Four Verts", "coverage": "Cover 3"}).json()
     assert r["verdict"] and -1.5 <= r["expected_epa"] <= 1.5
-    assert len(client.get("/api/sim/matrix").json()["rows"]) == 19
+    assert len(client.get("/api/sim/matrix").json()["rows"]) == 29
     assert client.get("/api/sim/run", params={"concept": "X", "coverage": "Cover 3"}).status_code == 400
     assert "Play-Simulator" in client.get("/").text
 
