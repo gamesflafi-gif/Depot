@@ -1173,7 +1173,9 @@ def standings(state: dict) -> list[dict]:
     rows = [{"name": t["name"], "abbr": t.get("abbr", "?"), "color": t.get("color", "#16c784"),
              "user": t["user"], "w": t["w"], "l": t["l"],
              "pf": t["pf"], "pa": t["pa"], "diff": t["pf"] - t["pa"],
-             "ovr": overall(t)} for t in state["teams"]]
+             "ovr": overall(t), "off": offense(t), "def": defense(t),
+             "off_scheme": t.get("off_scheme", "Ausgeglichen"),
+             "def_scheme": t.get("def_scheme", "Ausgeglichen")} for t in state["teams"]]
     rows.sort(key=lambda r: (r["w"], r["diff"], r["pf"]), reverse=True)
     for i, r in enumerate(rows, 1):
         r["rank"] = i
