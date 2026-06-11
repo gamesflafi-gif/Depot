@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v36-mgr2"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v37-mgr3"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -147,6 +147,11 @@ _STYLE2 = """
  .heat td.val{color:#06140d;font-weight:700;border-radius:5px;min-width:46px;font-variant-numeric:tabular-nums}
  .tbl td,.tbl th{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right}
  .tbl td.cn,.tbl th.cn{text-align:left} .tbl tr.me td{background:var(--accsoft)}
+ .tbl th.srt{cursor:pointer;white-space:nowrap;user-select:none} .tbl th.srt:hover{color:var(--fg)} .tbl th.srt.on{color:var(--acc)}
+ .tbl tr.ltrow{cursor:pointer} .tbl tr.ltrow:hover td{background:rgba(255,255,255,.04)} .tbl tr.ltrow.me:hover td{background:var(--accsoft)}
+ .tbl tr.ltrow.po td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
+ .tbl tr.ltdrow td{border-bottom:1px solid var(--line)} .ltdrow .scoutbox{margin:0;border-radius:0;border:0}
+ .podot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--acc);margin-right:5px;vertical-align:middle;box-shadow:0 0 5px var(--acc)}
  .scroll{overflow-x:auto;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior:contain} .note{color:var(--mut);font-size:13px;margin-top:8px}
  .reco{padding:11px 14px;background:linear-gradient(180deg,#222d28,#1c2622);border:1px solid var(--line);border-radius:10px;margin:7px 0;font-size:14px;
    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
@@ -1109,14 +1114,34 @@ function secDash(v){
    '<div><label>Defense-Schema</label><select id="sc_def">'+defk.map(k=>'<option'+(k===v.scheme.def?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
    '<button onclick="setScheme()">Übernehmen</button></div>'+
    '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+'</div></div>';
- h+='<div class="card scroll"><div class="sec" style="margin-top:0">Tabelle</div><table class="tbl"><tr>'+
-   '<th class="cn">#</th><th class="cn">Team</th><th>S</th><th>N</th><th>Diff</th><th>OVR</th></tr>';
- v.standings.forEach(t=>{h+='<tr'+(t.user?' class="me"':'')+'><td>'+t.rank+'</td><td class="cn">'+teamLogo(t.abbr,t.color)+' <span style="vertical-align:middle">'+esc(t.name)+'</span>'+
-   '</td><td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.ovr+'</td></tr>';});
- h+='</table></div>';
+ h+=leagueTable(v);
  h+='<div style="text-align:center;margin:16px 0 4px"><button class="ghost" onclick="resetFr()" style="opacity:.7;font-size:13px">Franchise zurücksetzen</button></div>';
  return h;
 }
+let _ltSort='rank';
+function ltSort(c){_ltSort=c;renderMgr(lastView);}
+function leagueTable(v){const rows=(v.standings||[]).slice();if(!rows.length)return '';
+ const asc={rank:1,l:1,pa:1},key=({rank:'rank',w:'w',l:'l',diff:'diff',pf:'pf',pa:'pa',ovr:'ovr'})[_ltSort]||'rank';
+ rows.sort((a,b)=>asc[_ltSort]?(a[key]-b[key]):(b[key]-a[key]));
+ const th=(c,lbl)=>'<th data-c="'+c+'" onclick="ltSort(this.dataset.c)" class="srt'+(_ltSort===c?' on':'')+'">'+lbl+(_ltSort===c?' ▾':'')+'</th>';
+ let h='<div class="card scroll"><div class="sec" style="margin-top:0">Liga-Tabelle <span class="mut" style="font-weight:600;font-size:11px;text-transform:none;letter-spacing:0">· Spalte = sortieren · Team = scouten</span></div>'+
+  '<table class="tbl lt"><tr><th class="cn">#</th><th class="cn">Team</th>'+th('w','S')+th('l','N')+th('diff','Diff')+th('pf','PF')+th('pa','PA')+th('ovr','OVR')+'</tr>';
+ rows.forEach(t=>{const po=t.rank<=4;
+   h+='<tr class="ltrow'+(t.user?' me':'')+(po?' po':'')+'" data-a="'+esc(t.abbr)+'" onclick="scoutTeamRow(this.dataset.a)">'+
+     '<td>'+(po?'<span class="podot" title="Playoff-Platz"></span>':'')+t.rank+'</td>'+
+     '<td class="cn">'+teamLogo(t.abbr,t.color)+' <span style="vertical-align:middle">'+esc(t.name)+'</span></td>'+
+     '<td>'+t.w+'</td><td>'+t.l+'</td><td>'+(t.diff>=0?'+':'')+t.diff+'</td><td>'+t.pf+'</td><td>'+t.pa+'</td><td><b>'+t.ovr+'</b></td></tr>'+
+     '<tr class="ltdrow"><td colspan="8" style="padding:0;border:0"><div id="ltd_'+esc(t.abbr)+'"></div></td></tr>';});
+ h+='</table><div class="note"><span class="podot"></span> Playoff-Platz (Top 4)</div></div>';
+ return h;
+}
+function scoutTeamRow(abbr){const d=$('ltd_'+abbr);if(!d)return;if(d.innerHTML){d.innerHTML='';return;}
+ const t=((lastView&&lastView.standings)||[]).find(x=>x.abbr===abbr);if(!t)return;
+ const tier=t.ovr>=84?'Titelkandidat – sehr tiefer, starker Kader':t.ovr>=76?'Playoff-Team – ausgewogen und gefährlich':t.ovr>=68?'Mittelfeld – schlagbar mit gutem Plan':'Aufbau-Team – klarer Vorteil';
+ const diff=lastView.ratings?lastView.ratings.ovr-t.ovr:0;
+ d.innerHTML='<div class="scoutbox"><b>Scouting · '+esc(t.name)+'</b>'+
+   '<div class="mut">Bilanz '+t.w+'–'+t.l+' · '+t.pf+' erzielt · '+t.pa+' kassiert · Diff '+(t.diff>=0?'+':'')+t.diff+' · '+t.ovr+' OVR</div>'+
+   '<div style="margin-top:4px">'+esc(tier)+(t.user?'':' · Dein OVR-Vorsprung: '+(diff>=0?'+':'')+diff)+'</div></div>';}
 function _winProb(my,opp,home){let p=1/(1+Math.pow(10,(opp-my)/14));if(home)p+=0.05;return Math.max(.05,Math.min(.95,p));}
 function _vsbar(label,mine,opp){const t=(mine+opp)||1,mp=Math.round(mine/t*100);
  return '<div class="vsrow"><span class="vsl">'+esc(label)+'</span><span class="vsbar"><span class="vsmine" style="width:'+mp+'%"></span></span><span class="vsv">'+mine+'<small>:'+opp+'</small></span></div>';}
@@ -1284,11 +1309,19 @@ function secTransfer(v){
    h+='</div>';});
  return h;
 }
+function leagueLeaders(v){const s=(v.standings||[]);if(!s.length)return '';
+ const top=(cmp)=>s.slice().sort(cmp)[0];
+ const byPF=top((a,b)=>b.pf-a.pf),byPA=top((a,b)=>a.pa-b.pa),byRec=top((a,b)=>(b.w-b.l)-(a.w-a.l)||b.diff-a.diff),byOvr=top((a,b)=>b.ovr-a.ovr);
+ const row=(lbl,t,val)=>'<div class="reco"><span style="display:flex;align-items:center;gap:9px">'+teamLogo(t.abbr,t.color)+'<b>'+esc(t.name)+'</b>'+(t.user?' <span class="tag tg-start">DU</span>':'')+'</span><span class="mut">'+lbl+' · <b style="color:var(--fg)">'+val+'</b></span></div>';
+ return '<div class="card"><div class="sec" style="margin-top:0">🏆 Liga-Spitze</div>'+
+   row('Beste Offense',byPF,byPF.pf+' Pkt')+row('Beste Defense',byPA,byPA.pa+' kassiert')+
+   row('Beste Bilanz',byRec,byRec.w+'–'+byRec.l)+row('Stärkster Kader',byOvr,byOvr.ovr+' OVR')+'</div>';}
 function secStats(v){
  const R=v.roster;
+ let h0=leagueLeaders(v);
  const leader=(key,fmt)=>{let best=null;R.forEach(p=>{if(!best||p.season[key]>best.season[key])best=p;});
    return best&&best.season[key]>0?'<div class="reco"><span style="display:flex;align-items:center;gap:9px">'+posBadge(best.pos)+'<b>'+esc(best.name)+'</b></span><span>'+fmt(best.season)+'</span></div>':'';};
- let h='<div class="card"><div class="sec" style="margin-top:0">Saison-Bestenliste (dein Team)</div>'+
+ let h=h0+'<div class="card"><div class="sec" style="margin-top:0">Saison-Bestenliste (dein Team)</div>'+
    (leader('pass_yds',s=>s.pass_yds+' Pass-Yds, '+s.pass_td+' TD')||'')+
    (leader('rush_yds',s=>s.rush_yds+' Rush-Yds ('+s.rush_att+' Läufe)')||'')+
    (leader('rec_yds',s=>s.rec+' Fänge, '+s.rec_yds+' Yds')||'')+
