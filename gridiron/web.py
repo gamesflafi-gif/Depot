@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v45-anlagen"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v46-scout2"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1384,18 +1384,15 @@ function _needOpen(v){const cnt={};(v.roster||[]).forEach(p=>cnt[p.pos]=(cnt[p.p
  Object.keys(v.slots||{}).forEach(pos=>{need[pos]=Math.max(0,(v.slots[pos]||0)-(cnt[pos]||0));});return need;}
 function scoutDetail(pid){const d=$('pd_'+pid);if(!d)return;if(d.innerHTML){d.innerHTML='';return;}
  const p=((lastView&&lastView.prospects)||[]).find(x=>String(x.id)===String(pid));if(!p)return;
- const tc=(lastView&&lastView.color)||'#16c784';
- if(p.attrs&&p.attrs.length){
-   const top=p.attrs.slice().sort((a,b)=>b.val-a.val).slice(0,3).map(a=>esc(a.label)+' '+a.val).join(' · ');
-   const boom=p.dev==='superstar'?'⭐ Superstar-Anlage — sehr hohes Ceiling':p.dev==='star'?'Hohes Ceiling (Star-Entwicklung)':p.dev==='slow'?'⚠️ Bust-Risiko — langsame Entwicklung':'Solide, planbare Entwicklung';
-   d.innerHTML='<div class="scoutbox"><div class="pddwrap"><div class="radmini">'+radarSVG(p.attrs,tc)+'</div><div style="flex:1;min-width:0">'+
-     '<div class="schd"><b>Scouting-Bericht</b><span class="scbadge">'+esc(p.grade||'')+'</span></div>'+
-     '<div class="mut" style="margin:2px 0 6px">OVR '+p.ovr+' · Ceiling '+p.pot+' · '+esc(p.dev_label||'')+' · '+esc(p.round)+'</div>'+
-     '<div class="mut">Stärken: '+top+'</div><div class="sctip">▸ '+boom+'</div></div></div></div>';
- }else{
-   const next=p.scout<1?'Stufe 1 deckt den Namen auf.':p.scout<2?'Stufe 2 deckt Wertung & größte Stärke auf.':'Stufe 3 deckt volle Werte, Potenzial & Entwicklungs-Trait auf.';
-   d.innerHTML='<div class="scoutbox"><b>'+esc(p.name)+' — '+esc(p.round)+'</b><div class="mut" style="margin-top:3px">Gescoutet '+p.scout+'/'+p.scout_max+' · '+next+'</div>'+(p.strength?'<div class="mut">Größte Stärke: '+esc(p.strength)+'</div>':'')+'</div>';
- }}
+ const next=p.scout<1?'Stufe 1 deckt den Namen auf.':p.scout<2?'Stufe 2 zeigt Wertung, größte Stärke & Risiko.':p.scout<3?'Stufe 3 verengt die Spanne und deckt den Entwicklungs-Trait auf.':'Voll gescoutet — Restunsicherheit bleibt: der echte Wert zeigt sich erst im Team.';
+ let h='<div class="scoutbox"><div class="schd"><b>Scouting-Bericht · '+esc(p.name)+'</b>'+(p.grade&&p.grade!=='?'?'<span class="scbadge">'+esc(p.grade)+'</span>':'')+'</div>'+
+   '<div class="mut" style="margin:2px 0 6px">'+esc(p.round)+' · Alter '+p.age+' · gescoutet '+p.scout+'/'+p.scout_max+'</div>'+
+   '<div class="scrow"><span class="scl">OVR-Spanne</span><span class="scbar"><span class="scfill" style="width:'+Math.round((p.ovr_hi-50)/49*100)+'%;background:#19e08f"></span></span><span class="scv">'+p.ovr_lo+'–'+p.ovr_hi+'</span></div>'+
+   '<div class="scrow"><span class="scl">Ceiling</span><span class="scbar"><span class="scfill" style="width:'+Math.round((p.pot_hi-50)/49*100)+'%;background:#5fa8ff"></span></span><span class="scv">'+p.pot_lo+'–'+p.pot_hi+'</span></div>';
+ if(p.strength)h+='<div class="mut" style="margin-top:5px">Größte Stärke: '+esc(p.strength)+(p.dev?' · Trait: '+esc(p.dev_label||''):'')+'</div>';
+ if(p.risk)h+='<div class="sctip">▸ '+esc(p.risk)+' — Draften bleibt eine Wette innerhalb der Spanne.</div>';
+ else h+='<div class="mut" style="margin-top:5px">'+next+'</div>';
+ d.innerHTML=h+'</div>';}
 function secTransfer(v){
  const cnt={};v.roster.forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);
  const _fneed=_needOpen(v);
@@ -1403,7 +1400,7 @@ function secTransfer(v){
  const sp=v.scout_pts||0;
  let h='<div class="card"><div class="schead"><div class="sec" style="margin:0">College-Scouting — Draft</div>'+
    '<div class="scoutpts"><span class="v">'+sp+'</span><span class="l">Punkte</span></div></div>'+
-   '<div class="note">Scoute Talente (1 Punkt je Stufe), um Werte, Potenzial &amp; Entwicklungs-Trait aufzudecken — oder direkt draften und auf die Anlage wetten. Jede Woche +3 Punkte.</div></div>';
+   '<div class="note">Scouting (1 Punkt/Stufe) <b>verengt nur die Spanne</b> und deckt Profil &amp; Risiko auf — den exakten Wert siehst du nie, Draften bleibt eine Wette. Punkte sind knapp (ca. +1/Woche, max. 12) — priorisiere deine Wunsch-Talente.</div></div>';
  const pros=v.prospects||[];const need=_needOpen(v);
  const needList=Object.keys(need).filter(p=>need[p]>0);
  if(needList.length)h+='<div class="card"><div class="sec" style="margin-top:0">Kaderbedarf</div><div class="needrow">'+needList.sort((a,b)=>need[b]-need[a]).map(p=>'<span class="needtag">'+posBadge(p)+' '+need[p]+' frei</span>').join('')+'</div></div>';
@@ -1417,14 +1414,14 @@ function secTransfer(v){
    if(_dFilter==='need')board=board.filter(p=>need[p.pos]>0);
    else if(_dFilter==='unsc')board=board.filter(p=>p.scout<p.scout_max);
    else if(_dFilter==='full')board=board.filter(p=>p.scout>=p.scout_max);
-   const projOf=p=>(p.pot!=null?p.pot:(p.ovr_lo+p.ovr_hi)/2);
+   const projOf=p=>((p.pot_lo+p.pot_hi)/2);
    const skey={proj:projOf,grade:p=>(p.ovr_lo+p.ovr_hi)/2,scout:p=>p.scout}[_dSort]||projOf;
    board.sort((a,b)=>skey(b)-skey(a));
    h+='<div class="card"><div class="sec" style="margin-top:0">Draft Big Board ('+board.length+') <span class="mut" style="font-weight:600;font-size:11px;text-transform:none;letter-spacing:0">· Zeile tippen = Bericht</span></div>';
    board.forEach((p,rank)=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];const done=p.scout>=p.scout_max;
-     const ovrTxt=(p.ovr!=null)?('OVR '+p.ovr+' · Pot '+p.pot):('OVR '+p.ovr_lo+'–'+p.ovr_hi);
-     const dev=(p.ovr!=null)?(' '+devBadge(p.dev,p.dev_label)):'';
-     const extra=(p.grade&&p.grade!=='?'?' · '+esc(p.grade):'')+(p.strength?' · '+esc(p.strength):'');
+     const ovrTxt='OVR '+p.ovr_lo+'–'+p.ovr_hi+' · Pot '+p.pot_lo+'–'+p.pot_hi;
+     const dev=(p.dev?' '+devBadge(p.dev,p.dev_label):'');
+     const extra=(p.grade&&p.grade!=='?'?' · '+esc(p.grade):'')+(p.risk?' · '+esc(p.risk):'');
      h+='<div class="prow prospect" data-i="'+p.id+'" onclick="scoutDetail(this.dataset.i)">'+
        '<span class="bbrank">'+(rank+1)+'</span><span class="pfa">'+portrait(p,34,v.color)+'</span>'+posBadge(p.pos)+
        '<span class="pname"><span class="nm">'+esc(p.name)+'</span>'+dev+(need[p.pos]>0?' <span class="tag tg-need">BEDARF</span>':'')+
