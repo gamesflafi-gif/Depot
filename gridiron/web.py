@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v40-meeting"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v41-tabs"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1058,7 +1058,8 @@ async function newTeam(){
 function navIcon(k){const I={grid:'<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/>',
  team:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0-1-5.8M21 20a5 5 0 0 0-4-4.9"/>',
  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',swap:'<path d="M7 7h13l-3-3M17 17H4l3 3"/>',
- tool:'<path d="M14 7a4 4 0 0 1-5 5l-6 6 2 2 6-6a4 4 0 0 1 5-5l-2-2 2-2z"/>'};
+ tool:'<path d="M14 7a4 4 0 0 1-5 5l-6 6 2 2 6-6a4 4 0 0 1 5-5l-2-2 2-2z"/>',
+ train:'<circle cx="12" cy="13" r="7"/><path d="M12 13V8M9 3h6"/>'};
  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(I[k]||I.grid)+'</svg>';}
 function pill(t){return '<span class="pill">'+esc(t)+'</span>';}
 let mgrTab='dash',lastView=null;
@@ -1077,10 +1078,11 @@ function renderMgr(v){
    (v.champion?'<div class="reco champ" style="margin-top:14px"><span><span class="tag">MEISTER</span> <b>'+esc(v.champion)+'</b></span><span class="mut">Saison '+v.season+'</span></div>':'')+
    '</div>';
  // Unter-Navigation
- const tabs=[['dash','Dashboard','grid'],['kader','Kader & Training','team'],['stats','Statistik','chart'],['transfer','Transfermarkt','swap'],['build','Verbesserungen','tool']];
- const needs={dash:(v.phase!=='done'&&!v.week_done&&!v.week_trained),kader:v.skillpoints>0,stats:false,transfer:(v.scout_pts>0),build:false};
+ const tabs=[['dash','Übersicht','grid'],['kader','Team','team'],['train','Training','train'],['liga','Liga','chart'],['transfer','Transfermarkt','swap'],['build','Anlagen','tool']];
+ const active=v.phase!=='done'&&!v.week_done;
+ const needs={dash:(active&&v.meeting),kader:v.skillpoints>0,train:(active&&!v.week_trained),liga:false,transfer:(v.scout_pts>0),build:false};
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+navIcon(t[2])+'<span>'+t[1]+'</span>'+(needs[t[0]]?'<span class="navbadge">!</span>':'')+'</div>').join('')+'</div>';
- h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
+ h+=(mgrTab==='kader'?secKader(v):mgrTab==='train'?secTraining(v):mgrTab==='liga'?secLiga(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):secOverview(v));
  $('mgr_out').innerHTML=h;
  if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();   // Sicherheitsnetz: Seite immer scrollbar, wenn kein Overlay offen ist
  if(!v.tutorial_seen && !window._tutShown){window._tutShown=true; openTutorial(0);}
@@ -1091,16 +1093,10 @@ function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 2
  star:'<path d="M12 3l2.6 5.6L21 9.3l-4.5 4.2L17.6 21 12 17.8 6.4 21l1.1-7.5L3 9.3l6.4-.7z"/>',
  heal:'<path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7z"/>',film:'<path d="M5 5h14v14H5zM5 9h14M9 5v14"/>'};
  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">'+(I[k]||I.team)+'</svg>';}
-function secDash(v){
+function secOverview(v){
  let h='';
- const active=v.phase!=='done'&&!v.week_done;
- // 1) Training zuerst — Pflicht vor dem Spiel
- if(active){h+='<div class="card stepcard"><div class="sec" style="margin-top:0"><span class="stepnum">1</span>Training dieser Woche'+(v.week_trained?'':' <span class="navbadge">!</span>')+'</div>';
-   if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span><span class="mut">weiter zu Schritt 2</span></div>'+(v.game_bonus>0?'<div class="note">Film-Bonus aktiv fürs nächste Spiel.</div>':'');
-   else h+='<div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span>'+(t.exp?'<span class="texp">+'+t.exp+' EXP · '+esc(t.group)+'</span>':(t.group?'<span class="texp">'+esc(t.group)+'</span>':''))+'</button>').join('')+'</div>';
-   h+='</div>';}
- // 2) Spielbetrieb
- h+='<div class="card'+(active?' stepcard':'')+'" id="gamecard"><div class="sec" style="margin-top:0">'+(active?'<span class="stepnum">2</span>':'')+(v.phase==='done'?'Saison beendet':(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
+ // Spielbetrieb
+ h+='<div class="card" id="gamecard"><div class="sec" style="margin-top:0">'+(v.phase==='done'?'Saison beendet':(v.is_bye?'Bye Week':(v.phase==='playoffs'?(v.playoff?v.playoff.round:'Playoffs'):'Woche '+(v.week+1))))+'</div>';
  if(v.phase==='done'){h+='<div class="reco champ"><span>Saison beendet'+(v.champion?' · Meister '+esc(v.champion):'')+'.</span></div>'+
    (v.awards&&v.awards.length?'<button onclick="showAwards()">🏆 Award-Show</button> ':'')+'<button class="ghost" onclick="newSeason()">Neue Saison starten</button> ';}
  else if(v.week_done){
@@ -1109,8 +1105,8 @@ function secDash(v){
    if(v.has_last_game)h+='<button class="ghost" onclick="watchLast()">Spiel ansehen</button> ';
  }
  else if(!v.week_trained){
-   h+='<div class="reco"><span class="mut">Erst das Training dieser Woche absolvieren (Schritt 1).</span></div>'+
-     '<button disabled>'+(v.is_bye?'Woche abschließen':'Selbst spielen')+'</button>'+(v.is_bye?'':' <button class="ghost" disabled>Simulieren</button>');
+   h+='<div class="reco"><span class="mut">Erst das Wochen-Training absolvieren.</span></div>'+
+     '<button data-t="train" onclick="mgrGo(this.dataset.t)">Zum Training ▶</button>';
  }
  else if(v.is_bye){h+='<div class="reco"><span><b>Bye Week</b> — diese Woche kein Spiel</span><span class="mut">Training erledigt — Woche abschließen</span></div>'+
    '<button onclick="simWeek()">Woche abschließen</button> ';}
@@ -1147,16 +1143,37 @@ function secDash(v){
  // Neuigkeiten (kompakt)
  if(v.events&&v.events.length){h+='<div class="card"><div class="sec" style="margin-top:0">Neuigkeiten</div>'+
    v.events.map(e=>'<div class="reco mini '+(e.type==='bad'?'loss':(e.type==='ok'?'win':''))+'"><span>'+esc(e.text)+'</span></div>').join('')+'</div>';}
+ h+='<details class="danger"><summary>⚙️ Einstellungen &amp; Gefahrenbereich</summary><div class="dangerin"><div class="mut" style="margin-bottom:8px">Unwiderrufliche Aktion — der gesamte Franchise-Fortschritt geht verloren.</div><button class="ghost danger-btn" onclick="resetFr()">Franchise zurücksetzen</button></div></details>';
+ return h;
+}
+function secTraining(v){
+ const active=v.phase!=='done'&&!v.week_done;
+ let h='<div class="card"><div class="sec" style="margin-top:0">Wochen-Training'+(active&&!v.week_trained?' <span class="navbadge">!</span>':'')+'</div>';
+ if(!active)h+='<div class="note">Diese Woche ist abgeschlossen — das nächste Training gibt es in der neuen Woche.</div>';
+ else if(v.week_trained)h+='<div class="reco win"><span>Training erledigt ✓</span>'+(v.game_bonus>0?'<span class="mut">Film-Bonus aktiv fürs nächste Spiel</span>':'')+'</div>';
+ else h+='<div class="note" style="margin-top:0">Wähle <b>ein</b> Training für diese Woche.</div><div class="traingrid">'+v.trainings.map(t=>'<button class="traincard" data-k="'+t.key+'" onclick="trainWeek(this.dataset.k)"><span class="ti">'+trainIcon(t.icon)+'</span><b>'+esc(t.label)+'</b><span class="td">'+esc(t.desc)+'</span>'+(t.exp?'<span class="texp">+'+t.exp+' EXP · '+esc(t.group)+'</span>':(t.group?'<span class="texp">'+esc(t.group)+'</span>':''))+'</button>').join('')+'</div>';
+ h+='</div>';
+ // Team-Schema
  const offk=Object.keys(v.off_schemes),defk=Object.keys(v.def_schemes);
  h+='<div class="card"><div class="sec" style="margin-top:0">Team-Schema</div><div class="controls">'+
    '<div><label>Offense-Schema</label><select id="sc_off">'+offk.map(k=>'<option'+(k===v.scheme.off?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
    '<div><label>Defense-Schema</label><select id="sc_def">'+defk.map(k=>'<option'+(k===v.scheme.def?' selected':'')+'>'+esc(k)+'</option>').join('')+'</select></div>'+
    '<button onclick="setScheme()">Übernehmen</button></div>'+
    '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+'</div></div>';
- h+=leagueTable(v);
- h+='<details class="danger"><summary>⚙️ Einstellungen &amp; Gefahrenbereich</summary><div class="dangerin"><div class="mut" style="margin-bottom:8px">Unwiderrufliche Aktion — der gesamte Franchise-Fortschritt geht verloren.</div><button class="ghost danger-btn" onclick="resetFr()">Franchise zurücksetzen</button></div></details>';
+ // Trainerstab
+ h+='<div class="sec">Trainerstab</div>';
+ v.coaches.forEach(c=>{const mk=v.coach_market[c.role]||[];
+   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+     '<div><b>'+esc(c.label)+'</b> · '+esc(c.name)+' <span class="mut">'+c.rating+' OVR</span></div>'+
+     '<button data-r="'+c.role+'" onclick="improveCoach(this.dataset.r)" '+(v.budget<c.improve_cost?'disabled':'')+'>Verbessern ('+c.improve_cost+' Mio)</button></div>'+
+     '<div class="ctraits">'+c.traits.map(t=>'<div class="ctrait"><span>'+esc(t.label)+'</span><span class="abar"><span class="afill" style="width:'+Math.round(t.val/99*100)+'%"></span></span><span class="aval">'+t.val+'</span></div>').join('')+'</div>';
+   if(mk.length){h+='<div class="note" style="margin-top:8px">Verfügbar:</div>';
+     mk.forEach(cd=>{h+='<div class="reco"><span>'+esc(cd.name)+' <span class="mut">'+cd.rating+' · '+cd.traits.map(t=>t.label[0]+t.val).join(' ')+'</span></span>'+
+       '<button data-r="'+c.role+'" data-i="'+cd.idx+'" onclick="hireCoach(this.dataset.r,this.dataset.i)" '+(v.budget<cd.cost?'disabled':'')+'>Anheuern ('+cd.cost+' Mio)</button></div>';});}
+   h+='</div>';});
  return h;
 }
+function secLiga(v){return leagueTable(v)+secStats(v);}
 let _ltSort='rank';
 function ltSort(c){_ltSort=c;renderMgr(lastView);}
 function leagueTable(v){const rows=(v.standings||[]).slice();if(!rows.length)return '';
@@ -1702,17 +1719,6 @@ function secBuild(v){
    '<div class="note">Budget: '+v.budget+' Mio. — tippe auf die Welt für die große, bewegbare Vereinswelt mit Ausbau, Erweiterungen & Liga-Vergleich.</div>'+
    '<div class="citypreview" onclick="openWorld()">'+_complexSVG(v)+'<div class="cpbadge">🌍 Vereinswelt öffnen</div></div>'+
    '<div id="facpanel">'+_facPanelHTML(v)+'</div></div>';
- // Trainerstab als Karten mit Stärken/Schwächen + Markt
- h+='<div class="sec">Trainerstab</div>';
- v.coaches.forEach(c=>{const mk=v.coach_market[c.role]||[];
-   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-     '<div><b>'+esc(c.label)+'</b> · '+esc(c.name)+' <span class="mut">'+c.rating+' OVR</span></div>'+
-     '<button data-r="'+c.role+'" onclick="improveCoach(this.dataset.r)" '+(v.budget<c.improve_cost?'disabled':'')+'>Verbessern ('+c.improve_cost+' Mio)</button></div>'+
-     '<div class="ctraits">'+c.traits.map(t=>'<div class="ctrait"><span>'+esc(t.label)+'</span><span class="abar"><span class="afill" style="width:'+Math.round(t.val/99*100)+'%"></span></span><span class="aval">'+t.val+'</span></div>').join('')+'</div>';
-   if(mk.length){h+='<div class="note" style="margin-top:8px">Verfügbar:</div>';
-     mk.forEach(cd=>{h+='<div class="reco"><span>'+esc(cd.name)+' <span class="mut">'+cd.rating+' · '+cd.traits.map(t=>t.label[0]+t.val).join(' ')+'</span></span>'+
-       '<button data-r="'+c.role+'" data-i="'+cd.idx+'" onclick="hireCoach(this.dataset.r,this.dataset.i)" '+(v.budget<cd.cost?'disabled':'')+'>Anheuern ('+cd.cost+' Mio)</button></div>';});}
-   h+='</div>';});
  return h;
 }
 async function improveCoach(role){const r=await api('/api/fr/improve_coach?role='+encodeURIComponent(role),'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
@@ -1982,12 +1988,12 @@ const TUT=[
  {tab:'dash',sel:'.tbanner',title:'Deine Franchise',text:'Hier oben siehst du dein Team, Bilanz, Budget, Skillpunkte und die Saisonwoche.'},
  {tab:'dash',sel:'.subnav',title:'Bereiche',text:'Über diese Reiter steuerst du alles: Dashboard, Kader & Training, Statistik, Transfermarkt und Verbesserungen.'},
  {tab:'dash',sel:'#goalcard',title:'Saison-Ziele',text:'Das Front-Office gibt dir Ziele vor. Erfüllst du sie, gibt es Budget-Belohnungen.'},
- {tab:'dash',sel:'.traingrid',title:'1× Training pro Woche',text:'Wähle eine Trainingskarte — z. B. Teamtraining, Einzeltraining oder eine Film-Session für einen Spielbonus.'},
  {tab:'dash',sel:'#gamecard',title:'Spiel & Woche',text:'Spiel selbst spielen oder simulieren. Erst danach schaltest du mit „Nächste Woche" weiter — die Woche endet nie von allein.'},
+ {tab:'train',sel:'.traingrid',title:'Training',text:'Wähle 1× pro Woche ein Training (Team, Einzel, Film-Session …). Hier verwaltest du auch dein Schema und den Trainerstab.'},
  {tab:'kader',sel:'.prow',title:'Spieler entwickeln',text:'Klicke einen Spieler an, um seine Attribute mit Skillpunkten zu steigern und ihn als Starter zu setzen.'},
  {tab:'transfer',sel:'.card',title:'College-Scouting & Transfermarkt',text:'Scoute College-Talente mit deinen Scouting-Punkten, um Können, Potenzial und Entwicklungs-Trait aufzudecken — dann draften. Darunter findest du fertige Free Agents. Jede Saison: Ruhestand + neuer Jahrgang.'},
- {tab:'stats',sel:'.card',title:'Statistik',text:'Saison- und Karrierewerte sowie Bestenlisten deines Teams.'},
- {tab:'build',sel:'.card',title:'Verbesserungen',text:'Investiere Budget in Trainerstab, Stadion (mehr Geld) und Equipment (mehr EXP). Viel Erfolg!'},
+ {tab:'liga',sel:'.card',title:'Liga',text:'Tabelle, Liga-Spitze, deine Saison-Bestenliste und Gegner-Scouting an einem Ort.'},
+ {tab:'build',sel:'.card',title:'Anlagen',text:'Deine Vereinswelt: Stadion (mehr Geld), Trainingsgelände (mehr EXP) und freischaltbare Erweiterungen. Viel Erfolg!'},
 ];
 let _tutStep=0;
 function openTutorial(s){_tutStep=s||0;tutShow();}
