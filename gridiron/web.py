@@ -18,18 +18,17 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v33-scrollfix"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v34-scroll2"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
    --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
- html{overflow-x:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%}
- button,a,.tab,.s,.optbtn,.prow,.reco,.facb,.citypreview,.worldzoom button,select,input,label{touch-action:manipulation}
+ html{overflow-x:hidden;-webkit-text-size-adjust:100%}
+ button,a,.tab,.s,.optbtn,.worldzoom button,select{touch-action:manipulation}
  body{margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;
    font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-   /* Seite lässt sich nur vertikal scrollen – kein seitliches Verschieben/Wackeln */
-   overflow-x:hidden;overscroll-behavior:none;width:100%;max-width:100%;position:relative;touch-action:pan-y}
+   width:100%;max-width:100%}
  img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
  .top{background:#0d1411;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
@@ -314,7 +313,7 @@ _STYLE2 = """
  .oseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#06140d;min-width:0}
  .o-ok{background:#16c784}.o-ok2{background:#0e9f6a;color:#eafff5}.o-mid{background:#3a4a44;color:#d6efe4}
  .o-warn{background:#e9b949}.o-bad{background:#ef5350;color:#fff}
- body.noscroll{overflow:hidden}
+ html.noscroll,body.noscroll{overflow:hidden}
  .overlay{position:fixed;inset:0;background:rgba(4,8,6,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow-y:auto;overflow-x:hidden;padding:18px 20px;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
  .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
@@ -474,8 +473,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
-function lockBody(){document.body.classList.add('noscroll');}
-function _releaseBody(){document.body.classList.remove('noscroll');document.body.style.top='';}
+function lockBody(){document.documentElement.classList.add('noscroll');document.body.classList.add('noscroll');}
+function _releaseBody(){document.documentElement.classList.remove('noscroll');document.body.classList.remove('noscroll');document.body.style.top='';}
 function unlockBodyIfNone(){if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();}   // nur sperren solange wirklich ein Overlay offen ist
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
