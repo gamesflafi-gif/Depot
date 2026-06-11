@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v38-scout"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v39-mgr4"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -355,6 +355,19 @@ _STYLE2 = """
  .prow:hover{border-color:var(--acc)} .prow .ovrnum{min-width:30px;text-align:center}
  .pfa{flex:none;line-height:0} .ptr{border-radius:8px;display:block}
  .prow .pname{flex:1;font-weight:600} .ptbadge{background:var(--acc);color:#04140c;font-weight:800;font-size:12px;padding:3px 9px;border-radius:7px}
+ /* Depth Chart */
+ .dcgrphd{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:14px 0 4px}
+ .dcpos{display:flex;gap:10px;align-items:flex-start;margin:7px 0;flex-wrap:wrap}
+ .dchead{flex:none;width:38px;padding-top:8px} .dclist{flex:1;min-width:200px;display:flex;flex-direction:column;gap:5px}
+ .dcrow{display:flex;align-items:center;gap:9px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--tile);cursor:pointer;transition:border-color .12s}
+ .dcrow:hover{border-color:var(--acc)} .dcrow.st{background:linear-gradient(180deg,#13301f,#0f2418);border-color:#1c5a40}
+ .dcrow.hurt{opacity:.7} .dcslot{width:24px;text-align:center;font-weight:800;font-size:11px;color:var(--mut)} .dcrow.st .dcslot{color:var(--acc)} .dcn{flex:1;font-weight:600;font-size:13.5px}
+ /* Gefahrenbereich */
+ details.danger{margin:18px 0 4px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);overflow:hidden}
+ details.danger>summary{cursor:pointer;padding:12px 15px;font-weight:700;color:var(--mut);list-style:none;font-size:13.5px} details.danger>summary::-webkit-details-marker{display:none}
+ details.danger[open]>summary{border-bottom:1px solid var(--line);color:var(--fg)} .dangerin{padding:14px 15px}
+ .danger-btn{border-color:#5a2a20 !important;color:#ef8e84 !important} .danger-btn:hover{border-color:var(--bad) !important;color:var(--bad) !important}
+ .card.empty{color:var(--mut);font-size:13.5px;text-align:center;border-style:dashed;background:transparent}
  .pcols{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:12px}
  .radarwrap{flex:none} .attrs{flex:1;min-width:240px}
  .arow{display:flex;align-items:center;gap:10px;margin:7px 0}
@@ -1100,6 +1113,7 @@ function secDash(v){
  if(v.phase!=='done'&&!v.is_bye)h+=matchupCard(v);
  h+=formStrip(v);
  h+=injuryCard(v);
+ h+=financeCard(v);
  // Entscheidungs-Event (nicht jede Woche, getrennt vom Training)
  if(v.pending_event){const ev=v.pending_event;_evt={b0:0,b1:0,d:0};
    const grp=(key,title,opts,cls)=>'<div class="evtgrp"><div class="evtlab">'+esc(title)+'</div><div class="evtopts">'+
@@ -1121,7 +1135,7 @@ function secDash(v){
    '<button onclick="setScheme()">Übernehmen</button></div>'+
    '<div class="note">Off: '+esc((v.off_schemes[v.scheme.off]||[]).join(', '))+'<br>Def: '+esc((v.def_schemes[v.scheme.def]||[]).join(', '))+'</div></div>';
  h+=leagueTable(v);
- h+='<div style="text-align:center;margin:16px 0 4px"><button class="ghost" onclick="resetFr()" style="opacity:.7;font-size:13px">Franchise zurücksetzen</button></div>';
+ h+='<details class="danger"><summary>⚙️ Einstellungen &amp; Gefahrenbereich</summary><div class="dangerin"><div class="mut" style="margin-bottom:8px">Unwiderrufliche Aktion — der gesamte Franchise-Fortschritt geht verloren.</div><button class="ghost danger-btn" onclick="resetFr()">Franchise zurücksetzen</button></div></details>';
  return h;
 }
 let _ltSort='rank';
@@ -1188,6 +1202,12 @@ function injuryCard(v){const inj=(v.roster||[]).filter(p=>p.inj>0).sort((a,b)=>b
  return '<div class="card"><div class="sec" style="margin-top:0">🩹 Verletzungs-Report ('+inj.length+')</div>'+
   inj.map(p=>'<div class="reco mini" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)" style="cursor:pointer"><span style="display:flex;align-items:center;gap:8px">'+posBadge(p.pos)+esc(p.name)+'</span><span class="tag tg-inj">noch '+p.inj+' Wo</span></div>').join('')+
   '<div class="note">„Regeneration"-Training verkürzt Ausfälle um 1 Woche.</div></div>';}
+function financeCard(v){const inc=(v.stadium&&v.stadium.income)||0;
+ const remain=(v.phase==='regular'&&v.n_weeks!=null)?Math.max(0,v.n_weeks-(v.week+1)):0;
+ const proj=v.budget+inc*remain;
+ return '<div class="card"><div class="sec" style="margin-top:0">💰 Finanzen</div>'+
+  '<div class="kgrid">'+kpi('Budget',v.budget+' Mio')+kpi('Einnahmen/Wo','+'+inc+' Mio')+kpi('Stadion-Stufe',v.stadium.level)+kpi('Prognose Saisonende',proj+' Mio')+'</div>'+
+  '<div class="note">Stadion ausbauen steigert die Wocheneinnahmen ('+(remain>0?remain+' Wochen verbleiben':'Saison läuft aus')+'). Budget fließt in Ausbauten, Coaches & Transfers.</div></div>';}
 let _kSort='ovr',_kFilter='all';
 function kSort(s){_kSort=s;renderMgr(lastView);}
 function kFilter(f){_kFilter=f;renderMgr(lastView);}
@@ -1198,6 +1218,19 @@ function _kApply(ps){let a=ps.slice();
  else if(_kFilter==='dev')a=a.filter(p=>p.ovr<p.pot);
  const key={ovr:p=>p.ovr,pot:p=>p.pot,age:p=>-p.age,form:p=>playerImpact(p)}[_kSort]||(p=>p.ovr);
  return a.sort((x,y)=>key(y)-key(x));}
+let _kView='list';
+function kView(x){_kView=x;renderMgr(lastView);}
+function depthChart(v){let h='<div class="card"><div class="sec" style="margin-top:0">Aufstellung (Depth Chart)</div><div class="note" style="margin-top:0">Pro Position: Starter (ST) zuoberst, danach die Backups nach OVR. Tippe einen Spieler an.</div>';
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+   h+='<div class="dcgrphd">'+grp[0]+'</div>';
+   grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos).sort((a,b)=>(b.starter-a.starter)||(b.ovr-a.ovr));if(!ps.length)return;
+     h+='<div class="dcpos"><div class="dchead">'+posBadge(pos)+'</div><div class="dclist">'+
+       ps.map((p,i)=>'<div class="dcrow'+(p.starter?' st':'')+(p.inj>0?' hurt':'')+'" data-i="'+p.id+'" onclick="openPlayer(this.dataset.i)">'+
+         '<span class="dcslot">'+(p.starter?'ST':(i+1))+'</span>'+ovrBadge(p.ovr)+
+         '<span class="dcn">'+esc(p.name)+(p.inj>0?' <span class="tag tg-inj">'+p.inj+'W</span>':'')+'</span>'+
+         '<span class="mut" style="font-size:12px">'+p.age+'J · Pot '+p.pot+'</span></div>').join('')+
+       '</div></div>';});});
+ return h+'</div>';}
 function secKader(v){
  const total=v.roster.length,starters=v.roster.filter(p=>p.starter).length,inj=v.roster.filter(p=>p.inj>0).length;
  const avgAge=total?Math.round(v.roster.reduce((s,p)=>s+p.age,0)/total):0;
@@ -1205,11 +1238,14 @@ function secKader(v){
    '<div class="kgrid">'+kpi('Skillpunkte',v.skillpoints)+kpi('Overall',v.ratings.ovr)+kpi('Starter',starters)+kpi('Ø Alter',avgAge)+kpi('Verletzt',inj)+kpi('Kader',total)+'</div>'+
    (v.skillpoints>0?'<div style="margin-top:12px"><button onclick="allocAll()">Alle Skillpunkte auto-verteilen ('+v.skillpoints+')</button></div>':'')+
    '<div class="note">Je 100 EXP = 1 Skillpunkt (aus Wochen-Training & Spiel-Leistung). Tippe einen Spieler an, um Punkte auf Attribute zu verteilen.</div></div>';
- // Sortier-/Filter-Leiste
- h+='<div class="card kbar"><div class="kbarrow"><span class="kbl">Sortieren</span>'+
-   [['ovr','OVR'],['pot','Potenzial'],['age','Alter'],['form','Form']].map(s=>'<button class="chip'+(_kSort===s[0]?' on':'')+'" data-s="'+s[0]+'" onclick="kSort(this.dataset.s)">'+s[1]+'</button>').join('')+'</div>'+
-   '<div class="kbarrow"><span class="kbl">Filter</span>'+
-   [['all','Alle'],['starter','Starter'],['bench','Bank'],['injured','Verletzt'],['dev','Entwicklung']].map(f=>'<button class="chip'+(_kFilter===f[0]?' on':'')+'" data-f="'+f[0]+'" onclick="kFilter(this.dataset.f)">'+f[1]+'</button>').join('')+'</div></div>';
+ // Ansicht-/Sortier-/Filter-Leiste
+ h+='<div class="card kbar"><div class="kbarrow"><span class="kbl">Ansicht</span>'+
+   [['list','Liste'],['depth','Aufstellung']].map(x=>'<button class="chip'+(_kView===x[0]?' on':'')+'" data-v="'+x[0]+'" onclick="kView(this.dataset.v)">'+x[1]+'</button>').join('')+'</div>'+
+   (_kView==='list'?('<div class="kbarrow"><span class="kbl">Sortieren</span>'+
+     [['ovr','OVR'],['pot','Potenzial'],['age','Alter'],['form','Form']].map(s=>'<button class="chip'+(_kSort===s[0]?' on':'')+'" data-s="'+s[0]+'" onclick="kSort(this.dataset.s)">'+s[1]+'</button>').join('')+'</div>'+
+     '<div class="kbarrow"><span class="kbl">Filter</span>'+
+     [['all','Alle'],['starter','Starter'],['bench','Bank'],['injured','Verletzt'],['dev','Entwicklung']].map(f=>'<button class="chip'+(_kFilter===f[0]?' on':'')+'" data-f="'+f[0]+'" onclick="kFilter(this.dataset.f)">'+f[1]+'</button>').join('')+'</div>'):'')+'</div>';
+ if(_kView==='depth')return h+depthChart(v);
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    let body='';
    grp[1].forEach(pos=>{const ps=_kApply(v.roster.filter(p=>p.pos===pos));if(!ps.length)return;
@@ -1302,6 +1338,7 @@ function secTransfer(v){
    '<div class="scoutpts"><span class="v">'+sp+'</span><span class="l">Punkte</span></div></div>'+
    '<div class="note">Scoute Talente (1 Punkt je Stufe), um Werte, Potenzial &amp; Entwicklungs-Trait aufzudecken — oder direkt draften und auf die Anlage wetten. Jede Woche +3 Punkte.</div></div>';
  const pros=v.prospects||[];
+ if(!pros.length)h+='<div class="card empty">🎓 Aktuell keine College-Prospects verfügbar — der Draft-Pool füllt sich zur nächsten Saison.</div>';
  [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
    const ps=pros.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
    h+='<div class="card"><div class="sec" style="margin-top:0">College · '+grp[0]+'</div>';
@@ -1358,6 +1395,7 @@ function secStats(v){
      '<td>'+p.season.pass_yds+'</td><td>'+p.season.rush_yds+'</td><td>'+p.season.rec_yds+'</td>'+
      '<td>'+p.season.tkl+'</td><td>'+p.season.sack+'</td><td>'+p.season.intc+'</td><td>'+p.season.td+'</td></tr>').join('')+
    '</table></div>';}
+ else h+='<div class="card empty">📊 Noch keine Spiele gewertet — spiele oder simuliere eine Woche, dann erscheinen hier die Saison-Statistiken.</div>';
  // Hall of Fame / Historie
  if(v.history&&v.history.length){h+='<div class="card"><div class="sec" style="margin-top:0">🏆 Hall of Fame / Historie</div>'+
    v.history.slice().reverse().map(x=>'<div class="reco"><span><span class="tag">S'+x.season+'</span> Meister: <b>'+esc(x.champion)+'</b></span><span class="mut">'+(x.mvp?'MVP '+esc(x.mvp):'')+'</span></div>').join('')+'</div>';}
