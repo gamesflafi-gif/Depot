@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v56-6plays"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v57-kicktop"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -363,6 +363,12 @@ _STYLE2 = """
  .optgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:6px 0 4px}
  .optbtn{padding:11px 13px;border:1px solid #46544e;background:var(--tile);color:var(--fg);border-radius:9px;cursor:pointer;text-align:left;font-weight:700;transition:border-color .12s,background .12s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
  .optbtn:hover{border-color:var(--acc);background:#2d3a34} .optbtn .ty{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
+ /* Obere Aktionsleiste: Field Goal / Punt (nur 4. Versuch) + Auszeit klein */
+ .topacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+ .optbtn.kick{flex:1 1 130px;text-align:center;font-weight:800;border-color:#d8a23a;background:#2a2516;color:#ffd98a}
+ .optbtn.kick:hover{border-color:#ffd34d;background:#352d18}
+ .optbtn.to.sm{margin-left:auto;flex:0 0 auto;padding:7px 11px;font-size:12px;font-weight:700;text-align:center;border-color:#46544e;background:var(--tile);color:#cdeede}
+ .optbtn.philly{border-color:#6f8;background:#16321f}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
@@ -1959,10 +1965,19 @@ function renderGame(g,play){
  if(disp.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(disp.away)+' '+disp['as']+' : '+disp.hs+' '+esc(disp.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
  else{const ban=disp.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':disp.awaiting==='2pt'?'🏈 2-Punkte-Versuch — wähle deinen Spielzug von der 3:':(disp.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
-   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'||disp.awaiting==='2pt'?'off':'def')+'">'+ban+'</div>'+
-   '<div class="optgrid">'+(disp.options||[]).map(o=>'<button class="optbtn'+(o.key==='__TIMEOUT__'?' to':'')+'" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
+   const opts=disp.options||[],dis=playBusy?'disabled':'';
+   const to=opts.find(o=>o.key==='__TIMEOUT__');                        // Auszeit -> klein oben rechts
+   const kicks=opts.filter(o=>o.key==='__FG__'||o.key==='__PUNT__');    // FG/Punt -> nur 4. Versuch, ganz oben
+   const plays=opts.filter(o=>o.key!=='__TIMEOUT__'&&o.key!=='__FG__'&&o.key!=='__PUNT__');
+   const pbtn=o=>'<button class="optbtn'+(o.key==='__PHILLY__'?' philly':'')+'" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>';
+   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'||disp.awaiting==='2pt'?'off':'def')+'">'+ban+'</div>';
+   if(kicks.length||to)h+='<div class="topacts">'+
+     kicks.map(o=>'<button class="optbtn kick" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+(o.key==='__FG__'?'🥅 ':'🦵 ')+esc(o.label)+'</button>').join('')+
+     (to?'<button class="optbtn to sm" '+dis+' data-k="__TIMEOUT__" onclick="gamePlay(this.dataset.k)">⏱ '+esc(to.label)+'</button>':'')+
+     '</div>';
+   h+='<div class="optgrid">'+plays.map(pbtn).join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
-   '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
+   '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+dis+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+dis+'>Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">'+qLabel(p.q)+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);

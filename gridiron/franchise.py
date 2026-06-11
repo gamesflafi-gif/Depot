@@ -1879,9 +1879,10 @@ def _new_decision_options(state: dict) -> None:
                          {"key": "__2PT__", "label": "2-Punkte-Conversion", "type": "+2"}]
     elif user_has_ball:
         opts = _random_off_options()
-        if g["ytz"] <= 50:                                # Field Goal ab ca. Mittellinie
-            opts.append({"key": "__FG__", "label": f"Field Goal ({round(g['ytz'] + 17)} Yd, {round(fg_make_prob(g['ytz'], kicker(off)) * 100)}%)", "type": "Kick"})
-        opts.append({"key": "__PUNT__", "label": "Punt", "type": "Kick"})   # jederzeit punten möglich
+        if g["down"] == 4:                                # Kicken nur im 4. Versuch (echtes Football)
+            if g["ytz"] <= 50:                            # Field Goal nur in Reichweite
+                opts.append({"key": "__FG__", "label": f"Field Goal ({round(g['ytz'] + 17)} Yd, {round(fg_make_prob(g['ytz'], kicker(off)) * 100)}%)", "type": "Kick"})
+            opts.append({"key": "__PUNT__", "label": "Punt", "type": "Kick"})
         g["off_snaps"] = g.get("off_snaps", 0) + 1
         if not g.get("philly_used") and g["off_snaps"] == g.get("philly_at", 2):   # 🦅 genau einmal anbieten
             opts.append({"key": "__PHILLY__", "label": "🦅 Philly Special", "type": "Trick"})
