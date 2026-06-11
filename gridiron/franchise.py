@@ -36,6 +36,11 @@ def _unit_side(u: str) -> str:
 
 
 def kicker(team: dict) -> int:
+    roster = team.get("roster")
+    if roster:                                           # Kicker ist eine normale Kaderposition
+        ks = [player_ovr(p) for p in roster if p["pos"] == "K" and p.get("inj", 0) == 0]
+        if ks:
+            return max(ks)
     return team.get("units", {}).get("K", 65)
 
 
@@ -82,8 +87,8 @@ def _name(rng: random.Random) -> str:
 
 
 # Kader: Slots & Starter je Positionsgruppe (nur das Nutzer-Team führt echte Spieler).
-ROSTER_SLOTS = {"QB": 2, "RB": 3, "WR": 4, "OL": 5, "DL": 4, "LB": 4, "DB": 4}
-STARTERS = {"QB": 1, "RB": 1, "WR": 2, "OL": 5, "DL": 4, "LB": 3, "DB": 3}
+ROSTER_SLOTS = {"QB": 2, "RB": 3, "WR": 4, "OL": 5, "DL": 4, "LB": 4, "DB": 4, "K": 1}
+STARTERS = {"QB": 1, "RB": 1, "WR": 2, "OL": 5, "DL": 4, "LB": 3, "DB": 3, "K": 1}
 
 # Attribute je Position (Schlüssel -> Gewicht fürs OVR).
 POS_ATTRS = {
@@ -94,14 +99,15 @@ POS_ATTRS = {
     "DL": {"PRSH": .35, "RDEF": .35, "STR": .20, "MOB": .10},
     "LB": {"TKL": .30, "COV": .30, "SPD": .25, "AWR": .15},
     "DB": {"COV": .40, "SPD": .30, "BALL": .20, "TKL": .10},
+    "K": {"KPW": .55, "KAC": .45},
 }
 ATTR_LABELS = {"ACC": "Genauigkeit", "ARM": "Wurfkraft", "AWR": "Übersicht", "MOB": "Mobilität",
                "SPD": "Speed", "AGI": "Agilität", "PWR": "Power", "CTH": "Hände", "RTE": "Route",
                "JMP": "Sprungkraft", "PBK": "Pass-Schutz", "RBK": "Run-Block", "STR": "Stärke",
                "PRSH": "Pass-Rush", "RDEF": "Run-Stop", "TKL": "Tackling", "COV": "Coverage",
-               "BALL": "Ball-Skills"}
+               "BALL": "Ball-Skills", "KPW": "Schusskraft", "KAC": "Kick-Präzision"}
 POS_LABELS = {"QB": "Quarterback", "RB": "Running Back", "WR": "Receiver", "OL": "O-Line",
-              "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary"}
+              "DL": "D-Line", "LB": "Linebacker", "DB": "Secondary", "K": "Kicker"}
 
 # Entwicklungs-Trait (Madden-Stil): wie schnell ein Spieler EXP in Können umsetzt.
 DEV_TRAITS = {"normal": 1.0, "star": 1.4, "superstar": 1.9}
@@ -371,8 +377,8 @@ def _units_from_roster(roster: list[dict]) -> dict:
 def _sync_units(team: dict) -> None:
     if team.get("roster"):
         new = _units_from_roster(team["roster"])
-        for u in ST_UNITS:                               # Kicker/Special Teams nicht aus dem Kader ableiten
-            new[u] = team.get("units", {}).get(u, 65)
+        if not any(p["pos"] == "K" for p in team["roster"]):      # alte Saves ohne Kader-Kicker: alten Wert behalten
+            new["K"] = team.get("units", {}).get("K", 65)
         team["units"] = new
 
 
@@ -567,6 +573,12 @@ def _migrate(state: dict) -> None:
         if t.get("user"):                                 # neue Anlagen für alte Spielstände
             for fac in ("medical", "athletic", "scouting_fac", "youth"):
                 t.setdefault(fac, 1)
+            rost = t.get("roster")                        # Kicker als Kaderposition nachrüsten
+            if rost and not any(p["pos"] == "K" for p in rost):
+                kbase = max(50, min(80, (t.get("units", {}).get("K", 66)) - 4))
+                nid = max((p["id"] for p in rost), default=0) + 1
+                rost.append(_gen_player(nid, "K", kbase, rng, age=rng.randint(23, 30), starter=True))
+                _sync_units(t)
     if "scout_pts" not in state:
         state["scout_pts"] = 6
     if "prospects" not in state:

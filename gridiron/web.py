@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v46-scout2"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v47-kicker"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -68,7 +68,7 @@ _STYLE = """
  /* Positions-Farben & OVR-Tiers (Game-Look) */
  .posb{display:inline-block;min-width:32px;text-align:center;font-weight:800;font-size:11px;padding:3px 6px;border-radius:6px;color:#06140d;letter-spacing:.02em;box-shadow:0 1px 2px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.18)}
  .p-QB{background:#f5a524}.p-RB{background:#16c784}.p-WR{background:#3b96ff;color:#fff}.p-OL{background:#b9923a}
- .p-DL{background:#ef5350;color:#fff}.p-LB{background:#9b6be3;color:#fff}.p-DB{background:#13b7c9;color:#04121f}
+ .p-DL{background:#ef5350;color:#fff}.p-LB{background:#9b6be3;color:#fff}.p-DB{background:#13b7c9;color:#04121f}.p-K{background:#e88c2a;color:#241200}
  .ovrb{font-weight:800;font-variant-numeric:tabular-nums;border-radius:8px;padding:5px 9px;min-width:38px;text-align:center;display:inline-block;font-size:15px;box-shadow:0 1px 3px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.15)}
  .ovr-elite{background:linear-gradient(135deg,#f3d27a,#caa23f);color:#231a00}.ovr-good{background:#16c784;color:#04140c}
  .ovr-ok{background:#1f6f53;color:#dffaef}.ovr-avg{background:#2a3530;color:#cfe}.ovr-low{background:#3a2a20;color:#eaa877}
@@ -1268,7 +1268,7 @@ function _kApply(ps){let a=ps.slice();
 let _kView='list';
 function kView(x){_kView=x;renderMgr(lastView);}
 function depthChart(v){let h='<div class="card"><div class="sec" style="margin-top:0">Aufstellung (Depth Chart)</div><div class="note" style="margin-top:0">Pro Position: Starter (ST) zuoberst, danach die Backups nach OVR. Tippe einen Spieler an.</div>';
- [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']],['Special Teams',['K']]].forEach(grp=>{
    h+='<div class="dcgrphd">'+grp[0]+'</div>';
    grp[1].forEach(pos=>{const ps=v.roster.filter(p=>p.pos===pos).sort((a,b)=>(b.starter-a.starter)||(b.ovr-a.ovr));if(!ps.length)return;
      h+='<div class="dcpos"><div class="dchead">'+posBadge(pos)+'</div><div class="dclist">'+
@@ -1293,7 +1293,7 @@ function secKader(v){
      '<div class="kbarrow"><span class="kbl">Filter</span>'+
      [['all','Alle'],['starter','Starter'],['bench','Bank'],['injured','Verletzt'],['dev','Entwicklung']].map(f=>'<button class="chip'+(_kFilter===f[0]?' on':'')+'" data-f="'+f[0]+'" onclick="kFilter(this.dataset.f)">'+f[1]+'</button>').join('')+'</div>'):'')+'</div>';
  if(_kView==='depth')return h+depthChart(v);
- [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']],['Special Teams',['K']]].forEach(grp=>{
    let body='';
    grp[1].forEach(pos=>{const ps=_kApply(v.roster.filter(p=>p.pos===pos));if(!ps.length)return;
      body+='<div style="margin:12px 0 4px">'+posBadge(pos)+' <span class="mut" style="font-weight:700">'+pos+'</span> <span class="mut" style="font-size:11px">· '+ps.length+'</span></div>';
@@ -1434,7 +1434,7 @@ function secTransfer(v){
  // --- Free Agents (sofort einsatzbereit, voll sichtbar) ---
  h+='<div class="card"><div class="sec" style="margin-top:0">Free Agents</div>'+
    '<div class="note">Fertige Spieler mit bekannten Werten. Position voll? Erst im Kader jemanden entlassen.</div></div>';
- [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
+ [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']],['Special Teams',['K']]].forEach(grp=>{
    const ps=v.market_players.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];
@@ -1495,8 +1495,7 @@ function _facList(v){const F=v.facilities||{};const kU=(v.units||[]).find(u=>u.k
  if(F.athletic)a.push({key:'athletic',k:'athletic',name:'Athletik-Center',lvl:F.athletic.level,cost:F.athletic.cost,maxed:F.athletic.level>=5,plus:'+1',eff:F.athletic.effect,gx:7.0,gy:0.7,w:1.3,d:1.1});
  if(F.scouting_fac)a.push({key:'scouting_fac',k:'scouting',name:'Scouting-Akademie',lvl:F.scouting_fac.level,cost:F.scouting_fac.cost,maxed:F.scouting_fac.level>=5,plus:'+1',eff:F.scouting_fac.effect,gx:0.5,gy:3.2,w:1.2,d:1.1});
  if(F.youth)a.push({key:'youth',k:'youth',name:'Jugend-Akademie',lvl:F.youth.level,cost:F.youth.cost,maxed:F.youth.level>=5,plus:'+1',eff:F.youth.effect,gx:7.0,gy:3.3,w:1.3,d:1.1});
- if(kU)a.push({key:'K',k:'kick',name:'Kicker-Akademie',lvl:Math.max(1,Math.ceil((kU.level-50)/10)),cost:kU.cost,maxed:kU.level>=95,plus:'+2',eff:'Field Goals weiter & Extra-Punkte sicherer',rating:kU.level,gx:4.05,gy:5.6,w:0.7,d:0.7});
- return a;}
+ return a;}   // Kicker ist jetzt eine Kaderposition (kein Anlagen-Gebäude mehr)
 const _BPAL={medical:['#5a6770','#414d55','#2c353b','#7a8990'],athletic:['#46587e','#33415f','#26314a','#6076a0'],scouting:['#445a7e','#33455f','#26344a','#5f78a0'],youth:['#46714f','#345740','#26402f','#5e9468'],generic:['#56636d','#3e4951','#2c343a','#76858f']};
 const _ACC={medical:'#ef5350',athletic:'#5fa8ff',scouting:'#5fa8ff',youth:'#19e08f'};
 function _icon(k,x,y){const c='#ffffff';
