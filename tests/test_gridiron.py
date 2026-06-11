@@ -371,6 +371,66 @@ def test_kicker_fg_and_extra_point(tmp_path):
     assert r2["game"]["hs"] + r2["game"]["as"] >= before
 
 
+def test_two_point_play_selection(tmp_path):
+    """2-Punkte-Versuch: __2PT__ öffnet eine Spielzug-Auswahl an der 3, ein Konzept entscheidet."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    F.do_training(cfg, st, "team")
+    F.start_game(cfg, st)
+    g = st["active_game"]
+    g["pos"] = 0 if g["user_is_home"] else 1
+    pos = g["pos"]
+    for _ in range(40):                                   # einen Touchdown erzwingen -> PAT
+        g["ytz"], g["down"], g["dist"] = 2, 1, 2
+        r = F.game_play(cfg, st, "Inside Zone")
+        if r["game"].get("awaiting") == "pat":
+            break
+        g = st["active_game"]; g["pos"] = pos
+    assert r["game"]["awaiting"] == "pat"
+    # __2PT__ resolviert NICHT sofort, sondern öffnet die Spielzug-Auswahl an der 3-Yard-Linie
+    r2 = F.game_play(cfg, st, "__2PT__")
+    assert r2["game"]["awaiting"] == "2pt" and r2["game"]["ytz"] == 3
+    assert "play" not in r2                                # kein Snap, nur Auswahl
+    opts = r2["game"]["options"]
+    plays = [o for o in opts if o["type"] in ("Pass", "Lauf")]
+    assert len(plays) >= 2 and any(o["type"] == "Lauf" for o in plays) and any(o["type"] == "Pass" for o in plays)
+    assert not any(o["key"] in ("__FG__", "__PUNT__") for o in opts)
+    # Ein Konzept spielt den Versuch aus -> animierbarer Play mit two_pt-Flag
+    before = r2["game"]["hs"] + r2["game"]["as"]
+    r3 = F.game_play(cfg, st, plays[0]["key"])
+    p = r3["play"]
+    assert p["two_pt"] and p["concept"] == plays[0]["key"] and p["kind"] in ("run", "complete", "incomplete", "sack", "int")
+    assert r3["game"]["awaiting"] != "2pt"                # Versuch abgeschlossen, Ballwechsel
+    assert r3["game"]["hs"] + r3["game"]["as"] in (before, before + 2)   # 0 oder +2 Punkte
+
+
+def test_penalty_payload_carries_play(tmp_path):
+    """Strafen liefern das echte Play + Strafen-Infos mit, damit das Frontend den Down animieren kann."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    F.do_training(cfg, st, "team")
+    F.start_game(cfg, st)
+    seen = None
+    for _ in range(3000):
+        g = st["active_game"]
+        if g["over"]:
+            F.start_game(cfg, st); g = st["active_game"]
+        if g.get("pat"):
+            F.game_play(cfg, st, "__XP__"); continue
+        uo = (g["pos"] == 0) == g["user_is_home"]
+        r = F.game_play(cfg, st, "Inside Zone" if uo else "Cover 2")
+        p = r.get("play", {})
+        if p.get("penalty"):
+            seen = p
+            break
+    assert seen is not None, "in 3000 Snaps keine Strafe gezogen"
+    for key in ("concept", "coverage", "pre_snap", "pen_name", "pen_side", "play_kind"):
+        assert key in seen, f"Strafe ohne Feld {key}"
+    assert isinstance(seen["pre_snap"], bool) and seen["pen_side"] in ("off", "def")
+
+
 def test_profiles_isolated(tmp_path):
     """Spielstände werden pro Profilname getrennt gespeichert."""
     from gridiron import franchise as F
