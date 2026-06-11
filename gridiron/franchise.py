@@ -2171,6 +2171,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
            "def": _spd_factor(deff["units"].get("DB", 70))}     # Tempo aus den Spielerwerten
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored, "td": is_td,
                                  "kind": o["kind"], "concept": concept, "coverage": coverage,
+                                 "turnover": bool(o["turnover"]),   # Fumble (Lauf/Fang) -> Animation zeigt Ballverlust
                                  "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0),
                                  "spd": spd},
             "game": _game_view(state)}

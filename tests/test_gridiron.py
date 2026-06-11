@@ -510,6 +510,36 @@ def test_penalty_payload_carries_play(tmp_path):
     assert isinstance(seen["pre_snap"], bool) and seen["pen_side"] in ("off", "def")
 
 
+def test_play_payload_carries_turnover_flag(tmp_path):
+    """Normale Snaps liefern ein boolesches turnover-Flag mit (für die Fumble-Animation)."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    F.do_training(cfg, st, "team"); st.pop("meeting", None)
+    F.start_game(cfg, st)
+    g = st["active_game"]
+    g["pos"] = 0 if g["user_is_home"] else 1                   # Nutzer am Ball
+    got = False
+    for _ in range(20):                                        # ein paar Snaps -> Vertrag prüfen
+        g["ytz"], g["down"], g["dist"] = 60, 1, 10             # Feld offen halten (kein Spielende)
+        r = F.game_play(cfg, st, "Inside Zone")
+        p = r.get("play", {})
+        if p.get("kind") in ("run", "complete", "incomplete", "sack", "int"):
+            assert "turnover" in p and isinstance(p["turnover"], bool)
+            got = True
+        g = st["active_game"]; g["pos"] = 0 if g["user_is_home"] else 1
+        if g.get("pat"):
+            F.game_play(cfg, st, "__XP__"); g = st["active_game"]; g["pos"] = 0 if g["user_is_home"] else 1
+    assert got
+    # Fumbles entstehen real in der Engine (turnover=True bei Lauf/Fang)
+    import numpy as np
+    from gridiron.simulator import play_outcome
+    rng = np.random.default_rng(0)
+    fumbles = sum(play_outcome("Inside Zone", "Cover 2", {"yardline_100": 60, "down": 1, "ydstogo": 10}, rng)["turnover"]
+                  for _ in range(6000))
+    assert fumbles > 0                                         # Fumble-Pfad existiert und feuert
+
+
 def test_profiles_isolated(tmp_path):
     """Spielstände werden pro Profilname getrennt gespeichert."""
     from gridiron import franchise as F

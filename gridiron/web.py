@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v63-anim"           # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v64-fumble"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -925,6 +925,7 @@ function playAnim(svg,d,res,onDone){
  res=res||{}; const kind=res.kind||(d.kind==='run'?'run':'complete');
  const yards=(res.yards!=null?res.yards:(res.mean_yards!=null?res.mean_yards:0));
  const td=!!res.td, vy=(td&&yards>24)?24:yards;   // bei Touchdown sichtbar in der Endzone enden, nicht getackelt
+ const fumble=!!res.fumble&&(kind==='run'||kind==='complete')&&!td;   // Fumble (Ballverlust) bei Lauf/Fang
  const isPass=(kind!=='run'),ball=$(P+'_pball'),C=26.65;
  const SP=res.spd||{off:1,def:1};                              // Tempo aus Spielerwerten (Offense-Skill / Defense-Coverage)
  const OFFSK={X:1,Z:1,SL:1,TE:1,RB:1,FB:1},DEFCV={CB:1,S:1,DB:1};
@@ -947,6 +948,7 @@ function playAnim(svg,d,res,onDone){
  const BALLSPD=23;                                  // Ballgeschwindigkeit (Yd/s) — Flug sichtbar, Receiver fängt im Lauf
  const TS=0.58;                                     // Spiel-Zeitlupe: Play läuft langsamer & lesbarer ab (real bleibt die Logik)
  const t0=performance.now();let last=t0,pt=0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false,throwAng=0,gainT=-1,hoT=-1;
+ let fumbled=false,recovered=false,fumT=-1,recT=-1,fumbleSpot=null,recoverer=null;
  const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/BALLSPD);
  const RESP={QB:8,RB:10,WR:10.5,TE:8.5,OL:6,FB:8.5,DE:7.5,DT:6.5,LB:8.5,CB:10.5,DB:10,S:9};   // Wendigkeit je Position
  const rp=pos=>RESP[pos]||8;
@@ -976,7 +978,7 @@ function playAnim(svg,d,res,onDone){
        if(r){const toLane=(r.x<=lane)?0.6:-0.6;steer(o,r.x+toLane,Math.max(o.y,r.y+0.3),mx('OL')*1.05,dt,rp('OL'));}     // an die lochnahe Schulter -> Verteidiger vom Loch wegtreiben
        else steer(o,o.x+(lane-o.x)*0.25,Math.min(4.5,o.y+2.6),mx('OL'),dt,rp('OL'));}                                   // frei -> zum Second Level
      return;}
-   if(o===tgt){
+   if(o===tgt){if(fumbled){o.vx=o.vy=0;return;}   // nach Fumble bleibt der Ballträger liegen
      if(isPass){if(!caught)routeStep(o,mx,dt,rp);else if(kind==='complete')steer(o,gain[0],gain[1],mx(o.pos),dt,rp(o.pos));}
      else{routeStep(o,mx,dt,rp);if(o.route&&o.ri>=o.route.length&&runEnd)steer(o,runEnd[0],runEnd[1],mx(o.pos),dt,rp(o.pos));}
      if((!isPass&&handoffDone)||caught){let near=null,nd=9;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nd){nd=dd;near=q;}});   // Loch lesen: weicher Cut in den freien Raum
@@ -1030,7 +1032,9 @@ function playAnim(svg,d,res,onDone){
   O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,1,o);});
   D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,-1,p);});
   if(ball){
-   if(!isPass){
+   if(fumbled){const fb=(recovered&&recoverer)?[recoverer.x,recoverer.y]:fumbleSpot;const fx=mapX(fb[0]),fy=mapY(fb[1]);   // loser Ball trudelt, dann beim Eroberer
+     ball.setAttribute('opacity',1);ball.setAttribute('cx',fx);ball.setAttribute('cy',fy);ball.setAttribute('transform','rotate('+((el*780)%360).toFixed(0)+' '+fx+' '+fy+')');}
+   else if(!isPass){
      if(!handoffDone){ball.setAttribute('opacity',1);ball.setAttribute('cx',mapX(qb.x));ball.setAttribute('cy',mapY(qb.y));ball.setAttribute('transform','');}   // Ball in QB-Hand bis zum Handoff
      else if(carrier){const ho=Math.min(1,(el-hoT)/0.16);                                    // kurzer Handoff-Übergang QB -> RB
        const bxv=qb.x+(carrier.x-qb.x)*ho,byv=qb.y+(carrier.y-qb.y)*ho;
@@ -1048,9 +1052,17 @@ function playAnim(svg,d,res,onDone){
   const atGain=carrier&&((kind==='complete'&&Math.hypot(carrier.x-gain[0],carrier.y-gain[1])<0.9)||(!isPass&&runEnd&&Math.abs(carrier.y-runEnd[1])<0.9));
   if(atGain&&gainT<0)gainT=el;
   const contact=carrier&&D.some(p=>Math.hypot(p.x-carrier.x,p.y-carrier.y)<1.45);     // Verteidiger wirklich am Ballträger?
-  const tackled=atGain&&(contact||el>gainT+1.6);                                       // bei Kontakt getackelt, sonst kurze Wartezeit (Safety)
+  // Fumble: am Kontaktpunkt springt der Ball los, der nächste Verteidiger erobert ihn
+  if(fumble&&carrier&&!fumbled&&atGain&&(contact||el>gainT+1.0)){fumbled=true;fumT=el;
+    fumbleSpot=[Math.max(2,Math.min(51,carrier.x+(carrier.i%2?1:-1)*0.9)),carrier.y+0.6];
+    downFig(P,'o'+carrier.i);                                                          // Ballträger geht zu Boden
+    let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-fumbleSpot[0],p.y-fumbleSpot[1]);if(dd<bd){bd=dd;recoverer=p;}});}
+  if(fumbled&&!recovered&&recoverer){steer(recoverer,fumbleSpot[0],fumbleSpot[1],mx(recoverer.pos),dt,rp(recoverer.pos));
+    if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
+  const tackled=!fumble&&atGain&&(contact||el>gainT+1.6);                              // normaler Tackle (bei Fumble übernimmt die Fumble-Logik)
   const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.6) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
-    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass));
+    || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
+    || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
   if(!done)_anim[P]=requestAnimationFrame(frame);
   else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
     celebrate(P,'o'+carrier.i);
@@ -1062,17 +1074,17 @@ function playAnim(svg,d,res,onDone){
     if(kind==='sack'){downFig(P,'o'+qb.i);D.filter(p=>p.role==='rush'&&Math.hypot(p.x-qb.x,p.y-qb.y)<1.9).sort((a,b)=>Math.hypot(a.x-qb.x,a.y-qb.y)-Math.hypot(b.x-qb.x,b.y-qb.y)).slice(0,2).forEach(p=>downFig(P,'d_'+p.i));}
     else if(kind==='int'&&intD){const hit=O.map(o=>[o,Math.hypot(o.x-intD.x,o.y-intD.y)]).filter(a=>a[1]<1.9).sort((a,b)=>a[1]-b[1]);   // Interceptor wird gestellt
       if(hit.length){downFig(P,'d_'+intD.i);hit.slice(0,2).forEach(a=>downFig(P,'o'+a[0].i));}}
-    else if(carrier&&kind!=='incomplete'&&!oob){const hit=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<1.8).sort((a,b)=>a[1]-b[1]);
-      if(hit.length){downFig(P,'o'+carrier.i);hit.slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}}      // nur bei echtem Kontakt zu Boden (kein Phantom-Tackle, kein Aus-Tackle)
-    if(!res.noResult)showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='int'&&intD?[intD.x,intD.y]:(kind==='sack'?[qb.x,vy]:catchPt)))});
+    else if(carrier&&kind!=='incomplete'&&!oob&&!fumble){const hit=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<1.8).sort((a,b)=>a[1]-b[1]);
+      if(hit.length){downFig(P,'o'+carrier.i);hit.slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}}      // nur bei echtem Kontakt zu Boden (kein Phantom-Tackle, kein Aus-Tackle; Fumble extra)
+    if(!res.noResult)showResult(svg,{kind,yards,td,fum:fumble,pt:(fumble&&fumbleSpot?fumbleSpot:(carrier?[carrier.x,carrier.y]:(kind==='int'&&intD?[intD.x,intD.y]:(kind==='sack'?[qb.x,vy]:catchPt))))});
     if(onDone)setTimeout(onDone,res.noResult?900:1600);}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
 function showResult(svg,res){
  const td=res.td;
- const label=td?'TOUCHDOWN!':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
- const col=td?'#19e08f':(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
+ const label=res.fum?'FUMBLE! Ball verloren':td?'TOUCHDOWN!':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
+ const col=res.fum?'#ef5350':td?'#19e08f':(res.kind==='int'||res.kind==='sack')?'#ef5350':res.kind==='incomplete'?'#cdeede':'#ffd34d';
  const pt=res.pt||[26,5],px=mapX(pt[0]),py=mapY(pt[1]),w=td?108:72,x=Math.min(Math.max(px,54),480),y=Math.max(py-16,16);
  const g=el('g',{});
  if(res.kind!=='incomplete'&&!td){g.appendChild(el('circle',{cx:px,cy:py,r:14,fill:'none',stroke:'#fff',opacity:.22,'stroke-width':2}));}  // Tackle-/Endpunkt (beim TD kein Tackle)
@@ -2084,7 +2096,7 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
- const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd};
+ const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover};
  _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}));}   // Cadence + Snap, dann das Play
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
