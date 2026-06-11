@@ -274,7 +274,7 @@ def test_college_scouting_and_draft(tmp_path):
     v = F.view(st)
     assert v["scout_pts"] == 6 and len(v["prospects"]) >= 8
     p0 = v["prospects"][0]
-    assert p0["scout"] == 0 and p0["ovr"] is None and p0["ovr_lo"] < p0["ovr_hi"]
+    assert p0["scout"] == 0 and p0.get("ovr") is None and p0["ovr_lo"] < p0["ovr_hi"]
     assert p0["name"].startswith("Prospect #")          # Name erst ab Scouting-Stufe 1
 
     pid = p0["id"]
@@ -283,7 +283,9 @@ def test_college_scouting_and_draft(tmp_path):
     assert F.scout_prospect(cfg, st, pid)["error"]       # 4. Mal: schon komplett
     assert F.view(st)["scout_pts"] == 3                  # 3 Punkte verbraucht
     pp = next(p for p in F.view(st)["prospects"] if p["id"] == pid)
-    assert pp["scout"] == 3 and pp["ovr"] is not None and "pot" in pp and pp["dev"] in F.DEV_TRAITS
+    # Auch voll gescoutet bleibt eine Spanne (Restunsicherheit), Trait wird aufgedeckt
+    assert pp["scout"] == 3 and pp["scouted_full"] and pp.get("ovr") is None
+    assert pp["ovr_lo"] <= pp["ovr_hi"] and "pot_lo" in pp and pp["dev"] in F.DEV_TRAITS
 
     # Position ist anfangs voll -> erst cutten, dann draften
     team = st["teams"][0]

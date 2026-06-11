@@ -242,8 +242,8 @@ def _draft_class(state: dict, rng: random.Random, n: int = 16) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # College-Scouting & Draft
 # --------------------------------------------------------------------------- #
-SCOUT_MAX = 3                          # volle Aufklärung nach 3 Scouting-Stufen
-_SCOUT_HALF = {0: 9, 1: 5, 2: 2, 3: 0}  # Unsicherheits-Halbweite der OVR-Spanne je Stufe
+SCOUT_MAX = 3                          # 3 Scouting-Stufen – aber nie 100% Gewissheit
+_SCOUT_HALF = {0: 11, 1: 7, 2: 4, 3: 2}  # Unsicherheits-Halbweite der OVR-Spanne je Stufe (Restunsicherheit bleibt -> Draft ist eine Wette)
 
 
 def _gen_prospects(state: dict, rng: random.Random, n: int = 12) -> list[dict]:
@@ -282,31 +282,34 @@ def prospect_cost(p: dict) -> int:
 
 
 def prospect_view(p: dict) -> dict:
-    """Zeigt nur, was bereits gescoutet wurde. Volle Werte erst ab Stufe 3."""
+    """Scouting zeigt nur Spannen + Profil — nie die exakten Werte. Der echte Wert bleibt eine Draft-Wette."""
     sc = p.get("scout", 0)
     ovr, pot = player_ovr(p), player_pot(p)
-    half = _SCOUT_HALF.get(sc, 9)
-    lo = max(40, ovr + p.get("_bias", 0) - half)
-    hi = min(99, ovr + p.get("_bias", 0) + half)
-    full = sc >= SCOUT_MAX
+    half = _SCOUT_HALF.get(sc, 11)
+    cons = ovr + p.get("_bias", 0)                        # öffentlicher Scouting-Konsens (kann daneben liegen)
+    consP = pot + p.get("_bias", 0)
+    lo, hi = max(40, cons - half), min(99, cons + half)
+    ph = half + 2                                         # das Ceiling ist noch unsicherer
+    plo, phi = max(lo, min(99, consP - ph)), min(99, consP + ph)
+    dev = p.get("dev", "normal")
+    risk = ("Hohes Ceiling (Boom)" if dev in ("superstar", "star")
+            else "Bust-Gefahr" if dev == "slow" else "Solide Anlage")
     out = {
         "id": p["id"], "pos": p["pos"], "age": p["age"], "scout": sc, "scout_max": SCOUT_MAX,
         "side": "Offense" if p["pos"] in OFF_UNITS else "Defense",
         "name": p["name"] if sc >= 1 else f"Prospect #{p['id'] % 1000:03d}",
         "round": _proj_round(p), "cost": prospect_cost(p),
-        "ovr_lo": lo, "ovr_hi": hi,
-        "ovr": ovr if full else None,
-        "grade": _grade_word(ovr) if sc >= 2 else "?",
+        "ovr_lo": lo, "ovr_hi": hi, "pot_lo": plo, "pot_hi": phi,
+        "grade": _grade_word(cons) if sc >= 2 else "?",
+        "scouted_full": sc >= SCOUT_MAX,
     }
     if sc >= 2:
         topk = max(p["attr"], key=lambda k: p["attr"][k])
         out["strength"] = ATTR_LABELS[topk]
-    if full:
-        out["pot"] = pot
-        out["dev"] = p.get("dev", "normal")
-        out["dev_label"] = DEV_LABELS.get(p.get("dev", "normal"), "Normal")
-        out["attrs"] = [{"key": k, "label": ATTR_LABELS[k], "val": p["attr"][k], "cap": p["cap"][k]}
-                        for k in POS_ATTRS[p["pos"]]]
+        out["risk"] = risk
+    if sc >= SCOUT_MAX:                                   # Trait aufgedeckt – Werte bleiben aber Spannen
+        out["dev"] = dev
+        out["dev_label"] = DEV_LABELS.get(dev, "Normal")
     return out
 
 
@@ -939,7 +942,8 @@ def next_week(cfg: Config, state: dict) -> dict:
         state["events"] = (state.get("events") or []) + extra
     state["week_done"] = False
     state["week_trained"] = False
-    state["scout_pts"] = state.get("scout_pts", 0) + 3 + (state["teams"][0].get("scouting_fac", 1) - 1)  # Scouting-Akademie gibt extra Punkte
+    sf = state["teams"][0].get("scouting_fac", 1)
+    state["scout_pts"] = min(12, state.get("scout_pts", 0) + 1 + (1 if sf >= 3 else 0))  # knappe Punkte (Scouting-Akademie ab St.3 +1), gedeckelt -> man muss priorisieren
     state["teams"][0]["game_bonus"] = 0
     state.pop("pending_event", None)                      # altes Zufalls-Event ersetzt durch Wochen-Meeting
     # Wochen-Meeting: jede Woche ein neues (nur in der regulären Saison)
@@ -1373,7 +1377,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["coach_market"] = _gen_market(rng)              # neuer Trainermarkt
     state["market_players"] = _draft_class(state, rng)    # neue Draft-/FA-Klasse
     state["prospects"] = _gen_prospects(state, rng)       # neuer College-Jahrgang
-    state["scout_pts"] = state.get("scout_pts", 0) + 6    # Scouting-Punkte für die neue Klasse
+    state["scout_pts"] = min(12, state.get("scout_pts", 0) + 4)    # Scouting-Punkte für die neue Klasse (gedeckelt)
     state["goals"] = _gen_goals(state)                    # neue Saisonziele
     youth = _youth_talents(state, rng)                    # Jugend-Akademie: eigene Talente pro Saison
     ret = state.pop("_retired", [])
