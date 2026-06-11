@@ -1839,6 +1839,7 @@ def _new_decision_options(state: dict) -> None:
         opts = _random_off_options()
         if g["ytz"] <= 50:                                # Field Goal ab ca. Mittellinie
             opts.append({"key": "__FG__", "label": f"Field Goal ({round(g['ytz'] + 17)} Yd, {round(fg_make_prob(g['ytz'], kicker(off)) * 100)}%)", "type": "Kick"})
+        opts.append({"key": "__PUNT__", "label": "Punt", "type": "Kick"})   # jederzeit punten möglich
         g["off_snaps"] = g.get("off_snaps", 0) + 1
         if not g.get("philly_used") and g["off_snaps"] == g.get("philly_at", 2):   # 🦅 genau einmal anbieten
             opts.append({"key": "__PHILLY__", "label": "🦅 Philly Special", "type": "Trick"})
@@ -1949,6 +1950,8 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         return _resolve_pat(cfg, state, g, off, deff, user_has_ball, choice)
     if choice == "__FG__":                                # Nutzer entscheidet sich fürs Field Goal
         return _attempt_fg(cfg, state, g, off, user_has_ball)
+    if choice == "__PUNT__":                              # Punt — Ballbesitz wechselt
+        return _attempt_punt(cfg, state, g, off, user_has_ball)
 
     philly = (choice == "__PHILLY__") and user_has_ball
     if user_has_ball:
@@ -2112,6 +2115,35 @@ def _attempt_fg(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) ->
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": scored, "good": scored, "kind": "fg",
                                  "fg_dist": dist, "concept": None, "coverage": None, "user_off": user_off},
+            "game": _game_view(state)}
+
+
+def _attempt_punt(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) -> dict:
+    """Punt: kickt den Ball weit, Ballbesitz wechselt; bei Punt in die Endzone Touchback an der eigenen 20."""
+    krat = kicker(off)
+    net = max(25, min(62, round(40 + (krat - 65) * 0.22 + random.randint(-7, 7))))
+    attack_right = (g["pos"] == 1)
+    nabs = g["absx"] + (net if attack_right else -net)
+    touchback = nabs >= 100 or nabs <= 0
+    nabs = max(0.0, min(100.0, nabs))
+    recv = state["teams"][g["ai"] if g["pos"] == 0 else g["hi"]]
+    g["pos"] ^= 1                                         # Ballbesitz wechselt, neuer Drive
+    g["drive"] += 1
+    g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
+    new_right = (g["pos"] == 1)
+    g["ytz"] = 80.0 if touchback else max(1.0, min(99.0, round((100.0 - nabs) if new_right else nabs, 1)))
+    g["absx"] = round((100.0 - g["ytz"]) if new_right else g["ytz"], 1)
+    g["down"], g["dist"] = 1, 10
+    if g["drive"] >= MAX_DRIVES:
+        g["over"] = True
+    label = f"Punt {net} Yd" + (" · Touchback" if touchback else "") + f" — Ball an {recv['name']}"
+    g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
+                        "hs": g["score"][0], "as_": g["score"][1], "off": user_off, "yards": 0})
+    _new_decision_options(state)
+    save(cfg, state)
+    return {"ok": True, "play": {"desc": label, "yards": 0, "scored": False, "kind": "punt",
+                                 "punt_net": net, "touchback": touchback,
+                                 "concept": None, "coverage": None, "user_off": user_off},
             "game": _game_view(state)}
 
 

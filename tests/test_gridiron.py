@@ -304,6 +304,26 @@ def test_college_scouting_and_draft(tmp_path):
     assert b["exp"] + b["pts"] * 100 > a["exp"] + a["pts"] * 100
 
 
+def test_punt_flips_possession(tmp_path):
+    """Punt ist jederzeit wählbar und wechselt den Ballbesitz mit neuer Feldposition."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+    st = F.new_franchise(cfg, "Adler", n_teams=6, seed=4)
+    F.do_training(cfg, st, "team")
+    F.start_game(cfg, st)
+    g = st["active_game"]
+    g["pos"] = 0 if g["user_is_home"] else 1
+    g["ytz"], g["absx"], g["down"], g["dist"] = 70.0, (30.0 if g["pos"] == 1 else 70.0), 3, 7
+    F._new_decision_options(st)
+    assert any(o["key"] == "__PUNT__" for o in F._game_view(st)["options"])
+    pos0 = g["pos"]
+    r = F.game_play(cfg, st, "__PUNT__")
+    g2 = st["active_game"]
+    assert r["play"]["kind"] == "punt" and r["play"]["punt_net"] >= 25
+    assert g2["pos"] != pos0 and g2["down"] == 1 and g2["dist"] == 10
+    assert 1.0 <= g2["ytz"] <= 99.0
+
+
 def test_kicker_fg_and_extra_point(tmp_path):
     """Kicker-Rating, Field-Goal-Wahrscheinlichkeit, Extra-Punkt & 2-Punkte-Conversion."""
     from gridiron import franchise as F

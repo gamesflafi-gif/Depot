@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v47-kicker"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v48-punt"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1910,7 +1910,7 @@ function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div 
 let _preG=null;
 function renderGame(g,play){
  if(!g.over)playClock=15;                                    // jeder neue Snap: Play-Clock zurücksetzen
- const willAnimate=!!(play&&(play.concept||play.kind==='fg'));   // läuft eine Snap-/Kick-Animation?
+ const willAnimate=!!(play&&(play.concept||play.kind==='fg'||play.kind==='punt'));   // läuft eine Snap-/Kick-Animation?
  if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern
  // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Kommentar) erst NACH der Animation
  const disp=(willAnimate&&_preG)?_preG:g;
@@ -1942,6 +1942,7 @@ function renderGame(g,play){
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);
  else if(play&&play.kind==='fg')animateFG(play);            // Field Goal / Extra-Punkt mit Kick-Animation
+ else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
  else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
 }
 function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
@@ -1993,6 +1994,27 @@ function animateFG(play){const svg=$('gfield');if(!svg){playBusy=false;return;}c
   ball.setAttribute('cx',bx);ball.setAttribute('cy',by);
   if(e<=1.9)_anim[P]=requestAnimationFrame(frame);
   else{ball.setAttribute('opacity',0);_fgResult(svg,made);setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},1100);}
+ }
+ _anim[P]=requestAnimationFrame(frame);
+}
+function animatePunt(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
+ const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};const net=play.punt_net||40;
+ let s='<defs><linearGradient id="pt_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e4a2d"/><stop offset="1" stop-color="#0b3a22"/></linearGradient></defs>'+
+  '<rect x="0" y="0" width="533" height="360" fill="url(#pt_'+P+')"/>'+
+  '<text x="266" y="38" text-anchor="middle" font-size="15" font-weight="800" fill="#cdeede">Punt — '+net+' Yard'+(play.touchback?' · Touchback':'')+'</text>';
+ for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';
+ for(let i=0;i<5;i++)s+=_fgFig(200+i*33,300,cols.off);                 // Schutzwall
+ s+=_fgFig(266,324,cols.off);                                          // Punter
+ for(let i=0;i<3;i++)s+=_fgFig(214+i*52,150,cols.def);                 // Return-Team
+ svg.innerHTML=s;
+ const ball=el('ellipse',{id:P+'_pball',cx:266,cy:318,rx:4,ry:2.5,fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:1});svg.appendChild(ball);
+ const t0=performance.now();
+ function frame(now){const e=(now-t0)/1000,t=Math.min(1,e/1.45);
+  const by=318-t*250-Math.sin(Math.PI*t)*64,bx=266+Math.sin(t*2.4)*8;
+  ball.setAttribute('cx',bx.toFixed(1));ball.setAttribute('cy',by.toFixed(1));
+  ball.setAttribute('transform','rotate('+(t*760).toFixed(0)+' '+bx.toFixed(1)+' '+by.toFixed(1)+')');
+  if(e<=1.7)_anim[P]=requestAnimationFrame(frame);
+  else{ball.setAttribute('opacity',0);setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},650);}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
