@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v32-ui"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v33-scrollfix"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -314,7 +314,7 @@ _STYLE2 = """
  .oseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#06140d;min-width:0}
  .o-ok{background:#16c784}.o-ok2{background:#0e9f6a;color:#eafff5}.o-mid{background:#3a4a44;color:#d6efe4}
  .o-warn{background:#e9b949}.o-bad{background:#ef5350;color:#fff}
- body.noscroll{position:fixed;left:0;right:0;width:100%;overflow:hidden}
+ body.noscroll{overflow:hidden}
  .overlay{position:fixed;inset:0;background:rgba(4,8,6,.84);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow-y:auto;overflow-x:hidden;padding:18px 20px;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
  .modal h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
@@ -474,10 +474,9 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
-let _lockY=0;
-function lockBody(){if(document.body.classList.contains('noscroll'))return;_lockY=window.scrollY||window.pageYOffset||0;document.body.style.top=(-_lockY)+'px';document.body.classList.add('noscroll');}
-function _releaseBody(){if(!document.body.classList.contains('noscroll'))return;document.body.classList.remove('noscroll');document.body.style.top='';window.scrollTo(0,_lockY);}
-function unlockBodyIfNone(){if(!document.querySelector('.overlay'))_releaseBody();}
+function lockBody(){document.body.classList.add('noscroll');}
+function _releaseBody(){document.body.classList.remove('noscroll');document.body.style.top='';}
+function unlockBodyIfNone(){if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();}   // nur sperren solange wirklich ein Overlay offen ist
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
@@ -1022,6 +1021,7 @@ function renderMgr(v){
  h+='<div class="subnav">'+tabs.map(t=>'<div class="s'+(mgrTab===t[0]?' on':'')+'" data-t="'+t[0]+'" onclick="mgrGo(this.dataset.t)">'+navIcon(t[2])+'<span>'+t[1]+'</span>'+(needs[t[0]]?'<span class="navbadge">!</span>':'')+'</div>').join('')+'</div>';
  h+=(mgrTab==='kader'?secKader(v):mgrTab==='build'?secBuild(v):mgrTab==='transfer'?secTransfer(v):mgrTab==='stats'?secStats(v):secDash(v));
  $('mgr_out').innerHTML=h;
+ if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();   // Sicherheitsnetz: Seite immer scrollbar, wenn kein Overlay offen ist
  if(!v.tutorial_seen && !window._tutShown){window._tutShown=true; openTutorial(0);}
 }
 function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/>',
