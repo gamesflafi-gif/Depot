@@ -12,6 +12,13 @@ from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS
 
 W = 53.3            # Feldbreite (Yards)
 C = 26.65           # Mitte
+# Seitenlinien liegen bei x≈1.2 und x≈52.1 (Frontend). Spieler-/Routen-x bleibt im Feld,
+# mit etwas Rand, damit keine Figur über die Linie ragt.
+IN_LO, IN_HI = 2.6, 50.7
+
+
+def _clampx(x: float) -> float:
+    return min(IN_HI, max(IN_LO, x))
 
 # Offensive Grundausrichtung (Shotgun, 11 Personnel) – feste Startpositionen.
 POS = {
@@ -56,7 +63,8 @@ def _route(name: str, start: tuple[float, float]) -> list[list[float]]:
         "screen":  [(sx, sy), (sx + 3.5, -2.5), (sx + 6, -2)],
         "block":   [(sx, sy), (sx, sy)],
     }
-    return [[round(x, 2), round(y, 2)] for x, y in R[name]]
+    # x immer im Feld halten (Routen nahe der Seitenlinie liefen sonst ins Aus)
+    return [[round(_clampx(x), 2), round(y, 2)] for x, y in R[name]]
 
 
 # Routen, die Manndeckung gut schlagen (Tempo-/Trennungs-Routen).
@@ -153,7 +161,7 @@ def _run_path(concept: str, rb: tuple[float, float]) -> dict:
     }
     pull = {"Power": ["LG"], "Counter": ["RG", "TE"], "Toss": ["RT"],
             "Sweep": ["LG", "RG"], "Pin & Pull": ["RT", "RG"]}.get(concept, [])
-    return {"path": [[round(x, 2), round(y, 2)] for x, y in paths[concept]], "pull": pull}
+    return {"path": [[round(_clampx(x), 2), round(y, 2)] for x, y in paths[concept]], "pull": pull}
 
 
 # Defense: jede Coverage als 11 Spieler mit Rolle:
