@@ -1906,6 +1906,53 @@ def _scheme_pick(team: dict, off: bool) -> str:
     return random.choice(pool)
 
 
+def _matchup_edge(off: dict, deff: dict, is_pass: bool) -> float:
+    """Stärke-Vorteil der Offense aus den passenden Einheiten (Pass: QB/OL/WR vs DL/DB/LB,
+    Lauf: OL/RB vs DL/LB) plus Coordinator-Einfluss. Ergebnis ~-0.45..0.45 für play_outcome."""
+    u, d = off.get("units", {}), deff.get("units", {})
+    gu = lambda k: u.get(k, 70)
+    gd = lambda k: d.get(k, 70)
+    if is_pass:
+        o = 0.42 * gu("QB") + 0.26 * gu("OL") + 0.32 * gu("WR") + 0.25 * (_coach_rating(off, "OC") - 60)
+        x = 0.34 * gd("DL") + 0.46 * gd("DB") + 0.20 * gd("LB") + 0.25 * (_coach_rating(deff, "DC") - 60)
+    else:
+        o = 0.50 * gu("OL") + 0.34 * gu("RB") + 0.16 * gu("WR") + 0.20 * (_coach_rating(off, "OC") - 60)
+        x = 0.44 * gd("DL") + 0.42 * gd("LB") + 0.14 * gd("DB") + 0.20 * (_coach_rating(deff, "DC") - 60)
+    return max(-0.45, min(0.45, (o - x) / 100.0))
+
+
+def _ai_offense_concept(team: dict, g: dict) -> str:
+    """KI-Offense ruft situativ: lange Distanz -> Pass, kurze/Goal-Line -> mehr Lauf."""
+    down, dist, ytz = g["down"], g["dist"], g["ytz"]
+    pb = 0.57                                            # Liga-Pass-Anteil
+    if down >= 3:
+        pb = 0.90 if dist >= 6 else (0.32 if dist <= 2 else 0.66)
+    elif dist <= 2:
+        pb = 0.42
+    if ytz <= 4:                                         # Goal-Line: lauflastiger
+        pb = min(pb, 0.5)
+    want_pass = random.random() < pb
+    pool = OFF_SCHEMES.get(team.get("off_scheme", "Ausgeglichen"), list(PASS_CONCEPTS))
+    cand = [k for k in pool if (k in PASS_CONCEPTS) == want_pass]
+    if not cand:                                         # Schema deckt die Art nicht ab -> Gesamtpool
+        cand = list(PASS_CONCEPTS) if want_pass else list(RUN_CONCEPTS)
+    return random.choice(cand)
+
+
+def _ai_defense_coverage(team: dict, g: dict) -> str:
+    """KI-Defense reagiert auf die Situation: erwartbarer Pass -> Mann/Blitz/Tiefe,
+    kurze Distanz -> Box-lastig; sonst variabel."""
+    down, dist = g["down"], g["dist"]
+    pool = DEF_SCHEMES.get(team.get("def_scheme", "Ausgeglichen"), list(COVERAGES))
+    if down >= 3 and dist >= 6:                          # klarer Passdown
+        cand = [k for k in pool if COVERAGES[k]["man"] or COVERAGES[k]["blitz"] >= 0.2 or COVERAGES[k]["deep_def"] >= 2]
+    elif dist <= 2:                                      # kurze Distanz -> Lauf erwarten
+        cand = [k for k in pool if COVERAGES[k]["box"] >= 7]
+    else:
+        cand = pool
+    return random.choice(cand or pool)
+
+
 # --- Strafen (echte Football-Regeln) -------------------------------------------------
 # (Name, Seite, Yards, automatisches First Down, Vor-Snap (kein Play), Spot-Foul, Gewicht)
 _PENALTIES = [
@@ -2006,27 +2053,35 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     if choice == "__PUNT__":                              # Punt — Ballbesitz wechselt
         return _attempt_punt(cfg, state, g, off, user_has_ball)
 
+    # KI-Offense entscheidet im 4. Versuch selbst (Field Goal in Reichweite / sonst Punt / knapp ausspielen)
+    if (not user_has_ball) and g["down"] == 4:
+        if g["ytz"] <= 40 and fg_make_prob(g["ytz"], kicker(off)) >= 0.55:
+            return _attempt_fg(cfg, state, g, off, user_off=False)
+        if g["ytz"] >= 48 or g["dist"] >= 4:
+            return _attempt_punt(cfg, state, g, off, user_off=False)
+
     philly = (choice == "__PHILLY__") and user_has_ball
     if user_has_ball:
         if philly:
             g["philly_used"] = True
-            concept, coverage = "Flood", _scheme_pick(deff, off=False)   # Trick-Play, visuell als Pass
+            concept, coverage = "Flood", _ai_defense_coverage(deff, g)   # Trick-Play, visuell als Pass
         elif choice in PASS_CONCEPTS or choice in RUN_CONCEPTS:
-            concept, coverage = choice, _scheme_pick(deff, off=False)
+            concept, coverage = choice, _ai_defense_coverage(deff, g)    # KI-Coverage reagiert situativ
         else:
             return {"error": "Unbekanntes Konzept."}
     else:
         if choice not in COVERAGES:
             return {"error": "Unbekannte Coverage."}
-        coverage, concept = choice, _scheme_pick(off, off=True)
+        coverage, concept = choice, _ai_offense_concept(off, g)          # KI-Offense ruft situativ
 
     ytz0, dist0 = g["ytz"], g["dist"]                # Feldposition vor dem Snap (für die Animation)
     if philly:                                       # 🦅 Easter Egg: meist großer Raumgewinn
         o = ({"yards": min(int(g["ytz"]), random.randint(16, 38)), "kind": "complete", "turnover": False, "pass": True}
              if random.random() < 0.80 else {"yards": 0, "kind": "incomplete", "turnover": False, "pass": True})
     else:
+        edge = _matchup_edge(off, deff, concept in PASS_CONCEPTS)        # Stärke beider Teams zählt jetzt mit
         o = play_outcome(concept, coverage,
-                         {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG)
+                         {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG, edge=edge)
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     # Strafen (nur normale Snaps – nicht bei Trick-Plays/FG/PAT)
@@ -2089,16 +2144,8 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
             switch = False
         else:
             g["down"] += 1
-            if g["down"] > 4:
-                if not user_has_ball and g["ytz"] <= 45:          # KI: Field Goal im Bereich
-                    if random.random() < fg_make_prob(g["ytz"], kicker(off)):
-                        g["score"][g["pos"]] += 3
-                        label = f"Field Goal gut aus {round(g['ytz'] + 17)} Yd (+3)"
-                        scored = True
-                    else:
-                        label = f"Field Goal daneben aus {round(g['ytz'] + 17)} Yd"
-                else:
-                    label = "4th Down vergeben — Ballverlust"
+            if g["down"] > 4:                                     # 4. Versuch vergeben (KI kickt vorher selbst)
+                label = "4th Down vergeben — Ballverlust"
             else:
                 switch = False
 
@@ -2314,7 +2361,9 @@ def _resolve_two_point(cfg: Config, state: dict, g: dict, off: dict,
     Endzone erreicht = +2 (wird animiert wie ein normaler Spielzug)."""
     pos = g.pop("pat")["pos"]
     coverage = random.choice(["Cover 0", "Cover 1", "Cover 2 Man"])   # Goal-Line: mannlastig
-    o = play_outcome(concept, coverage, {"yardline_100": 3.0, "down": 1, "ydstogo": 3}, _RNG)
+    deff = state["teams"][g["ai"] if g["pos"] == 0 else g["hi"]]
+    edge = _matchup_edge(off, deff, concept in PASS_CONCEPTS)
+    o = play_outcome(concept, coverage, {"yardline_100": 3.0, "down": 1, "ydstogo": 3}, _RNG, edge=edge)
     yards = max(-3, min(int(o["yards"]), 3))
     good = (not o["turnover"]) and o["kind"] in ("complete", "run") and yards >= 3
     if good:
@@ -2449,14 +2498,20 @@ def abort_game(cfg: Config, state: dict) -> dict:
 
 
 def _auto_choice(state: dict) -> str:
-    """Sinnvolle automatische Spielzug-Wahl (für Sim-Buttons)."""
+    """Sinnvolle automatische Spielzug-Wahl (für Sim-Buttons) — situativ wie ein echter Coach."""
     g = state["active_game"]
     if g.get("pat"):
         return "__XP__"                                   # automatischer Extra-Punkt
+    teams = state["teams"]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
-    if user_has_ball and g["down"] >= 4 and g["ytz"] <= 45:
-        return "__FG__"                                   # 4th Down in Reichweite -> Field Goal
-    return _scheme_pick(state["teams"][0], off=user_has_ball)
+    if user_has_ball:
+        if g["down"] == 4:                                # 4. Versuch: FG / Punt / knapp ausspielen
+            if g["ytz"] <= 40 and fg_make_prob(g["ytz"], kicker(teams[0])) >= 0.55:
+                return "__FG__"
+            if g["ytz"] >= 48 or g["dist"] >= 4:
+                return "__PUNT__"
+        return _ai_offense_concept(teams[0], g)           # situatives eigenes Play-Calling
+    return _ai_defense_coverage(teams[0], g)              # situative eigene Coverage
 
 
 def game_sim_drive(cfg: Config, state: dict) -> dict:

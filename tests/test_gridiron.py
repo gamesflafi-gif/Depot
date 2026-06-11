@@ -146,6 +146,40 @@ def test_simulator_advisors():
     assert all(len(row["epa"]) == 12 for row in m["rows"])
 
 
+def test_strength_edge_drives_outcomes():
+    """Team-/Spielerstärke wirkt im interaktiven Spiel: höherer edge -> mehr Raumgewinn."""
+    import numpy as np
+    from gridiron.simulator import play_outcome
+    rng = np.random.default_rng(0)
+    sit = {"yardline_100": 60, "down": 1, "ydstogo": 10}
+
+    def avg(concept, cov, edge, n=5000):
+        return sum(play_outcome(concept, cov, sit, rng, edge=edge)["yards"] for _ in range(n)) / n
+
+    assert avg("Four Verts", "Cover 3", 0.40) > avg("Four Verts", "Cover 3", -0.40) + 1.5
+    assert avg("Inside Zone", "Cover 3", 0.40) > avg("Inside Zone", "Cover 3", -0.40) + 0.8
+    # edge=0 bleibt unverändert zur Standard-Engine (kein Default-Effekt)
+    assert abs(avg("Four Verts", "Cover 3", 0.0, n=8000) - avg("Four Verts", "Cover 3", 0.0, n=8000)) < 1.0
+
+
+def test_matchup_edge_and_ai_tendencies():
+    """_matchup_edge hat das richtige Vorzeichen; KI ruft situativ (lang->Pass, kurz->Lauf)."""
+    from gridiron import franchise as F
+    from gridiron.simulator import PASS_CONCEPTS
+    strong = {"units": {"QB": 95, "OL": 92, "WR": 93, "RB": 90, "DL": 92, "LB": 90, "DB": 93}, "coaches": {}}
+    weak = {"units": {"QB": 58, "OL": 57, "WR": 56, "RB": 58, "DL": 56, "LB": 57, "DB": 56}, "coaches": {}}
+    assert F._matchup_edge(strong, weak, True) > 0.15      # starke Offense vs schwache Defense
+    assert F._matchup_edge(weak, strong, True) < -0.15     # umgekehrt
+    # situatives Play-Calling über viele Ziehungen
+    team = {"off_scheme": "Ausgeglichen"}
+    def passrate(down, dist, n=3000):
+        return sum(F._ai_offense_concept(team, {"down": down, "dist": dist, "ytz": 60}) in PASS_CONCEPTS
+                   for _ in range(n)) / n
+    assert passrate(3, 9) > 0.80                            # 3rd & lang -> Pass
+    assert passrate(3, 1) < 0.45                            # 3rd & kurz -> Lauf
+    assert passrate(3, 9) > passrate(1, 2)                  # mehr Pass je länger die Distanz
+
+
 def test_simulator_invalid():
     from gridiron.simulator import simulate
     import pytest
