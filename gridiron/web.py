@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v41-tabs"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v42-draftboard"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -382,6 +382,12 @@ _STYLE2 = """
  details.danger[open]>summary{border-bottom:1px solid var(--line);color:var(--fg)} .dangerin{padding:14px 15px}
  .danger-btn{border-color:#5a2a20 !important;color:#ef8e84 !important} .danger-btn:hover{border-color:var(--bad) !important;color:var(--bad) !important}
  .card.empty{color:var(--mut);font-size:13.5px;text-align:center;border-style:dashed;background:transparent}
+ /* Draft Big Board */
+ .needrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px} .needtag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--mut);background:var(--tile);border:1px solid var(--line);border-radius:8px;padding:5px 10px}
+ .prow.prospect{flex-wrap:nowrap} .bbrank{width:22px;text-align:center;font-weight:800;color:var(--mut);font-variant-numeric:tabular-nums;flex:none}
+ .tag.tg-need{background:linear-gradient(180deg,#5fa8ff,#3b82e0);color:#04121f}
+ .pddet:empty{display:none} .pddet{margin:-2px 0 8px}
+ .pddwrap{display:flex;gap:14px;align-items:center;flex-wrap:wrap} .radmini{flex:none;width:120px} .radmini svg{width:120px;height:120px}
  .pcols{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:12px}
  .radarwrap{flex:none} .attrs{flex:1;min-width:240px}
  .arow{display:flex;align-items:center;gap:10px;margin:7px 0}
@@ -1366,31 +1372,63 @@ let _curPid=null;
 function curPlayer(){return _curPid;}
 function afterPlayer(r){if(r.view){lastView=r.view;renderMgr(r.view);const p=r.view.roster.find(x=>String(x.id)===String(_curPid));if(p)renderPlayer(p);}}
 function closePlayer(){const o=$('playeroverlay');if(o)o.remove();_curPid=null;unlockBodyIfNone();}
+let _dSort='proj',_dFilter='all';
+function dSort(s){_dSort=s;renderMgr(lastView);}
+function dFilter(f){_dFilter=f;renderMgr(lastView);}
+function _needOpen(v){const cnt={};(v.roster||[]).forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);const need={};
+ Object.keys(v.slots||{}).forEach(pos=>{need[pos]=Math.max(0,(v.slots[pos]||0)-(cnt[pos]||0));});return need;}
+function scoutDetail(pid){const d=$('pd_'+pid);if(!d)return;if(d.innerHTML){d.innerHTML='';return;}
+ const p=((lastView&&lastView.prospects)||[]).find(x=>String(x.id)===String(pid));if(!p)return;
+ const tc=(lastView&&lastView.color)||'#16c784';
+ if(p.attrs&&p.attrs.length){
+   const top=p.attrs.slice().sort((a,b)=>b.val-a.val).slice(0,3).map(a=>esc(a.label)+' '+a.val).join(' · ');
+   const boom=p.dev==='superstar'?'⭐ Superstar-Anlage — sehr hohes Ceiling':p.dev==='star'?'Hohes Ceiling (Star-Entwicklung)':p.dev==='slow'?'⚠️ Bust-Risiko — langsame Entwicklung':'Solide, planbare Entwicklung';
+   d.innerHTML='<div class="scoutbox"><div class="pddwrap"><div class="radmini">'+radarSVG(p.attrs,tc)+'</div><div style="flex:1;min-width:0">'+
+     '<div class="schd"><b>Scouting-Bericht</b><span class="scbadge">'+esc(p.grade||'')+'</span></div>'+
+     '<div class="mut" style="margin:2px 0 6px">OVR '+p.ovr+' · Ceiling '+p.pot+' · '+esc(p.dev_label||'')+' · '+esc(p.round)+'</div>'+
+     '<div class="mut">Stärken: '+top+'</div><div class="sctip">▸ '+boom+'</div></div></div></div>';
+ }else{
+   const next=p.scout<1?'Stufe 1 deckt den Namen auf.':p.scout<2?'Stufe 2 deckt Wertung & größte Stärke auf.':'Stufe 3 deckt volle Werte, Potenzial & Entwicklungs-Trait auf.';
+   d.innerHTML='<div class="scoutbox"><b>'+esc(p.name)+' — '+esc(p.round)+'</b><div class="mut" style="margin-top:3px">Gescoutet '+p.scout+'/'+p.scout_max+' · '+next+'</div>'+(p.strength?'<div class="mut">Größte Stärke: '+esc(p.strength)+'</div>':'')+'</div>';
+ }}
 function secTransfer(v){
  const cnt={};v.roster.forEach(p=>cnt[p.pos]=(cnt[p.pos]||0)+1);
+ const _fneed=_needOpen(v);
  // --- College-Scouting & Draft (Kopf-Feature) ---
  const sp=v.scout_pts||0;
  let h='<div class="card"><div class="schead"><div class="sec" style="margin:0">College-Scouting — Draft</div>'+
    '<div class="scoutpts"><span class="v">'+sp+'</span><span class="l">Punkte</span></div></div>'+
    '<div class="note">Scoute Talente (1 Punkt je Stufe), um Werte, Potenzial &amp; Entwicklungs-Trait aufzudecken — oder direkt draften und auf die Anlage wetten. Jede Woche +3 Punkte.</div></div>';
- const pros=v.prospects||[];
+ const pros=v.prospects||[];const need=_needOpen(v);
+ const needList=Object.keys(need).filter(p=>need[p]>0);
+ if(needList.length)h+='<div class="card"><div class="sec" style="margin-top:0">Kaderbedarf</div><div class="needrow">'+needList.sort((a,b)=>need[b]-need[a]).map(p=>'<span class="needtag">'+posBadge(p)+' '+need[p]+' frei</span>').join('')+'</div></div>';
  if(!pros.length)h+='<div class="card empty">🎓 Aktuell keine College-Prospects verfügbar — der Draft-Pool füllt sich zur nächsten Saison.</div>';
- [['Offense',['QB','RB','WR','OL']],['Defense',['DL','LB','DB']]].forEach(grp=>{
-   const ps=pros.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
-   h+='<div class="card"><div class="sec" style="margin-top:0">College · '+grp[0]+'</div>';
-   ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];const done=p.scout>=p.scout_max;
+ else{
+   h+='<div class="card kbar"><div class="kbarrow"><span class="kbl">Big Board</span>'+
+     [['proj','Projektion'],['grade','Wertung'],['scout','Gescoutet']].map(s=>'<button class="chip'+(_dSort===s[0]?' on':'')+'" data-s="'+s[0]+'" onclick="dSort(this.dataset.s)">'+s[1]+'</button>').join('')+'</div>'+
+     '<div class="kbarrow"><span class="kbl">Filter</span>'+
+     [['all','Alle'],['need','Bedarf'],['unsc','Ungescoutet'],['full','Fertig']].map(f=>'<button class="chip'+(_dFilter===f[0]?' on':'')+'" data-f="'+f[0]+'" onclick="dFilter(this.dataset.f)">'+f[1]+'</button>').join('')+'</div></div>';
+   let board=pros.slice();
+   if(_dFilter==='need')board=board.filter(p=>need[p.pos]>0);
+   else if(_dFilter==='unsc')board=board.filter(p=>p.scout<p.scout_max);
+   else if(_dFilter==='full')board=board.filter(p=>p.scout>=p.scout_max);
+   const projOf=p=>(p.pot!=null?p.pot:(p.ovr_lo+p.ovr_hi)/2);
+   const skey={proj:projOf,grade:p=>(p.ovr_lo+p.ovr_hi)/2,scout:p=>p.scout}[_dSort]||projOf;
+   board.sort((a,b)=>skey(b)-skey(a));
+   h+='<div class="card"><div class="sec" style="margin-top:0">Draft Big Board ('+board.length+') <span class="mut" style="font-weight:600;font-size:11px;text-transform:none;letter-spacing:0">· Zeile tippen = Bericht</span></div>';
+   board.forEach((p,rank)=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];const done=p.scout>=p.scout_max;
      const ovrTxt=(p.ovr!=null)?('OVR '+p.ovr+' · Pot '+p.pot):('OVR '+p.ovr_lo+'–'+p.ovr_hi);
      const dev=(p.ovr!=null)?(' '+devBadge(p.dev,p.dev_label)):'';
      const extra=(p.grade&&p.grade!=='?'?' · '+esc(p.grade):'')+(p.strength?' · '+esc(p.strength):'');
-     h+='<div class="reco prospect"><span style="display:flex;align-items:center;gap:9px;flex:1;min-width:0"><span class="pfa">'+portrait(p,34,v.color)+'</span>'+posBadge(p.pos)+
-       '<span style="min-width:0"><span class="nm">'+esc(p.name)+'</span>'+dev+
-       '<span class="mut sub">'+ovrTxt+' · Alter '+p.age+' · '+esc(p.round)+extra+'</span>'+
-       scoutDots(p.scout,p.scout_max)+'</span></span>'+
-       '<span class="act">'+
-       '<button class="ghost" data-i="'+p.id+'" onclick="scoutP(this.dataset.i)" '+((sp<1||done)?'disabled':'')+'>'+(done?'✓ Komplett':'Scouten (1)')+'</button>'+
-       '<button data-i="'+p.id+'" onclick="draftP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Draften ('+p.cost+')')+'</button>'+
-       '</span></div>';});
-   h+='</div>';});
+     h+='<div class="prow prospect" data-i="'+p.id+'" onclick="scoutDetail(this.dataset.i)">'+
+       '<span class="bbrank">'+(rank+1)+'</span><span class="pfa">'+portrait(p,34,v.color)+'</span>'+posBadge(p.pos)+
+       '<span class="pname"><span class="nm">'+esc(p.name)+'</span>'+dev+(need[p.pos]>0?' <span class="tag tg-need">BEDARF</span>':'')+
+       '<span class="mut" style="display:block;font-size:12px">'+ovrTxt+' · '+esc(p.round)+extra+'</span>'+scoutDots(p.scout,p.scout_max)+'</span>'+
+       '<span class="act" onclick="event.stopPropagation()">'+
+       '<button class="ghost" data-i="'+p.id+'" onclick="scoutP(this.dataset.i)" '+((sp<1||done)?'disabled':'')+'>'+(done?'✓':'Scouten')+'</button>'+
+       '<button data-i="'+p.id+'" onclick="draftP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?'voll':'Draft '+p.cost)+'</button>'+
+       '</span></div><div class="pddet" id="pd_'+p.id+'"></div>';});
+   h+='</div>';}
  // --- Free Agents (sofort einsatzbereit, voll sichtbar) ---
  h+='<div class="card"><div class="sec" style="margin-top:0">Free Agents</div>'+
    '<div class="note">Fertige Spieler mit bekannten Werten. Position voll? Erst im Kader jemanden entlassen.</div></div>';
@@ -1398,7 +1436,7 @@ function secTransfer(v){
    const ps=v.market_players.filter(p=>grp[1].includes(p.pos));if(!ps.length)return;
    h+='<div class="card"><div class="sec" style="margin-top:0">'+grp[0]+'</div>';
    ps.forEach(p=>{const full=(cnt[p.pos]||0)>=v.slots[p.pos];
-     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px"><span class="pfa">'+portrait(p,34,v.color)+'</span>'+ovrBadge(p.ovr)+posBadge(p.pos)+'<span><b>'+esc(p.name)+'</b> <span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'</span></span></span>'+
+     h+='<div class="reco"><span style="display:flex;align-items:center;gap:9px"><span class="pfa">'+portrait(p,34,v.color)+'</span>'+ovrBadge(p.ovr)+posBadge(p.pos)+'<span><b>'+esc(p.name)+'</b>'+(_fneed[p.pos]>0?' <span class="tag tg-need">BEDARF</span>':'')+' <span class="mut" style="display:block;font-size:12px">Alter '+p.age+' · Pot '+p.pot+'</span></span></span>'+
        '<button data-i="'+p.id+'" onclick="signP(this.dataset.i)" '+((v.budget<p.cost||full)?'disabled':'')+'>'+(full?p.pos+' voll':'Verpflichten ('+p.cost+' Mio)')+'</button></div>';});
    h+='</div>';});
  return h;
