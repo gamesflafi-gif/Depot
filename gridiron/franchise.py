@@ -648,6 +648,7 @@ def new_franchise(cfg: Config, team_name: str, n_teams: int = 8,
     state["market_players"] = _draft_class(state, rng)
     state["prospects"] = _gen_prospects(state, rng)
     state["goals"] = _gen_goals(state)
+    _gen_meeting(state, rng)                                # erstes Wochen-Meeting
     save(cfg, state)
     return state
 
@@ -940,10 +941,11 @@ def next_week(cfg: Config, state: dict) -> dict:
     state["week_trained"] = False
     state["scout_pts"] = state.get("scout_pts", 0) + 3 + (state["teams"][0].get("scouting_fac", 1) - 1)  # Scouting-Akademie gibt extra Punkte
     state["teams"][0]["game_bonus"] = 0
-    # Entscheidungs-Event nicht jede Woche (~35 %), nur in der regulären Saison
-    if (state["phase"] == "regular" and not state.get("pending_event")
-            and state["teams"][0].get("roster") and random.random() < 0.35):
-        _gen_event(state, random.Random())
+    # Wochen-Meeting: jede Woche ein neues (nur in der regulären Saison)
+    if state["phase"] == "regular" and state["teams"][0].get("roster"):
+        _gen_meeting(state, random.Random())
+    else:
+        state.pop("meeting", None)
     save(cfg, state)
     return {"ok": True, "view": view(state)}
 
@@ -1169,6 +1171,45 @@ def resolve_event(cfg: Config, state: dict, b0: int, b1: int, d: int) -> dict:
     return {"ok": True, "messages": msgs, "view": view(state)}
 
 
+# --- Wochen-Meeting: jede Woche 3 Pakete, je 1 Buff + 1 Debuff, eins wählen ---------
+def _gen_meeting(state: dict, rng: random.Random) -> None:
+    if not state["teams"][0].get("roster"):
+        return
+    buffs = rng.sample(_BUFFS, 3)
+    debuffs = rng.sample(_DEBUFFS, 3)
+    state["meeting"] = {
+        "title": rng.choice(["Wochen-Meeting", "Vereinsmeeting", "Front-Office-Meeting", "Team-Besprechung"]),
+        "options": [{"buff": buffs[i], "debuff": debuffs[i]} for i in range(3)],
+    }
+
+
+def _meeting_view(m: dict | None) -> dict | None:
+    if not m:
+        return None
+    return {"title": m.get("title", "Wochen-Meeting"),
+            "options": [{"buff": o["buff"]["label"], "debuff": o["debuff"]["label"]} for o in m["options"]]}
+
+
+def resolve_meeting(cfg: Config, state: dict, idx: int) -> dict:
+    """Wendet das gewählte Paket (1 Buff + 1 Debuff) an und schließt das Meeting."""
+    m = state.get("meeting")
+    if not m:
+        return {"error": "Kein offenes Meeting."}
+    if idx < 0 or idx >= len(m["options"]):
+        return {"error": "Ungültige Auswahl."}
+    team = state["teams"][0]
+    rng = random.Random()
+    msgs: list[dict] = []
+    opt = m["options"][idx]
+    _apply_eff(state, team, opt["buff"]["eff"], rng, msgs)
+    _apply_eff(state, team, opt["debuff"]["eff"], rng, msgs)
+    state.pop("meeting", None)
+    _sync_units(team)
+    state["events"] = msgs + state.get("events", [])
+    save(cfg, state)
+    return {"ok": True, "messages": msgs, "view": view(state)}
+
+
 def standings(state: dict) -> list[dict]:
     rows = [{"name": t["name"], "abbr": t.get("abbr", "?"), "color": t.get("color", "#16c784"),
              "user": t["user"], "w": t["w"], "l": t["l"],
@@ -1338,6 +1379,7 @@ def new_season(cfg: Config, state: dict) -> dict:
     state["events"] = ([{"type": "bad", "text": f"Karriereende: {n}"} for n in ret]
                        + [{"type": "ok", "text": "Neue Draft-/Free-Agent-Klasse im Transfermarkt verfügbar."}]
                        + youth)
+    _gen_meeting(state, rng)                                # Wochen-Meeting für die neue Saison
     save(cfg, state)
     return state
 
@@ -1648,6 +1690,7 @@ def view(state: dict) -> dict:
         and _user_pair(state) is None,
         "events": state.get("events", []),
         "pending_event": _event_view(state.get("pending_event")),
+        "meeting": _meeting_view(state.get("meeting")),
         "slots": ROSTER_SLOTS,
         "market_players": [{"id": p["id"], "name": p["name"], "pos": p["pos"],
                             "ovr": player_ovr(p), "pot": player_pot(p), "age": p["age"],

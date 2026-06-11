@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v39-mgr4"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v40-meeting"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -120,6 +120,7 @@ _STYLE = """
   .hubcard{padding:12px} .hubcard .note{font-size:12px;margin-bottom:4px} .complex{margin-top:8px}
   .facpanel{flex-wrap:wrap;gap:8px;padding:11px 12px} .facpanel>div:last-child{text-align:left;width:100%} .facpanel>div:last-child button{width:100%}
   .worldwrap{width:100vw} .worldview{height:46vh;min-height:240px} .expgrid{grid-template-columns:1fr}
+  .meetgrid{grid-template-columns:1fr}
   .devnm{font-size:12px} .devst{display:none}
  }
 """
@@ -221,6 +222,19 @@ _STYLE2 = """
  .scv{width:64px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums} .scv small{color:var(--mut);font-weight:600;font-size:10px}
  .sctip{margin-top:7px;padding:7px 9px;border-radius:7px;background:var(--accsoft);border:1px solid #1c5a40;color:#bdeed6;font-size:12.5px;font-weight:600}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
+ /* Wochen-Meeting */
+ .meetcard{border-color:#3a4a6a;background:linear-gradient(180deg,#161f2e,#121826)}
+ .meetwrap{max-width:720px}
+ .meetgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+ .meetopt{display:flex;flex-direction:column;gap:8px;text-align:left;padding:14px 13px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(180deg,#1a2420,#141d1a);color:var(--fg);cursor:pointer;font:inherit;transition:border-color .12s,transform .05s,box-shadow .12s}
+ .meetopt:hover{border-color:var(--acc);transform:translateY(-2px);box-shadow:0 10px 24px -12px rgba(0,0,0,.7)}
+ .meetopt:active{transform:translateY(0)}
+ .moh{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+ .mobuff,.modeb{display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:600;line-height:1.35}
+ .mobuff{color:#bdeed6} .modeb{color:#eab8b2}
+ .mosign{flex:none;width:20px;height:20px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;margin-top:1px}
+ .mosign.good{background:var(--accsoft);color:#5fe6ac;border:1px solid #1c5a40} .mosign.bad{background:#2c1414;color:#ef8e84;border:1px solid #5a2a20}
+ .mopick{margin-top:auto;text-align:center;font-weight:800;font-size:12.5px;color:#04140c;background:linear-gradient(180deg,#1fd897,#12ac72);border-radius:8px;padding:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
  .awrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin:8px 0;background:var(--tile)}
  .awlabel{font-size:11px;font-weight:800;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
  .awname{font-weight:700;margin:2px 0;display:flex;align-items:center;gap:7px}
@@ -527,7 +541,7 @@ function unlockBodyIfNone(){if(!document.querySelector('.overlay')&&!$('tutspot'
 const pct=x=>Math.round(x*100)+'%';
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2);
 
-function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay','awoverlay','worldoverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
+function closeAllOverlays(){['tutspot','gameoverlay','overlay','resultoverlay','playeroverlay','awoverlay','worldoverlay','meetingoverlay'].forEach(id=>{const o=$(id);if(o)o.remove();});
  stopClock();liveG=null;playBusy=false;_releaseBody();}   // nichts darf den Bildschirm blockieren
 function tab(s){closeAllOverlays();                                                     // beim Tab-Wechsel offene Overlays/Sperren lösen
  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===s));
@@ -1070,6 +1084,7 @@ function renderMgr(v){
  $('mgr_out').innerHTML=h;
  if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();   // Sicherheitsnetz: Seite immer scrollbar, wenn kein Overlay offen ist
  if(!v.tutorial_seen && !window._tutShown){window._tutShown=true; openTutorial(0);}
+ else if(v.meeting){const mk=v.season+'-'+v.week;if(window._metKey!==mk){window._metKey=mk;setTimeout(openMeeting,160);}}   // Wochen-Meeting einmal pro Woche automatisch öffnen
 }
 function trainIcon(k){const I={team:'<circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/>',
  off:'<path d="M12 19V5M6 11l6-6 6 6"/>',def:'<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
@@ -1109,6 +1124,10 @@ function secDash(v){
  }
  if(v.last_result)h+=renderResult(v.last_result,v.team_name);
  h+='</div>';
+ // Wochen-Meeting (offen) – prominent
+ if(v.meeting)h+='<div class="card meetcard"><div class="sec" style="margin-top:0">📋 '+esc(v.meeting.title)+' offen</div>'+
+   '<div class="note" style="margin-top:0">Wähle dein Wochen-Paket — ein Vorteil plus ein Nachteil.</div>'+
+   '<div style="margin-top:10px"><button onclick="openMeeting()">Meeting öffnen</button></div></div>';
  // Matchup-Analyse, Form & Verletzungen
  if(v.phase!=='done'&&!v.is_bye)h+=matchupCard(v);
  h+=formStrip(v);
@@ -1943,6 +1962,20 @@ function evtPick(b){const g=b.dataset.g;_evt[g]=+b.dataset.i;
  document.querySelectorAll('.evtopt[data-g="'+g+'"]').forEach(x=>x.classList.toggle('on',x===b));}
 async function resolveEvent(){const r=await api('/api/fr/resolve_event?b0='+_evt.b0+'&b1='+_evt.b1+'&d='+_evt.d,'POST');
  if(r.error){alert(r.error);return;}_evt={b0:0,b1:0,d:0};if(r.view)renderMgr(r.view);}
+/* ---------- Wochen-Meeting (jede Woche ein Paket aus 1 Buff + 1 Debuff wählen) ---------- */
+function openMeeting(){const v=lastView;if(!v||!v.meeting)return;closeMeeting();const m=v.meeting;
+ const o=document.createElement('div');o.className='overlay';o.id='meetingoverlay';
+ o.addEventListener('click',e=>{if(e.target===o)closeMeeting();});
+ o.innerHTML='<div class="modal meetwrap"><div class="modalhead"><h3>📋 '+esc(m.title)+'</h3><button class="ghost" onclick="closeMeeting()">Später</button></div>'+
+   '<div class="note" style="margin-top:0">Wähle genau <b>ein</b> Paket. Jedes bringt einen Vorteil — und einen Nachteil.</div>'+
+   '<div class="meetgrid">'+m.options.map((opt,i)=>'<button class="meetopt" data-i="'+i+'" onclick="resolveMeeting(this.dataset.i)">'+
+     '<div class="moh">Paket '+(i+1)+'</div>'+
+     '<div class="mobuff"><span class="mosign good">＋</span>'+esc(opt.buff)+'</div>'+
+     '<div class="modeb"><span class="mosign bad">－</span>'+esc(opt.debuff)+'</div>'+
+     '<div class="mopick">Dieses Paket wählen</div></button>').join('')+'</div></div>';
+ document.body.appendChild(o);lockBody();}
+function closeMeeting(){const o=$('meetingoverlay');if(o)o.remove();unlockBodyIfNone();}
+async function resolveMeeting(i){const r=await api('/api/fr/resolve_meeting?idx='+i,'POST');if(r.error){alert(r.error);return;}closeMeeting();if(r.view)renderMgr(r.view);}
 async function nextWeek(){const r=await api('/api/fr/next_week','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);}
 /* ---------- Interaktives Tutorial (führt durch die Oberfläche) ---------- */
 const TUT=[
@@ -2272,6 +2305,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return F.resolve_event(cfg, st, b0, b1, d)
+
+    @app.post("/api/fr/resolve_meeting")
+    def fr_resolve_meeting(idx: int = 0):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.resolve_meeting(cfg, st, idx)
 
     @app.post("/api/fr/sign")
     def fr_sign(pid: int):
