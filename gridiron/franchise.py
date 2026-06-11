@@ -941,6 +941,7 @@ def next_week(cfg: Config, state: dict) -> dict:
     state["week_trained"] = False
     state["scout_pts"] = state.get("scout_pts", 0) + 3 + (state["teams"][0].get("scouting_fac", 1) - 1)  # Scouting-Akademie gibt extra Punkte
     state["teams"][0]["game_bonus"] = 0
+    state.pop("pending_event", None)                      # altes Zufalls-Event ersetzt durch Wochen-Meeting
     # Wochen-Meeting: jede Woche ein neues (nur in der regulären Saison)
     if state["phase"] == "regular" and state["teams"][0].get("roster"):
         _gen_meeting(state, random.Random())

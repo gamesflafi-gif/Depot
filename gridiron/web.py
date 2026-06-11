@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v44-reveal"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v45-anlagen"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -194,6 +194,7 @@ _STYLE2 = """
  .facpanel{display:flex;align-items:center;gap:12px;background:var(--tile);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:10px}
  .facpanel .fpn{font-weight:800;font-size:15px}
  /* Vereinswelt-Vorschau + Pop-up */
+ .cityview{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:12px;background:#0c130f} .cityview .complex{margin-top:0;border:0;display:block}
  .citypreview{position:relative;cursor:pointer;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:12px;transition:border-color .15s}
  .citypreview:hover{border-color:var(--acc)} .citypreview .complex{margin-top:0;border:0;pointer-events:none}
  .cpbadge{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:linear-gradient(180deg,rgba(16,30,22,.92),rgba(9,16,12,.92));border:1px solid rgba(25,224,143,.5);color:#eaf6ef;font-weight:800;font-size:13px;padding:9px 18px;border-radius:999px;box-shadow:0 8px 22px -8px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.1);pointer-events:none}
@@ -1147,14 +1148,6 @@ function secOverview(v){
  h+=formStrip(v);
  h+=injuryCard(v);
  h+=financeCard(v);
- // Entscheidungs-Event (nicht jede Woche, getrennt vom Training)
- if(v.pending_event){const ev=v.pending_event;_evt={b0:0,b1:0,d:0};
-   const grp=(key,title,opts,cls)=>'<div class="evtgrp"><div class="evtlab">'+esc(title)+'</div><div class="evtopts">'+
-     opts.map((o,i)=>'<button class="evtopt '+cls+(i===0?' on':'')+'" data-g="'+key+'" data-i="'+i+'" onclick="evtPick(this)">'+esc(o)+'</button>').join('')+'</div></div>';
-   h+='<div class="card evtcard"><div class="sec" style="margin-top:0">⚡ '+esc(ev.title)+'</div>'+
-     '<div class="note">Wähle 2 Buffs (je 1 von 2) und nimm 1 Nachteil in Kauf (kleineres Übel).</div>'+
-     grp('b0','Buff 1',ev.buffs[0],'buff')+grp('b1','Buff 2',ev.buffs[1],'buff')+grp('d','Nachteil',ev.debuff,'debuff')+
-     '<div style="margin-top:12px"><button onclick="resolveEvent()">Bestätigen</button></div></div>';}
  // Saison-Ziele (kompakt)
  if(v.goals&&v.goals.length){h+='<div class="card" id="goalcard"><div class="sec" style="margin-top:0">Saison-Ziele</div>'+
    v.goals.map(g=>{const prog=g.key==='wins'?' ('+g.progress+'/'+g.target+')':'';return '<div class="reco mini'+(g.done?' win':'')+'"><span>'+(g.done?'✓ ':'')+esc(g.label)+prog+'</span><span class="mut">'+(g.done?'erfüllt':'+'+g.reward+' Mio')+'</span></div>';}).join('')+'</div>';}
@@ -1688,7 +1681,7 @@ function _complexSVG(v,opts){const world=!!(opts&&opts.world);
  dr.sort((a,b)=>a[0]-b[0]);
  // Labels zuletzt, von hinten nach vorne, immer über den Gebäuden
  const labels=list.slice().sort((a,b)=>(a.gy+a.d)-(b.gy+b.d)).map(_facLabel).join('');
- const vb=world?'0 0 600 384':'92 30 460 300';
+ const vb=world?'90 24 464 318':'92 30 460 300';
  return '<svg class="complex'+(world?' worldsvg':'')+'" viewBox="'+vb+'" preserveAspectRatio="xMidYMid meet">'+s+dr.map(x=>x[1]).join('')+labels+lockLabels+'</svg>';}
 // Freischaltbare Erweiterungen (Bauplätze) – Status aus den vorhandenen Anlagen-Stufen
 function _lockedFacs(v){const F=v.facilities||{};
@@ -1764,11 +1757,15 @@ function scoutTeam(abbr){const d=$('dev_'+abbr);if(!d)return;if(d.innerHTML){d.i
  const t=((lastView&&lastView.standings)||[]).find(x=>x.abbr===abbr);if(!t)return;
  d.innerHTML=scoutReportHTML(t,lastView);}
 function secBuild(v){
- // Anlagen-Gelände: anklickbare Karte mit Standorten, trainierenden Spielern und sichtbarem Ausbau
+ // Anlagen-Gelände: anklickbare Karte direkt im Tab (kein Pop-up), mit Ausbau-Panel & Erweiterungen
  let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Vereinsgelände</div>'+
-   '<div class="note">Budget: '+v.budget+' Mio. — tippe auf die Welt für die große, bewegbare Vereinswelt mit Ausbau, Erweiterungen & Liga-Vergleich.</div>'+
-   '<div class="citypreview" onclick="openWorld()">'+_complexSVG(v)+'<div class="cpbadge">🌍 Vereinswelt öffnen</div></div>'+
+   '<div class="note" style="margin-top:0">Budget: '+v.budget+' Mio. — tippe ein Gebäude an und bau es aus. Jede Stufe verändert es sichtbar.</div>'+
+   '<div class="cityview">'+_complexSVG(v,{world:true})+'</div>'+
    '<div id="facpanel">'+_facPanelHTML(v)+'</div></div>';
+ const lf=_lockedFacs(v);
+ h+='<div class="card"><div class="sec" style="margin-top:0">🏗️ Erweiterungen freischalten</div><div class="note" style="margin-top:0">Neue Bauplätze auf dem Gelände — schalte sie über die passenden Anlagen-Stufen frei.</div>'+
+   '<div class="expgrid" style="margin-top:10px">'+lf.map(f=>'<div class="exprow'+(f.unlocked?' on':'')+'"><span class="expic">'+(f.unlocked?'✓':'🔒')+'</span>'+
+     '<span class="expnm"><b>'+esc(f.name)+'</b><small>'+(f.unlocked?'Bauplatz bereit — bald baubar':'Benötigt '+esc(f.reqname)+' Stufe '+f.reqL+' (aktuell '+f.reqcur+')')+'</small></span></div>').join('')+'</div></div>';
  return h;
 }
 async function improveCoach(role){const r=await api('/api/fr/improve_coach?role='+encodeURIComponent(role),'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
