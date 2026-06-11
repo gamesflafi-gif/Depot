@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v37-mgr3"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v38-scout"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -213,7 +213,13 @@ _STYLE2 = """
  .devnm{flex:1;display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px} .devbarwrap{height:6px;border-radius:3px;background:#0c1410;overflow:hidden} .devbar{display:block;height:100%}
  .devov{font-weight:800;font-size:15px;text-align:center} .devov small{display:block;font-size:9px;color:var(--mut);font-weight:600}
  .devst{color:#e9b949;font-size:12px;letter-spacing:1px} .ghost.mini{padding:6px 10px;font-size:12px}
- .devdet:empty{display:none} .scoutbox{padding:9px 11px;margin:2px 0 6px;border:1px dashed var(--line);border-radius:9px;background:#0e150f;font-size:13px}
+ .devdet:empty{display:none} .scoutbox{padding:10px 12px;margin:2px 0 6px;border:1px dashed var(--line);border-radius:9px;background:#0e150f;font-size:13px}
+ .schd{display:flex;align-items:center;justify-content:space-between;gap:8px} .schd b{font-size:13.5px}
+ .scbadge{font-size:10.5px;font-weight:800;color:#04140c;background:linear-gradient(180deg,#f0c659,#e2a832);border-radius:6px;padding:2px 8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+ .scrow{display:flex;align-items:center;gap:9px;margin:5px 0} .scl{width:64px;font-size:12px;color:var(--mut)}
+ .scbar{position:relative;flex:1;height:8px;border-radius:5px;background:var(--bg);border:1px solid var(--line);overflow:hidden} .scfill{position:absolute;inset:0 auto 0 0}
+ .scv{width:64px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums} .scv small{color:var(--mut);font-weight:600;font-size:10px}
+ .sctip{margin-top:7px;padding:7px 9px;border-radius:7px;background:var(--accsoft);border:1px solid #1c5a40;color:#bdeed6;font-size:12.5px;font-weight:600}
  .evtcard{border-color:#5a4f20;background:#1d1b11}
  .awrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin:8px 0;background:var(--tile)}
  .awlabel{font-size:11px;font-weight:800;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
@@ -1135,13 +1141,28 @@ function leagueTable(v){const rows=(v.standings||[]).slice();if(!rows.length)ret
  h+='</table><div class="note"><span class="podot"></span> Playoff-Platz (Top 4)</div></div>';
  return h;
 }
+function scoutReportHTML(t,sv){sv=sv||lastView||{};const all=(sv.standings||[]),me=sv.ratings||{},N=all.length||1;
+ const offRank=all.slice().sort((a,b)=>b.off-a.off).findIndex(x=>x.abbr===t.abbr)+1;
+ const defRank=all.slice().sort((a,b)=>b.def-a.def).findIndex(x=>x.abbr===t.abbr)+1;
+ const offs=all.map(x=>x.off),defs=all.map(x=>x.def);
+ const omin=offs.length?Math.min(...offs):t.off,omax=offs.length?Math.max(...offs):t.off;
+ const dmin=defs.length?Math.min(...defs):t.def,dmax=defs.length?Math.max(...defs):t.def;
+ const pc=(v,lo,hi)=>Math.round((v-lo)/((hi-lo)||1)*100);
+ const bar=(lbl,val,rank,p,acc)=>'<div class="scrow"><span class="scl">'+lbl+'</span><span class="scbar"><span class="scfill" style="width:'+Math.max(7,p)+'%;background:'+acc+'"></span></span><span class="scv">'+val+' <small>#'+rank+'/'+N+'</small></span></div>';
+ const tier=t.ovr>=84?'Titelkandidat':t.ovr>=76?'Playoff-Team':t.ovr>=68?'Mittelfeld':'Aufbau-Team';
+ let tip='';if(me.def!=null&&me.off!=null){const offThreat=t.off-me.def,defThreat=t.def-me.off;
+   tip=offThreat>defThreat+3?'Ihre Offense ist die größere Gefahr → stärke deine Defense, wähle sichere Coverages.'
+     :defThreat>offThreat+3?'Ihre Defense ist stark → setze auf Lauf-Balance und kurze, sichere Pässe.'
+     :'Ausgeglichener Gegner — Schema-Disziplin entscheidet.';}
+ return '<div class="scoutbox"><div class="schd"><b>Scouting · '+esc(t.name)+'</b><span class="scbadge">'+tier+'</span></div>'+
+   '<div class="mut" style="margin:1px 0 7px">Bilanz '+t.w+'–'+t.l+' · '+t.pf+':'+t.pa+' Pkt · '+t.ovr+' OVR'+(t.user?'':(me.ovr!=null?' · dein Vorsprung '+(me.ovr-t.ovr>=0?'+':'')+(me.ovr-t.ovr):''))+'</div>'+
+   bar('Offense',t.off,offRank,pc(t.off,omin,omax),'#19e08f')+
+   bar('Defense',t.def,defRank,pc(t.def,dmin,dmax),'#5fa8ff')+
+   '<div class="mut" style="margin-top:5px">Schema: Off '+esc(t.off_scheme||'?')+' · Def '+esc(t.def_scheme||'?')+'</div>'+
+   (tip&&!t.user?'<div class="sctip">▸ '+tip+'</div>':'')+'</div>';}
 function scoutTeamRow(abbr){const d=$('ltd_'+abbr);if(!d)return;if(d.innerHTML){d.innerHTML='';return;}
  const t=((lastView&&lastView.standings)||[]).find(x=>x.abbr===abbr);if(!t)return;
- const tier=t.ovr>=84?'Titelkandidat – sehr tiefer, starker Kader':t.ovr>=76?'Playoff-Team – ausgewogen und gefährlich':t.ovr>=68?'Mittelfeld – schlagbar mit gutem Plan':'Aufbau-Team – klarer Vorteil';
- const diff=lastView.ratings?lastView.ratings.ovr-t.ovr:0;
- d.innerHTML='<div class="scoutbox"><b>Scouting · '+esc(t.name)+'</b>'+
-   '<div class="mut">Bilanz '+t.w+'–'+t.l+' · '+t.pf+' erzielt · '+t.pa+' kassiert · Diff '+(t.diff>=0?'+':'')+t.diff+' · '+t.ovr+' OVR</div>'+
-   '<div style="margin-top:4px">'+esc(tier)+(t.user?'':' · Dein OVR-Vorsprung: '+(diff>=0?'+':'')+diff)+'</div></div>';}
+ d.innerHTML=scoutReportHTML(t,lastView);}
 function _winProb(my,opp,home){let p=1/(1+Math.pow(10,(opp-my)/14));if(home)p+=0.05;return Math.max(.05,Math.min(.95,p));}
 function _vsbar(label,mine,opp){const t=(mine+opp)||1,mp=Math.round(mine/t*100);
  return '<div class="vsrow"><span class="vsl">'+esc(label)+'</span><span class="vsbar"><span class="vsmine" style="width:'+mp+'%"></span></span><span class="vsv">'+mine+'<small>:'+opp+'</small></span></div>';}
@@ -1616,12 +1637,8 @@ function _wbind(){const v=$('worldview');if(!v)return;
  const up=e=>{delete _wptr[e.pointerId];_wpd=0;};v.onpointerup=up;v.onpointercancel=up;v.onpointerleave=up;
  v.onwheel=e=>{e.preventDefault();const r=v.getBoundingClientRect();_wzoom(e.deltaY<0?1.12:0.9,e.clientX-r.left,e.clientY-r.top);};}
 function scoutTeam(abbr){const d=$('dev_'+abbr);if(!d)return;if(d.innerHTML){d.innerHTML='';return;}
- const t=(lastView.standings||[]).find(x=>x.abbr===abbr);if(!t)return;
- const tier=t.ovr>=84?'Titelkandidat – sehr tiefer, starker Kader':t.ovr>=76?'Playoff-Team – ausgewogen und gefährlich':t.ovr>=68?'Mittelfeld – schlagbar mit gutem Plan':'Aufbau-Team – klarer Vorteil für dich';
- const off=t.pf||0,def=t.pa||0;
- d.innerHTML='<div class="scoutbox"><b>Scouting-Bericht '+esc(t.name)+'</b>'+
-   '<div class="mut">Bilanz '+t.w+'–'+t.l+' · '+off+' Punkte erzielt · '+def+' kassiert · '+t.ovr+' OVR</div>'+
-   '<div style="margin-top:4px">'+esc(tier)+'</div></div>';}
+ const t=((lastView&&lastView.standings)||[]).find(x=>x.abbr===abbr);if(!t)return;
+ d.innerHTML=scoutReportHTML(t,lastView);}
 function secBuild(v){
  // Anlagen-Gelände: anklickbare Karte mit Standorten, trainierenden Spielern und sichtbarem Ausbau
  let h='<div class="card hubcard"><div class="sec" style="margin-top:0">🏟️ Vereinsgelände</div>'+
