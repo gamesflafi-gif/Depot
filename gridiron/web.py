@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v57-kicktop"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v58-meetfix"        # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -119,8 +119,8 @@ _STYLE = """
   /* Anlagen-Hub: Karte größer nutzen, Ausbau-Button bricht sauber um */
   .hubcard{padding:12px} .hubcard .note{font-size:12px;margin-bottom:4px} .complex{margin-top:8px}
   .facpanel{flex-wrap:wrap;gap:8px;padding:11px 12px} .facpanel>div:last-child{text-align:left;width:100%} .facpanel>div:last-child button{width:100%}
-  .worldwrap{width:100vw} .worldview{height:46vh;min-height:240px} .expgrid{grid-template-columns:1fr}
-  .meetgrid{grid-template-columns:1fr}
+  .worldwrap{width:100vw} .worldview{height:46vh;min-height:240px} .expgrid{grid-template-columns:1fr!important}
+  .meetgrid{grid-template-columns:1fr!important}   /* Mobile: Pakete untereinander (Quelltext-Reihenfolge sonst überschrieben) */
   .devnm{font-size:12px} .devst{display:none}
  }
 """
