@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v68-balance"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v69-intfix"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -972,7 +972,7 @@ function playAnim(svg,d,res,onDone){
  const TS=0.58;                                     // Spiel-Zeitlupe: Play läuft langsamer & lesbarer ab (real bleibt die Logik)
  const t0=performance.now();let last=t0,pt=0,thrown=false,tAt=0,bp=[qb.x,qb.y],arrived=false,caught=false,sacked=false,arrTime=0,oob=false,throwAng=0,gainT=-1,hoT=-1;
  let fumbled=false,recovered=false,fumT=-1,recT=-1,fumbleSpot=null,recoverer=null;
- const flightDur=Math.max(0.35,Math.hypot((intD?intD.x:catchPt[0])-qb.x,(intD?intD.y:catchPt[1])-qb.y)/BALLSPD);
+ const flightDur=Math.max(0.35,Math.hypot(catchPt[0]-qb.x,catchPt[1]-qb.y)/BALLSPD);
  const RESP={QB:8,RB:10,WR:10.5,TE:8.5,OL:6,FB:8.5,DE:7.5,DT:6.5,LB:8.5,CB:10.5,DB:10,S:9};   // Wendigkeit je Position
  const rp=pos=>RESP[pos]||8;
  const rushers=D.filter(p=>p.role==='rush');
@@ -1015,7 +1015,7 @@ function playAnim(svg,d,res,onDone){
   });
   // Ball / Wurf — fester Fangpunkt, Release so getimt, dass Ball und Receiver zusammen ankommen
   if(isPass&&kind!=='sack'){
-   const dest=intD?[intD.x,intD.y]:catchPt;                                 // fester Zielpunkt (keine homing-Kurve)
+   const dest=catchPt;                                                      // fester Zielpunkt — auch bei INT bricht der Verteidiger dorthin (kein homing auf einen wegrennenden Spieler)
    if(!thrown){
      const ballTime=Math.hypot(dest[0]-qb.x,dest[1]-qb.y)/BALLSPD;          // Flugzeit des Balls zum Punkt
      const recvTime=tgt?Math.hypot(dest[0]-tgt.x,dest[1]-tgt.y)/Math.max(4,_spd(tgt.pos)):0;  // Zeit des Receivers zum Punkt
@@ -1024,13 +1024,14 @@ function playAnim(svg,d,res,onDone){
      if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;}   // Ball zeigt in Flugrichtung
    }
    if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
-     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}}}
-   else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[intD.x,intD.y];}
+     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)popFig(P,'d_'+intD.i);}}   // INT-Fang
+   else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[bp[0]+(intD.x-bp[0])*0.3,bp[1]+(intD.y-bp[1])*0.3];}   // INT: Ball gleitet weich zum Eroberer (kein Sprung)
   }
   if(kind==='incomplete'&&arrived&&!swatted&&swatD){swatted=true;popFig(P,'d_'+swatD.i);}   // DB verteidigt den Pass (Reaktion)
   // ---- Defense: Rush / Mann / Zone / Verfolgung (alles weich gesteuert) ----
   D.forEach(p=>{const sp=mx(p.pos);
    if(picked){if(p===intD)steer(p,intD.x,Math.max(intD.y-11,-5.5),sp,dt,rp(p.pos));else steer(p,p.x+(intD.x-p.x)*0.05,p.y,sp*0.6,dt,rp(p.pos));return;}   // INT-Return: Interceptor läuft zurück, Rest begleitet
+   if(kind==='int'&&p===intD){steer(p,catchPt[0],catchPt[1],sp*1.05,dt,rp(p.pos));return;}   // Interceptor bricht auf den Ball (sitzt am Fangpunkt)
    if(kind==='sack'){steer(p,qb.x,qb.y,sp,dt,rp(p.pos));return;}
    if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                              // Verfolgungswinkel: leicht vor den Läufer
      const ahead=Math.min(0.42,Math.max(0,(carrier.y-p.y))/16);steer(p,carrier.x+(dest[0]-carrier.x)*ahead,carrier.y+(dest[1]-carrier.y)*ahead,sp,dt,rp(p.pos));return;}
