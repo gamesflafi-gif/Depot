@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v43-routes"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v44-reveal"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -301,8 +301,13 @@ _STYLE2 = """
  .vsteam .tn{font-weight:800;font-size:15px} .vsmid{display:flex;align-items:center;font-weight:800;font-size:24px;color:var(--mut)}
  .caps{display:flex;gap:7px;justify-content:center;flex-wrap:wrap} .capw{display:flex;flex-direction:column;align-items:center;gap:3px}
  .capn{font-size:10px;color:var(--mut);font-weight:700;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
- .coin{width:92px;height:92px;border-radius:50%;background:linear-gradient(135deg,#f6d985,#c79a32);display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 8px 22px rgba(0,0,0,.45);animation:coinflip 1.05s ease-in-out 2}
- @keyframes coinflip{0%{transform:rotateY(0) scale(.9)}50%{transform:rotateY(900deg) scale(1.1)}100%{transform:rotateY(1800deg) scale(1)}}
+ .coinwrap{perspective:600px;margin:10px auto 6px;width:100px;height:100px}
+ .coinflip{position:relative;width:100px;height:100px;transform-style:preserve-3d;transform:rotateY(0deg)}
+ .coinflip.toss{animation:cointumble .9s linear infinite}
+ @keyframes cointumble{from{transform:rotateY(0deg)}to{transform:rotateY(360deg)}}
+ .cface{position:absolute;inset:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;letter-spacing:.04em;color:#3a2a05;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:radial-gradient(circle at 36% 30%,#fceaa0,#e8c45f 45%,#c89a30);border:4px solid #b5862a;box-shadow:0 10px 24px rgba(0,0,0,.5),inset 0 0 0 5px rgba(255,255,255,.15)}
+ .cface .cab{background:var(--c);color:#fff;border-radius:9px;padding:5px 9px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+ .cface.cback{transform:rotateY(180deg)}
  .introbig{font-size:22px;font-weight:800} .introsub{color:var(--mut);font-size:14px}
  .kostrip{position:relative;width:100%;max-width:460px;height:30px;border-radius:8px;background:linear-gradient(90deg,#0e4a2d,#1d7a48);border:1px solid #06140d;overflow:hidden}
  .koball{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;border:2px solid #fff;transition:left 1s cubic-bezier(.2,.7,.3,1)}
@@ -1886,10 +1891,17 @@ function gameIntro(g,done){let fin=false;const end=()=>{if(fin)return;fin=true;c
    '<div class="vsrow">'+teamCol(uName,uAbbr,uColor,uCaps,true)+'<div class="vsmid">VS</div>'+teamCol(oName,oAbbr,oColor,oCaps,false)+'</div>'+
    '<div class="introsub" style="font-size:12px">Kapitäne ohne Helm</div></div>';
    window._introT=setTimeout(s2,2600);}
- function s2(){const recv=g.coin&&g.coin.user_receives?uName:oName;
-   M.innerHTML='<div class="introwrap">'+skip+'<div class="introbig">Münzwurf</div><div class="coin">🏈</div>'+
-   '<div class="introbig"><b style="color:var(--acc)">'+esc(recv)+'</b></div><div class="introsub">gewinnt den Münzwurf und bekommt den Ball</div></div>';
-   window._introT=setTimeout(s3,2400);}
+ function s2(){const userWins=!!(g.coin&&g.coin.user_receives),recv=userWins?uName:oName;
+   const endDeg=1980+(userWins?0:180);   // viele Umdrehungen; Vorderseite (Nutzer)=Vielfaches von 360, Rückseite (Gegner)=+180
+   M.innerHTML='<div class="introwrap">'+skip+'<div class="introbig">Münzwurf</div>'+
+     '<div class="coinwrap"><div class="coinflip" id="coinflip" style="transform:rotateY(0deg)">'+
+       '<div class="cface cfront"><span class="cab" style="--c:'+esc(uColor)+'">'+esc(uAbbr)+'</span></div>'+
+       '<div class="cface cback"><span class="cab" style="--c:'+esc(oColor)+'">'+esc(oAbbr)+'</span></div>'+
+     '</div></div><div class="introsub" id="cointxt">Die Münze fliegt …</div></div>';
+   const cf=$('coinflip');
+   setTimeout(()=>{if(cf){cf.style.transition='transform 2s cubic-bezier(.16,.62,.18,1)';cf.style.transform='rotateY('+endDeg+'deg)';}},70);
+   setTimeout(()=>{const t=$('cointxt');if(t)t.innerHTML='<b style="color:var(--acc)">'+esc(recv)+'</b> gewinnt den Münzwurf und bekommt den Ball';},2150);
+   window._introT=setTimeout(s3,2900);}
  function s3(){const k=g.kickoff||{return_to:25,td:false};const recvCol=(g.coin&&g.coin.user_receives)?uColor:oColor;
    const endX=k.td?96:Math.max(8,Math.min(92,k.return_to));
    M.innerHTML='<div class="introwrap">'+skip+'<div class="introbig">Kickoff</div>'+
@@ -1902,33 +1914,38 @@ function gameIntro(g,done){let fin=false;const end=()=>{if(fin)return;fin=true;c
 function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div class="yl" style="left:'+p+'%"></div>';
  const lab=(p===50?'50':(p<50?p:100-p));t+='<div class="yn" style="left:'+p+'%">'+lab+'</div><div class="yn b" style="left:'+p+'%">'+lab+'</div>';});
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
+let _preG=null;
 function renderGame(g,play){
  if(!g.over)playClock=15;                                    // jeder neue Snap: Play-Clock zurücksetzen
  const willAnimate=!!(play&&(play.concept||play.kind==='fg'));   // läuft eine Snap-/Kick-Animation?
- if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern (Bugfix: nach Flag wählbar)
+ if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern
+ // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Kommentar) erst NACH der Animation
+ const disp=(willAnimate&&_preG)?_preG:g;
+ if(!willAnimate)_preG=null;
  let h='<div class="modalhead"><h3><span class="livedot"></span> Dein Spiel</h3>'+
    '<button class="ghost" onclick="abortGame()">Verlassen</button></div>'+
    '<div class="tvscore">'+
-     '<div class="tvteam">'+teamLogo(g.aabbr,g.acolor,'lg')+'<span class="nm">'+esc(g.away)+'</span></div>'+
-     '<div class="tvpts">'+g['as']+'</div>'+
+     '<div class="tvteam">'+teamLogo(disp.aabbr,disp.acolor,'lg')+'<span class="nm">'+esc(disp.away)+'</span></div>'+
+     '<div class="tvpts">'+disp['as']+'</div>'+
      '<div class="tvmid"><div class="qn" id="gq">Q'+gameQ+'</div><div class="sub clk" id="clk">'+fmtClock(gameClock)+'</div></div>'+
-     '<div class="tvpts">'+g.hs+'</div>'+
-     '<div class="tvteam r"><span class="nm">'+esc(g.home)+'</span>'+teamLogo(g.habbr,g.hcolor,'lg')+'</div>'+
+     '<div class="tvpts">'+disp.hs+'</div>'+
+     '<div class="tvteam r"><span class="nm">'+esc(disp.home)+'</span>'+teamLogo(disp.habbr,disp.hcolor,'lg')+'</div>'+
    '</div>'+
-   '<div class="tvfield"><div class="ez" style="background:'+esc(g.acolor)+'">'+esc(g.aabbr)+'</div>'+
-     gameTurf(g)+'<div class="ez" style="background:'+esc(g.hcolor)+'">'+esc(g.habbr)+'</div></div>'+
-   '<div class="dd"><span>'+g.down+'. &amp; '+g.dist+'</span><span class="mut">noch '+g.ytz+' Yd bis TD · Ball: '+esc(g.possession)+'</span></div>'+
+   '<div class="tvfield"><div class="ez" style="background:'+esc(disp.acolor)+'">'+esc(disp.aabbr)+'</div>'+
+     gameTurf(disp)+'<div class="ez" style="background:'+esc(disp.hcolor)+'">'+esc(disp.habbr)+'</div></div>'+
+   '<div class="dd"><span>'+disp.down+'. &amp; '+disp.dist+'</span><span class="mut">noch '+disp.ytz+' Yd bis TD · Ball: '+esc(disp.possession)+'</span></div>'+
    '<div class="fieldwrap" style="margin:10px 0"><svg id="gfield" viewBox="0 0 533 360" style="width:100%;height:auto;display:block"></svg></div>';
- if(play)h+='<div class="reco'+(play.scored?' win':'')+(play.penalty?' flag':'')+'"><span>'+esc(play.desc)+'</span>'+(play.penalty?'<span class="mut">Strafe</span>':'<span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span>')+'</div>';
- if(g.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(g.away)+' '+g['as']+' : '+g.hs+' '+esc(g.home)+'</div>'+
+ if(play&&!willAnimate)h+='<div class="reco'+(play.scored?' win':'')+(play.penalty?' flag':'')+'"><span>'+esc(play.desc)+'</span>'+(play.penalty?'<span class="mut">Strafe</span>':'<span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span>')+'</div>';
+ else if(willAnimate)h+='<div class="reco"><span class="mut">Spielzug läuft …</span></div>';
+ if(disp.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(disp.away)+' '+disp['as']+' : '+disp.hs+' '+esc(disp.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
- else{const ban=g.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(g.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
-   h+='<div class="posbanner '+(g.user_offense||g.awaiting==='pat'?'off':'def')+'">'+ban+'</div>'+
+ else{const ban=disp.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(disp.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
+   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'?'off':'def')+'">'+ban+'</div>'+
    '<div class="pclock'+(playClock<=5?' urgent':'')+'" id="pclk">⏱ '+playClock+'s</div>'+
-   '<div class="optgrid">'+g.options.map(o=>'<button class="optbtn" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
+   '<div class="optgrid">'+(disp.options||[]).map(o=>'<button class="optbtn" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
- h+='<div class="commentary" style="margin-top:10px">'+g.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
+ h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);
  else if(play&&play.kind==='fg')animateFG(play);            // Field Goal / Extra-Punkt mit Kick-Animation
@@ -1986,7 +2003,7 @@ function animateFG(play){const svg=$('gfield');if(!svg){playBusy=false;return;}c
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-async function gamePlay(choice){if(playBusy)return;playBusy=true;const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){playBusy=false;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+async function gamePlay(choice){if(playBusy)return;playBusy=true;_preG=liveG;const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 async function simDrive(){if(playBusy)return;const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
  if(r.result){if(r.view)renderMgr(r.view);showGameResult(r.result);}else renderGame(r.game);}
