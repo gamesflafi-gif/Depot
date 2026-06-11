@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v70-camera"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v71-persp"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -256,6 +256,9 @@ _STYLE2 = """
  /* Play-Art Feld */
  .fieldwrap{margin:12px 0 10px;border-radius:12px;overflow:hidden;border:1px solid #06140d;box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
  #field{display:block;width:100%;height:auto}
+ /* 3/4-Kamera: Spielfeld schräg von hinten/oben (Perspektive) — Sicht aufs eigene Team downfield */
+ .gtilt{perspective:700px;perspective-origin:50% 38%;overflow:hidden}
+ .gtilt #gfield{transform:rotateX(26deg) scale(1.04);transform-origin:50% 74%}
  #field .pl{filter:drop-shadow(0 1.5px 1.5px rgba(0,0,0,.55))}
  .fig{transform-box:fill-box;transform-origin:center;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5))}
  .fig.pop{animation:pop .4s ease}@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.6)}100%{transform:scale(1)}}
@@ -1093,7 +1096,7 @@ function playAnim(svg,d,res,onDone){
     let bd=1e9;D.forEach(p=>{const dd=Math.hypot(p.x-fumbleSpot[0],p.y-fumbleSpot[1]);if(dd<bd){bd=dd;recoverer=p;}});}
   if(fumbled&&!recovered&&recoverer){steer(recoverer,fumbleSpot[0],fumbleSpot[1],mx(recoverer.pos),dt,rp(recoverer.pos));
     if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
-  const tackled=!fumble&&atGain&&(contact||el>gainT+1.0);                              // Tackle bei Kontakt (Läufer läuft durch, steht nicht)
+  const tackled=!fumble&&atGain&&(contact||el>gainT+0.5);                              // Tackle bei Kontakt; sonst kurz danach (kein langes Stehen)
   const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.6) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (td&&atGain) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
@@ -1110,9 +1113,9 @@ function playAnim(svg,d,res,onDone){
     else if(kind==='int'&&intD){const hit=O.map(o=>[o,Math.hypot(o.x-intD.x,o.y-intD.y)]).filter(a=>a[1]<1.9).sort((a,b)=>a[1]-b[1]);   // Interceptor wird gestellt
       if(hit.length){downFig(P,'d_'+intD.i);hit.slice(0,2).forEach(a=>downFig(P,'o'+a[0].i));}}
     else if(carrier&&kind!=='incomplete'&&!oob&&!fumble){const near=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).sort((a,b)=>a[1]-b[1]);
-      downFig(P,'o'+carrier.i);const gang=near.filter(a=>a[1]<2.6).slice(0,2);   // Tackle: Ballträger + beteiligte Verteidiger
+      downFig(P,'o'+carrier.i);const gang=near.filter(a=>a[1]<2.8).slice(0,2);   // Tackle: Ballträger + beteiligte Verteidiger
       if(gang.length)gang.forEach(a=>downFig(P,'d_'+a[0].i));
-      else if(near[0]&&near[0][1]<6){moveP(P,'d_'+near[0][0].i,carrier.x+0.8,carrier.y-0.5);downFig(P,'d_'+near[0][0].i);}}   // sonst nächsten Verfolger heranziehen (kein Stehenbleiben, kein Allein-Flippen)
+      else if(near[0]){moveP(P,'d_'+near[0][0].i,carrier.x+0.8,carrier.y-0.5);downFig(P,'d_'+near[0][0].i);}}   // immer ein Tackler (nächster Verfolger) – kein Stehenbleiben/Allein-Flippen
     if(!res.noResult)showResult(svg,{kind,yards,td,fum:fumble,pt:(fumble&&fumbleSpot?fumbleSpot:(carrier?[carrier.x,carrier.y]:(kind==='int'&&intD?[intD.x,intD.y]:(kind==='sack'?[qb.x,vy]:catchPt))))});
     if(onDone)setTimeout(onDone,res.noResult?900:1600);}
  }
@@ -2043,7 +2046,7 @@ function renderGame(g,play){
    '<div class="tvfield"><div class="ez" style="background:'+esc(disp.acolor)+'">'+esc(disp.aabbr)+'</div>'+
      gameTurf(disp)+'<div class="ez" style="background:'+esc(disp.hcolor)+'">'+esc(disp.habbr)+'</div></div>'+
    '<div class="dd"><span>'+disp.down+'. &amp; '+disp.dist+'</span><span class="mut">noch '+disp.ytz+' Yd bis TD · Ball: '+esc(disp.possession)+'</span></div>'+
-   '<div class="fieldwrap" style="margin:10px 0"><svg id="gfield" viewBox="0 0 533 360" style="width:100%;height:auto;display:block"></svg></div>';
+   '<div class="fieldwrap gtilt" style="margin:10px 0"><svg id="gfield" viewBox="0 0 533 360" style="width:100%;height:auto;display:block"></svg></div>';
  if(play&&!willAnimate)h+='<div class="reco'+(play.scored?' win':'')+(play.penalty?' flag':'')+'"><span>'+esc(play.desc)+'</span>'+(play.penalty?'<span class="mut">Strafe</span>':'<span class="mut">'+(play.yards>=0?'+':'')+play.yards+' Yd</span>')+'</div>';
  else if(willAnimate)h+='<div class="reco"><span class="mut">Spielzug läuft …</span></div>';
  if(disp.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(disp.away)+' '+disp['as']+' : '+disp.hs+' '+esc(disp.home)+'</div>'+
