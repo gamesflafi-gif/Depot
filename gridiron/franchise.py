@@ -1851,8 +1851,11 @@ def _new_decision_options(state: dict) -> None:
     off = teams[g["hi"] if g["pos"] == 0 else g["ai"]]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
     if g.get("pat"):                                      # Extra-Punkt / 2-Punkte nach TD
-        g["opts"] = [{"key": "__XP__", "label": f"Extra-Punkt (Kick, {round(xp_make_prob(kicker(off)) * 100)}%)", "type": "+1"},
-                     {"key": "__2PT__", "label": "2-Punkte-Conversion", "type": "+2"}]
+        if g["pat"].get("two_pt"):                        # 2-Punkte-Versuch -> Spielzug an der 3 wählen
+            g["opts"] = _random_off_options()
+        else:
+            g["opts"] = [{"key": "__XP__", "label": f"Extra-Punkt (Kick, {round(xp_make_prob(kicker(off)) * 100)}%)", "type": "+1"},
+                         {"key": "__2PT__", "label": "2-Punkte-Conversion", "type": "+2"}]
     elif user_has_ball:
         opts = _random_off_options()
         if g["ytz"] <= 50:                                # Field Goal ab ca. Mittellinie
@@ -2011,8 +2014,12 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         _runoff(g, 0 if pen["pre_snap"] else random.randint(4, 8), True)  # Strafe: Uhr steht (Vor-Snap: keine Zeit)
         _new_decision_options(state)
         save(cfg, state)
+        cos_y = 0 if pen["pre_snap"] else max(-8, min(yards, int(ytz0) - 2))   # kosmetischer Raumgewinn (wird zurückgepfiffen)
         return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
                                      "kind": "penalty", "penalty": True, "user_off": user_has_ball,
+                                     "concept": concept, "coverage": coverage,
+                                     "pre_snap": bool(pen["pre_snap"]), "pen_name": pen["name"],
+                                     "pen_side": pen["side"], "play_kind": o["kind"], "play_yards": cos_y,
                                      "ytz0": round(ytz0), "dist0": round(dist0)},
                 "game": _game_view(state)}
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
@@ -2240,6 +2247,18 @@ def _pat_log(g: dict, off: dict, label: str, user_off: bool) -> None:
 def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
                  user_off: bool, choice: str) -> dict:
     """Extra-Punkt (Kick) oder 2-Punkte-Conversion nach einem Touchdown."""
+    pat = g["pat"]
+    # 2-Punkte-Versuch: erst Spielzug an der 3-Yard-Linie wählen, dann ausspielen
+    if choice == "__2PT__" and not pat.get("two_pt"):
+        pat["two_pt"] = True
+        g["ytz"], g["down"], g["dist"] = 3.0, 1, 3        # Goal-Line-Snap von der 3
+        g["absx"] = round((100.0 - 3.0) if g["pos"] == 1 else 3.0, 1)
+        _new_decision_options(state)                      # Optionen -> Run/Pass-Konzepte
+        save(cfg, state)
+        return {"ok": True, "game": _game_view(state)}    # kein Snap -> nur die Auswahl rendern
+    if pat.get("two_pt") and (choice in PASS_CONCEPTS or choice in RUN_CONCEPTS):
+        return _resolve_two_point(cfg, state, g, off, user_off, choice)
+    # Extra-Punkt-Kick (Standard; __2PT__-Fallback nur falls ohne Auswahl, z. B. Auto-Sim)
     pos = g.pop("pat")["pos"]
     if choice == "__2PT__":
         edge = 0.10 * (offense(off) - defense(deff))
@@ -2247,7 +2266,7 @@ def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
         label = "2-Punkte-Conversion gut! (+2)" if good else "2-Punkte-Conversion gescheitert"
         if good:
             g["score"][pos] += 2
-        kind, fg_dist = "pat", 0                          # 2PT: keine Kick-Animation
+        kind, fg_dist = "pat", 0
     else:                                                 # Extra-Punkt-Kick
         good = random.random() < xp_make_prob(kicker(off))
         label = "Extra-Punkt gut (+1)" if good else "Extra-Punkt daneben"
@@ -2261,6 +2280,34 @@ def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": True, "good": good, "kind": kind,
                                  "fg_dist": fg_dist, "concept": None, "coverage": None, "user_off": user_off},
+            "game": _game_view(state)}
+
+
+def _resolve_two_point(cfg: Config, state: dict, g: dict, off: dict,
+                       user_off: bool, concept: str) -> dict:
+    """2-Punkte-Conversion als echter Goal-Line-Snap: gewähltes Konzept gegen Mann-Coverage,
+    Endzone erreicht = +2 (wird animiert wie ein normaler Spielzug)."""
+    pos = g.pop("pat")["pos"]
+    coverage = random.choice(["Cover 0", "Cover 1", "Cover 2 Man"])   # Goal-Line: mannlastig
+    o = play_outcome(concept, coverage, {"yardline_100": 3.0, "down": 1, "ydstogo": 3}, _RNG)
+    yards = max(-3, min(int(o["yards"]), 3))
+    good = (not o["turnover"]) and o["kind"] in ("complete", "run") and yards >= 3
+    if good:
+        g["score"][pos] += 2
+    # Box-Score für das Nutzer-Team auch beim 2-Punkte-Versuch
+    urost = state["teams"][0].get("roster")
+    if urost and user_off:
+        _attr_off(g.setdefault("box", {}), urost, o, yards, good, random)
+    label = "2-Punkte-Conversion gut! (+2)" if good else "2-Punkte-Conversion gescheitert"
+    _pat_log(g, off, label, user_off)
+    _switch_possession(g)
+    _runoff(g, random.randint(4, 7), True)
+    _new_decision_options(state)
+    save(cfg, state)
+    return {"ok": True, "play": {"desc": label, "yards": yards, "scored": good, "good": good,
+                                 "kind": o["kind"], "concept": concept, "coverage": coverage,
+                                 "two_pt": True, "td": False, "user_off": user_off,
+                                 "ytz0": 3, "dist0": 3},
             "game": _game_view(state)}
 
 
@@ -2421,6 +2468,7 @@ def _game_view(state: dict) -> dict:
     off = teams[off_i]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
     pat = bool(g.get("pat"))
+    two_pt = bool(pat and g["pat"].get("two_pt"))
     if "opts" not in g:                                   # Fallback (z. B. altes Spiel)
         _new_decision_options(state)
     opts = g.get("opts", [])
@@ -2434,8 +2482,8 @@ def _game_view(state: dict) -> dict:
         "down": g["down"], "dist": g["dist"], "ytz": round(g["ytz"]), "absx": round(g["absx"], 1),
         "drive": g["drive"], "max_drives": MAX_DRIVES, "over": g["over"],
         "possession": teams[off_i]["name"], "user_offense": user_has_ball,
-        "awaiting": "pat" if pat else ("offense" if user_has_ball else "defense"),
-        "pat": pat, "kicker": kicker(teams[0]),
+        "awaiting": "2pt" if two_pt else ("pat" if pat else ("offense" if user_has_ball else "defense")),
+        "pat": pat, "two_pt": two_pt, "kicker": kicker(teams[0]),
         "options": opts, "log": g["log"][:12],
         "user_is_home": g["user_is_home"],
         "coin": g.get("coin"), "kickoff": g.get("kickoff"),

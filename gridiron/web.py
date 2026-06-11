@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v52-clock"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v53-flags"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -936,8 +936,11 @@ function playAnim(svg,d,res,onDone){
    if(o===tgt){
      if(isPass){if(!caught)_routeRun(o,M(o.pos));else if(kind==='complete')_toward(o,gain[0],gain[1],M(o.pos));}  // läuft die Route weiter, bleibt nicht am Ende stehen
      else{_advance(o,M(o.pos));if(o.ri>=o.route.length&&runEnd)_toward(o,runEnd[0],runEnd[1],M(o.pos));}
-     if(!isPass||caught){const nd=D.reduce((m,q)=>Math.min(m,Math.hypot(q.x-o.x,q.y-o.y)),9);   // läuft die optimale Linie (durchs Loch, dann gerade zum TD)
-       if(nd<1.7&&el>(o._jukeT||-9)+0.7){o._jukeT=el;o.x+=(o.x<=C?1.3:-1.3);if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // nur bei nahem Gegner ein Ausweichschritt + Spin
+     if(!isPass||caught){let near=null,nd=9;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nd){nd=dd;near=q;}});   // sucht das offene Loch: weicht zur freien Seite aus
+       if(near&&nd<1.9&&el>(o._jukeT||-9)+0.55){o._jukeT=el;
+         let dir=(near.x>o.x)?-1:1;                       // weg vom nächsten Verteidiger (in den offenen Raum)
+         if(o.x<5)dir=1;else if(o.x>48)dir=-1;            // nicht ins Seitenaus cutten
+         o.x+=dir*1.15;if(!o._spun){o._spun=1;spinFig(P,'o'+o.i);}}}  // ein sauberer Cut + Spin, kein Zickzack
      return;}
    if(o.route&&!caught)_routeRun(o,M(o.pos)*0.94);   // Mitläufer laufen ihre Routen voll aus und danach weiter (kein Einfrieren)
   });
@@ -1011,8 +1014,8 @@ function playAnim(svg,d,res,onDone){
     if(kind==='sack'){downFig(P,'o'+qb.i);D.filter(p=>p.role==='rush').sort((a,b)=>Math.hypot(a.x-qb.x,a.y-qb.y)-Math.hypot(b.x-qb.x,b.y-qb.y)).slice(0,2).forEach(p=>downFig(P,'d_'+p.i));}
     else if(carrier&&kind!=='incomplete'){downFig(P,'o'+carrier.i);                     // Tackle: Ballträger + nächste Verteidiger gehen zu Boden (Gang-Tackle)
       D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).filter(a=>a[1]<2.6).sort((a,b)=>a[1]-b[1]).slice(0,2).forEach(a=>downFig(P,'d_'+a[0].i));}
-    showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
-    if(onDone)setTimeout(onDone,1200);}
+    if(!res.noResult)showResult(svg,{kind,yards,td,pt:(carrier?[carrier.x,carrier.y]:(kind==='sack'?[qb.x,vy]:catchPt))});
+    if(onDone)setTimeout(onDone,res.noResult?700:1200);}
  }
  _anim[P]=requestAnimationFrame(frame);
 }
@@ -1946,8 +1949,8 @@ function renderGame(g,play){
  else if(willAnimate)h+='<div class="reco"><span class="mut">Spielzug läuft …</span></div>';
  if(disp.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(disp.away)+' '+disp['as']+' : '+disp.hs+' '+esc(disp.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
- else{const ban=disp.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(disp.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
-   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'?'off':'def')+'">'+ban+'</div>'+
+ else{const ban=disp.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':disp.awaiting==='2pt'?'🏈 2-Punkte-Versuch — wähle deinen Spielzug von der 3:':(disp.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
+   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'||disp.awaiting==='2pt'?'off':'def')+'">'+ban+'</div>'+
    '<div class="optgrid">'+(disp.options||[]).map(o=>'<button class="optbtn'+(o.key==='__TIMEOUT__'?' to':'')+'" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
@@ -1958,25 +1961,43 @@ function renderGame(g,play){
  else if(play&&play.penalty)animatePenalty(play);          // Flagge — Schiedsrichter wirft, dann Ergebnis
  else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
 }
-function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
+/* Flagge fliegt aus der Hand eines Refs in hohem Bogen aufs Feld (eigene Animationsschleife). */
+let _flagIv={};
+function _throwFlag(svg,sx,sy,ex,ey){const P=svg.id;if(_flagIv[P])cancelAnimationFrame(_flagIv[P]);
+ const flag=el('rect',{id:P+'_flag',x:sx-3.5,y:sy-3.5,width:7,height:7,rx:1.5,fill:'#ffd34d',stroke:'#b9930a','stroke-width':1});svg.appendChild(flag);
+ const t0=performance.now(),dur=0.72;
+ function fr(now){const t=Math.min(1,(now-t0)/1000/dur);
+  const x=sx+(ex-sx)*t,y=sy+(ey-sy)*t-Math.sin(Math.PI*t)*46;
+  flag.setAttribute('x',(x-3.5).toFixed(1));flag.setAttribute('y',(Math.max(8,y)-3.5).toFixed(1));
+  flag.setAttribute('transform','rotate('+(t*560).toFixed(0)+' '+x.toFixed(1)+' '+Math.max(8,y).toFixed(1)+')');
+  if(t<1)_flagIv[P]=requestAnimationFrame(fr);}
+ _flagIv[P]=requestAnimationFrame(fr);}
+/* Strafen-Karte: zeigt erst NACH dem Play, welche Strafe es war und wie die Yards verrechnet werden. */
+function _penaltyCard(svg,play){const x=266,y=148,name=play.pen_name||'Strafe';
+ let eff=(play.desc||'').replace(/^🚩\s*/,'');if(eff.length>48){const m=eff.split('—');eff=(m[1]||eff).trim();}
+ const g=el('g',{});
+ g.appendChild(el('rect',{x:x-156,y:y-34,width:312,height:70,rx:11,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':2}));
+ const t0=el('text',{x:x,y:y-12,'text-anchor':'middle','font-size':12,fill:'#ffd34d','font-weight':800,'letter-spacing':2});t0.textContent='🚩 FLAGGE';
+ const t1=el('text',{x:x,y:y+6,'text-anchor':'middle','font-size':15,fill:'#fff','font-weight':800});t1.textContent=name;
+ const t2=el('text',{x:x,y:y+24,'text-anchor':'middle','font-size':10.5,fill:'#cdeede'});t2.textContent=eff;
+ g.appendChild(t0);g.appendChild(t1);g.appendChild(t2);svg.appendChild(g);}
+async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
+ const cont=()=>{setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},1500);};   // danach normaler Folgesnap
  const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
- let s='<rect width="533" height="360" fill="#0e4a2d"/>';
- for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';
- for(let i=0;i<8;i++)s+=_fgFig(120+i*40,205+(i%2)*16,i<4?cols.off:cols.def);
- s+=_refFig(258,250);
- svg.innerHTML=s;
- const flag=el('rect',{id:P+'_flag',x:254,y:245,width:8,height:8,rx:1.5,fill:'#ffd34d',stroke:'#b9930a','stroke-width':1});svg.appendChild(flag);
- const lbl=el('text',{x:266,y:58,'text-anchor':'middle','font-size':22,'font-weight':800,fill:'#ffd34d',opacity:0});lbl.textContent='🚩 STRAFE';svg.appendChild(lbl);
- const t0=performance.now();
- function frame(now){const e=(now-t0)/1000,t=Math.min(1,e/0.85);
-  const fx=258+t*64,fy=245-Math.sin(Math.PI*t)*132;
-  flag.setAttribute('x',(fx-4).toFixed(1));flag.setAttribute('y',Math.max(16,fy).toFixed(1));
-  flag.setAttribute('transform','rotate('+(t*620).toFixed(0)+' '+fx.toFixed(1)+' '+Math.max(16,fy).toFixed(1)+')');
-  if(e>0.5)lbl.setAttribute('opacity',Math.min(1,(e-0.5)/0.3).toFixed(2));
-  if(e<=1.5)_anim[P]=requestAnimationFrame(frame);
-  else setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},500);
- }
- _anim[P]=requestAnimationFrame(frame);
+ let d=null;
+ if(play.concept){try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();}catch(e){d=null;}}
+ if(play.pre_snap||!d||d.error){                          // Vor-Snap-Foul: kein Snap, sofort Pfiff
+   if(d&&!d.error)renderField(svg,d,play.dist0||10,cols,play.ytz0,true);
+   else{let s='<rect width="533" height="360" fill="#0e4a2d"/>';for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';s+=_refFig(258,250);svg.innerHTML=s;}
+   setTimeout(()=>_throwFlag(svg,250,120,292,250),250);
+   setTimeout(()=>_penaltyCard(svg,play),1300);
+   cont();return;}
+ // Post-Snap: das echte Play läuft, der Ref wirft früh die Flagge, danach erscheint die Strafe
+ renderField(svg,d,play.dist0||10,cols,play.ytz0);
+ setTimeout(()=>{if(_anim[P])_throwFlag(svg,250,118,300,255);},520);   // Ref wirft, während der Spielzug läuft
+ playAnim(svg,d,{kind:play.play_kind||'run',yards:play.play_yards||0,td:false,noResult:true},
+   ()=>{_penaltyCard(svg,play);cont();});                 // erst Tackle, dann Flaggen-Info, dann Strafe
+ return;
 }
 function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
 async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
