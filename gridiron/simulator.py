@@ -226,15 +226,22 @@ def _pass_params(c: dict, cov: dict):
 
 
 def play_outcome(concept: str, coverage: str, situation: dict,
-                 rng: np.random.Generator, rates: BaseRates | None = None) -> dict:
+                 rng: np.random.Generator, rates: BaseRates | None = None,
+                 edge: float = 0.0) -> dict:
     """Ein einzelner, gezogener Spielzug (für den interaktiven Spielmodus).
-    Liefert realisierte Yards + Ergebnis-Art (Completion/Incomplete/Sack/INT/Lauf)."""
+    Liefert realisierte Yards + Ergebnis-Art (Completion/Incomplete/Sack/INT/Lauf).
+    edge = Stärke-Vorteil der Offense aus den Einheiten-Ratings (~-0.45..0.45):
+    bessere Mannschaft trifft öfter, läuft weiter, wird seltener gesackt/abgefangen."""
     rates = rates or BaseRates()
+    e = float(np.clip(edge, -0.45, 0.45))
     cov = COVERAGES[coverage]
     is_pass = concept in PASS_CONCEPTS
     if is_pass:
         c = PASS_CONCEPTS[concept]
         mf, band, comp_p, sack_p, int_p = _pass_params(c, cov)
+        comp_p = float(np.clip(comp_p + 0.40 * e, 0.12, 0.96))           # Qualität -> Trefferquote
+        sack_p = float(np.clip(sack_p * (1.0 - 0.85 * e), 0.004, 0.32))  # gute O-Line/QB -> weniger Sacks
+        int_p = float(np.clip(int_p * (1.0 - 0.70 * e), 0.003, 0.11))    # gute Offense -> weniger INTs
         u = rng.random()
         if u < sack_p:
             return {"yards": -int(rng.integers(4, 10)), "kind": "sack", "turnover": False, "pass": True}
@@ -242,8 +249,8 @@ def play_outcome(concept: str, coverage: str, situation: dict,
             return {"yards": 0, "kind": "int", "turnover": True, "pass": True}
         if rng.random() < comp_p:
             air = c["depth"] + rng.normal(0, _AIR_SPREAD[band])
-            yac = rng.gamma(1.6, ({"screen": 8.0, "short": 4.5, "inter": 3.0, "deep": 2.2}[band] * mf) / 1.6)
-            fum = rng.random() < 0.012
+            yac = rng.gamma(1.6, ({"screen": 8.0, "short": 4.5, "inter": 3.0, "deep": 2.2}[band] * mf * (1.0 + 0.35 * e)) / 1.6)
+            fum = rng.random() < max(0.004, 0.012 * (1.0 - 0.5 * e))
             return {"yards": max(int(round(air + yac)) - (3 if fum else 0), -2),
                     "kind": "complete", "turnover": fum, "pass": True}
         return {"yards": 0, "kind": "incomplete", "turnover": False, "pass": True}
@@ -251,13 +258,13 @@ def play_outcome(concept: str, coverage: str, situation: dict,
     c = RUN_CONCEPTS[concept]
     box = _box_for(coverage, str(situation.get("personnel", "11")))
     mf = _run_matchup(c, cov, box)
-    mean_target = max(rates.run_yards_mean * mf, 1.0)
+    mean_target = max(rates.run_yards_mean * mf * (1.0 + 0.45 * e), 0.8)
     y = rng.gamma(2.6, (mean_target + 1.6) / 2.6) - 1.6
-    if rng.random() < 0.05 * c["expl"] * mf:
+    if rng.random() < 0.05 * c["expl"] * mf * (1.0 + 0.6 * max(0.0, e)):
         y += int(rng.integers(8, 45))
-    if rng.random() < 0.08 / mf:
+    if rng.random() < (0.08 / mf) * max(0.3, 1.0 - 0.6 * e):              # bessere Offense -> seltener gestoppt
         y = -int(rng.integers(1, 4))
-    fum = rng.random() < 0.011
+    fum = rng.random() < max(0.004, 0.011 * (1.0 - 0.5 * e))
     return {"yards": int(round(y)), "kind": "run", "turnover": fum, "pass": False}
 
 
