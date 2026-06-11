@@ -22,7 +22,9 @@ from gridiron.config import Config
 from gridiron.simulator import COVERAGES, PASS_CONCEPTS, RUN_CONCEPTS, play_outcome, simulate
 
 # Einheiten (Roster-Gruppen) und ihre Gewichte für Offense-/Defense-Stärke.
-GAME_DRIVES = 14                                          # Drives je Spiel (~7 Ballbesitze/Team)
+GAME_DRIVES = 14                                          # Drives je Spiel (~7 Ballbesitze/Team) – nur Schnell-Sim der KI-Spiele
+QUARTER_SECONDS = 360                                     # Echte Spieluhr: 6:00 je Viertel (Madden-Standard, beschleunigte Uhr)
+OT_SECONDS = 600                                          # Overtime-Periode: 10:00 Sudden Death
 OFF_UNITS = {"QB": 0.34, "OL": 0.30, "WR": 0.20, "RB": 0.16}
 DEF_UNITS = {"DL": 0.40, "DB": 0.32, "LB": 0.28}
 ST_UNITS = ["K"]                                     # Special Teams (Kicker) – zählt nicht in Off/Def-Rating
@@ -1777,6 +1779,13 @@ def _kickoff_return(rng) -> tuple[int, bool]:
 def start_game(cfg: Config, state: dict) -> dict:
     if state.get("active_game"):
         g = state["active_game"]
+        g.setdefault("quarter", g.get("q", 1))           # alte laufende Spiele auf echte Uhr nachrüsten
+        g.setdefault("clock", QUARTER_SECONDS)
+        g.setdefault("clock_running", False)
+        g.setdefault("timeouts", [3, 3])
+        g.setdefault("two_min", [g["quarter"] > 2, g["quarter"] > 2])
+        g.setdefault("open_receiver", g.get("pos", 0))
+        g.setdefault("playoff", state.get("phase") == "playoffs")
         if "opts" not in g:                              # alte laufende Spiele nachrüsten
             _new_decision_options(state)
             save(cfg, state)
@@ -1799,6 +1808,9 @@ def start_game(cfg: Config, state: dict) -> dict:
         "down": 1, "dist": 10, "ytz": 75.0,
         "absx": 75.0 if pos == 0 else 25.0,
         "log": [], "over": False, "box": {},
+        "quarter": 1, "clock": QUARTER_SECONDS, "clock_running": False,  # echte Spieluhr
+        "timeouts": [3, 3], "two_min": [False, False],                   # 3 Auszeiten/Hälfte, 2-Min-Warnung je Hälfte
+        "open_receiver": pos, "playoff": (state.get("phase") == "playoffs"),
         "off_snaps": 0, "philly_at": random.randint(1, 3), "philly_used": False,  # 🦅 Easter Egg: 1x pro Spiel
         "coin": {"user_receives": user_receives},
         "kickoff": {"return_to": ret_to, "td": ret_td, "by_user": (pos == 0) == user_is_home},
@@ -1849,10 +1861,18 @@ def _new_decision_options(state: dict) -> None:
         g["off_snaps"] = g.get("off_snaps", 0) + 1
         if not g.get("philly_used") and g["off_snaps"] == g.get("philly_at", 2):   # 🦅 genau einmal anbieten
             opts.append({"key": "__PHILLY__", "label": "🦅 Philly Special", "type": "Trick"})
-        g["opts"] = opts
+        g["opts"] = _with_timeout(g, opts)
     else:                                                 # Defense: 4 zufällige Coverages
         covs = random.sample(list(COVERAGES), min(4, len(COVERAGES)))
-        g["opts"] = [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in covs]
+        g["opts"] = _with_timeout(g, [{"key": k, "label": COVERAGES[k]["label"], "type": "Coverage"} for k in covs])
+
+
+def _with_timeout(g: dict, opts: list) -> list:
+    """Hängt eine Auszeit-Option an, wenn die Uhr läuft und das Nutzer-Team noch Auszeiten hat."""
+    uti = 0 if g["user_is_home"] else 1
+    if g.get("clock_running") and g["timeouts"][uti] > 0:
+        opts = list(opts) + [{"key": "__TIMEOUT__", "label": f"Auszeit ({g['timeouts'][uti]})", "type": "Uhr"}]
+    return opts
 
 
 def _scheme_pick(team: dict, off: bool) -> str:
@@ -1952,6 +1972,8 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     off, deff = teams[off_i], teams[def_i]
     user_has_ball = (g["pos"] == 0) == g["user_is_home"]
 
+    if choice == "__TIMEOUT__":                           # Auszeit – stoppt die Uhr, kein Snap
+        return _call_timeout(cfg, state, g)
     if g.get("pat"):                                      # Extra-Punkt / 2-Punkte-Conversion offen
         return _resolve_pat(cfg, state, g, off, deff, user_has_ball, choice)
     if choice == "__FG__":                                # Nutzer entscheidet sich fürs Field Goal
@@ -1986,6 +2008,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     pen = None if philly else _roll_penalty(random)
     if pen and _apply_penalty(g, pen, o, yards, attack_right, off, user_has_ball):
         pen_desc = g["log"][0]["desc"]
+        _runoff(g, 0 if pen["pre_snap"] else random.randint(4, 8), True)  # Strafe: Uhr steht (Vor-Snap: keine Zeit)
         _new_decision_options(state)
         save(cfg, state)
         return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
@@ -1993,6 +2016,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
                                      "ytz0": round(ytz0), "dist0": round(dist0)},
                 "game": _game_view(state)}
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
+    oob = (not o["turnover"]) and (not is_td) and o["kind"] in ("complete", "run") and random.random() < 0.16  # ins Seitenaus
     # Box-Score (Nutzer-Team)
     urost = teams[0].get("roster")
     if urost:
@@ -2014,7 +2038,11 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         g["absx"] = 100.0 if attack_right else 0.0
         label = ("🦅 Philly Special — " if philly else "") + "TOUCHDOWN! " + off["name"]
         scored = True
-        if user_has_ball:
+        if _ot_win(g):                                    # OT: Touchdown beendet das Spiel sofort (kein PAT)
+            switch = False
+            g["over"] = True
+            label += " — Sudden-Death-Sieg!"
+        elif user_has_ball:
             g["pat"] = {"pos": g["pos"]}                  # Nutzer wählt XP/2PT -> noch kein Wechsel
             switch = False
         else:                                             # KI: Extra-Punkt automatisch
@@ -2045,12 +2073,21 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
             else:
                 switch = False
 
+    if _ot_win(g) and not g["over"]:                      # OT: KI-Field-Goal/Score beendet das Spiel sofort
+        g["over"] = True
+        switch = False
+
     g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
                         "hs": g["score"][0], "as_": g["score"][1],
                         "off": user_has_ball, "yards": yards})
 
     if switch:
         _switch_possession(g)
+    if not g.get("pat") and not g["over"]:                # Spieluhr läuft ab (außer offener PAT / Spielende)
+        secs, stop = _clock_cost(o["kind"], scored, o["turnover"], oob)
+        _runoff(g, secs, stop)
+        if not g["over"]:
+            _ai_timeout_check(g)
 
     _new_decision_options(state)                          # Optionen für den nächsten Snap
     save(cfg, state)
@@ -2061,14 +2098,138 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
 
 
 def _switch_possession(g: dict) -> None:
-    """Ballwechsel: neuer Drive für das andere Team an der eigenen 25."""
+    """Ballwechsel: neuer Drive für das andere Team an der eigenen 25 (Uhr stoppt kurz)."""
     g["pos"] ^= 1
     g["drive"] += 1
-    g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
     g["down"], g["dist"], g["ytz"] = 1, 10, 75.0
     g["absx"] = 75.0 if g["pos"] == 0 else 25.0
-    if g["drive"] >= MAX_DRIVES:
-        g["over"] = True
+    g["clock_running"] = False                            # Possession-Wechsel: Uhr läuft erst beim nächsten Snap
+
+
+# --- Echte Spieluhr -------------------------------------------------------------------
+def _evt(g: dict, desc: str) -> dict:
+    """Uhr-/Spielereignis als neutraler Log-Eintrag (Viertelende, 2-Min, Timeout, Schlusspfiff)."""
+    return {"q": g["quarter"], "team": "", "desc": desc,
+            "hs": g["score"][0], "as_": g["score"][1], "off": False, "yards": 0}
+
+
+def _setup_drive(g: dict, pos: int) -> None:
+    """Frischer Ballbesitz an der eigenen 25 (Kickoff/Halbzeit/OT). Uhr steht bis zum Snap."""
+    g["pos"] = pos
+    g["down"], g["dist"], g["ytz"] = 1, 10, 75.0
+    g["absx"] = 75.0 if pos == 0 else 25.0
+    g["clock_running"] = False
+
+
+def _start_overtime(g: dict) -> None:
+    """Overtime: 10:00 Sudden Death, Münzwurf bestimmt den Ballbesitz, je 2 Auszeiten."""
+    g["quarter"] += 1                                     # 5, 6, ... (mehrere OT in den Playoffs möglich)
+    g["q"] = g["quarter"]
+    g["clock"] = OT_SECONDS
+    g["timeouts"] = [2, 2]
+    g["two_min"] = [True, True]                           # keine 2-Min-Warnung in der OT
+    g["log"].insert(0, _evt(g, f"— Overtime {g['quarter'] - 4} — Sudden Death —"))
+    _setup_drive(g, random.randint(0, 1))
+
+
+def _halftime_kickoff(g: dict) -> None:
+    """Halbzeit: zweite Hälfte beginnt, das andere Team als zu Spielbeginn bekommt den Ball."""
+    g["quarter"] = 3
+    g["q"] = 3
+    g["clock"] = QUARTER_SECONDS
+    g["timeouts"] = [3, 3]                                # Auszeiten zur Halbzeit zurückgesetzt
+    g["log"].insert(0, _evt(g, "— Halbzeit — Kickoff zur zweiten Hälfte —"))
+    _setup_drive(g, g.get("open_receiver", 0) ^ 1)
+
+
+def _advance_quarter(g: dict) -> None:
+    """Wird gerufen, wenn die Viertel-Uhr 0 erreicht: Viertel-/Halbzeit-/Spiel-/OT-Übergang."""
+    q = g["quarter"]
+    if q in (1, 3):                                       # Viertel im Halbzeit-Block: gleiche Possession läuft weiter
+        g["quarter"] += 1
+        g["q"] = g["quarter"]
+        g["clock"] = QUARTER_SECONDS
+        g["clock_running"] = False
+        g["log"].insert(0, _evt(g, f"— Ende Q{q} — Beginn Q{q + 1} —"))
+    elif q == 2:
+        _halftime_kickoff(g)
+    else:                                                 # Ende Q4 oder OT
+        if g["score"][0] != g["score"][1]:
+            g["over"] = True
+            g["log"].insert(0, _evt(g, "— Schlusspfiff —"))
+        elif g.get("playoff") and g["quarter"] < 9:      # Playoffs: weiter bis zur Entscheidung
+            _start_overtime(g)
+        elif g["quarter"] == 4:                           # Regular Season: genau eine Overtime
+            _start_overtime(g)
+        else:
+            g["over"] = True                              # OT vorbei & weiter unentschieden (Regular Season erlaubt Remis)
+            g["log"].insert(0, _evt(g, "— Schlusspfiff — Unentschieden nach OT —"))
+
+
+def _ot_win(g: dict) -> bool:
+    """In der OT (Sudden Death) beendet jeder Punktgewinn das Spiel sofort."""
+    return g["quarter"] >= 5 and g["score"][0] != g["score"][1]
+
+
+def _runoff(g: dict, seconds: int, stop: bool) -> None:
+    """Zentral: zieht Spielzeit ab, behandelt 2-Minuten-Warnung und Viertel-/Spiel-Übergänge.
+    stop=True, wenn die Uhr nach dem Down steht (Incomplete, Out-of-Bounds, Score, Wechsel, Timeout)."""
+    if g.get("over"):
+        return
+    q = g["quarter"]
+    before = g["clock"]
+    g["clock"] = max(0, before - max(0, int(seconds)))
+    g["clock_running"] = not stop
+    half = 0 if q <= 2 else 1
+    if q in (2, 4) and not g["two_min"][half] and before > 120 and g["clock"] <= 120:
+        g["two_min"][half] = True                        # Zwei-Minuten-Warnung: Uhr steht
+        g["clock_running"] = False
+        g["log"].insert(0, _evt(g, "⏱ Zwei-Minuten-Warnung"))
+    if g["clock"] <= 0:
+        _advance_quarter(g)
+
+
+def _clock_cost(kind: str, scored: bool, turnover: bool, oob: bool) -> tuple[int, bool]:
+    """Verbrauchte Spielzeit (Sek.) und ob die Uhr danach steht – realistische Football-Uhr."""
+    if scored:
+        return random.randint(4, 8), True                # Touchdown/Field Goal: Uhr steht
+    if kind == "incomplete":
+        return random.randint(5, 8), True                # unvollständiger Pass: Uhr steht
+    if turnover or kind == "int":
+        return random.randint(8, 14), True               # Ballverlust: Uhr steht (Wechsel)
+    if oob:
+        return random.randint(8, 14), True               # ins Aus gelaufen: Uhr steht
+    return random.randint(28, 40), False                 # Lauf/Pass/Sack im Feld: Uhr läuft weiter
+
+
+def _call_timeout(cfg: Config, state: dict, g: dict) -> dict:
+    """Vom Nutzer gerufene Auszeit: stoppt die Uhr, kostet keine Spielzeit."""
+    uti = 0 if g["user_is_home"] else 1
+    if g["timeouts"][uti] <= 0 or not g.get("clock_running"):
+        return {"error": "Keine Auszeit möglich (Uhr steht oder keine Auszeit übrig)."}
+    g["timeouts"][uti] -= 1
+    g["clock_running"] = False
+    g["log"].insert(0, _evt(g, f"⏱ Auszeit {state['teams'][0]['name']} ({g['timeouts'][uti]} übrig)"))
+    _new_decision_options(state)
+    save(cfg, state)
+    user_off = (g["pos"] == 0) == g["user_is_home"]
+    return {"ok": True, "play": {"desc": "Auszeit genommen", "yards": 0, "scored": False,
+                                 "kind": "timeout", "user_off": user_off},
+            "game": _game_view(state)}
+
+
+def _ai_timeout_check(g: dict) -> None:
+    """KI nutzt in den letzten 2 Minuten einer Hälfte Auszeiten, wenn sie zurückliegt und die Uhr läuft."""
+    if not g.get("clock_running") or g["quarter"] not in (2, 4) or g["clock"] > 120:
+        return
+    ai = 1 if g["user_is_home"] else 0                    # KI-Team-Index (0/1)
+    user_has_ball = (g["pos"] == 0) == g["user_is_home"]  # läuft die Uhr, weil der Nutzer angreift?
+    ai_score = g["score"][1] if g["user_is_home"] else g["score"][0]
+    user_score = g["score"][0] if g["user_is_home"] else g["score"][1]
+    if user_has_ball and ai_score < user_score and g["timeouts"][ai] > 0 and random.random() < 0.7:
+        g["timeouts"][ai] -= 1
+        g["clock_running"] = False
+        g["log"].insert(0, _evt(g, f"⏱ Auszeit (Gegner) – {g['timeouts'][ai]} übrig"))
 
 
 def _pat_log(g: dict, off: dict, label: str, user_off: bool) -> None:
@@ -2095,6 +2256,7 @@ def _resolve_pat(cfg: Config, state: dict, g: dict, off: dict, deff: dict,
         kind, fg_dist = "fg", 18                          # Kick-Animation (Extra-Punkt)
     _pat_log(g, off, label, user_off)
     _switch_possession(g)
+    _runoff(g, random.randint(4, 7), True)                # Zeit des Touchdown-Snaps; PAT selbst ist ungetaktet
     _new_decision_options(state)
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": True, "good": good, "kind": kind,
@@ -2116,7 +2278,12 @@ def _attempt_fg(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) ->
         label = f"Field Goal daneben aus {dist} Yd"
         scored = False
     _pat_log(g, off, label, user_off)
-    _switch_possession(g)
+    if scored and _ot_win(g):                             # OT: erfolgreiches Field Goal beendet das Spiel
+        g["over"] = True
+        g["log"].insert(0, _evt(g, "— Sudden-Death-Sieg per Field Goal —"))
+    else:
+        _switch_possession(g)
+        _runoff(g, random.randint(5, 9), True)            # Field Goal: Uhr steht, Wechsel
     _new_decision_options(state)
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": scored, "good": scored, "kind": "fg",
@@ -2135,16 +2302,15 @@ def _attempt_punt(cfg: Config, state: dict, g: dict, off: dict, user_off: bool) 
     recv = state["teams"][g["ai"] if g["pos"] == 0 else g["hi"]]
     g["pos"] ^= 1                                         # Ballbesitz wechselt, neuer Drive
     g["drive"] += 1
-    g["q"] = min(4, g["drive"] // (MAX_DRIVES // 4 or 1) + 1)
     new_right = (g["pos"] == 1)
     g["ytz"] = 80.0 if touchback else max(1.0, min(99.0, round((100.0 - nabs) if new_right else nabs, 1)))
     g["absx"] = round((100.0 - g["ytz"]) if new_right else g["ytz"], 1)
     g["down"], g["dist"] = 1, 10
-    if g["drive"] >= MAX_DRIVES:
-        g["over"] = True
+    g["clock_running"] = False
     label = f"Punt {net} Yd" + (" · Touchback" if touchback else "") + f" — Ball an {recv['name']}"
     g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
                         "hs": g["score"][0], "as_": g["score"][1], "off": user_off, "yards": 0})
+    _runoff(g, random.randint(10, 16), True)              # Punt: Uhr steht, Ballwechsel
     _new_decision_options(state)
     save(cfg, state)
     return {"ok": True, "play": {"desc": label, "yards": 0, "scored": False, "kind": "punt",
@@ -2262,7 +2428,9 @@ def _game_view(state: dict) -> dict:
         "home": home["name"], "away": away["name"],
         "habbr": home.get("abbr", "HOM"), "aabbr": away.get("abbr", "AWY"),
         "hcolor": home.get("color", "#16c784"), "acolor": away.get("color", "#ef5350"),
-        "hs": g["score"][0], "as": g["score"][1], "q": g["q"],
+        "hs": g["score"][0], "as": g["score"][1], "q": g["quarter"],
+        "quarter": g["quarter"], "clock": g["clock"], "clock_running": g.get("clock_running", False),
+        "timeouts": g.get("timeouts", [3, 3]), "ot": g["quarter"] > 4,
         "down": g["down"], "dist": g["dist"], "ytz": round(g["ytz"]), "absx": round(g["absx"], 1),
         "drive": g["drive"], "max_drives": MAX_DRIVES, "over": g["over"],
         "possession": teams[off_i]["name"], "user_offense": user_has_ball,

@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v51-plays"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v52-clock"          # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -320,6 +320,12 @@ _STYLE2 = """
  .tvpts{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;min-width:50px;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,.55);letter-spacing:-.02em}
  .tvmid{text-align:center;min-width:60px}.tvmid .qn{font-weight:800;font-size:16px}.tvmid .sub{color:var(--mut);font-size:11px}
  .tvmid .clk{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#cdeede}
+ .tvmid .clk.run{color:#16c784}
+ .toline{display:flex;justify-content:center;gap:10px;margin-top:3px}
+ .toline .tol,.toline .tor{display:inline-flex;gap:2px}
+ .todot{width:9px;height:3px;border-radius:2px;background:#16c784;display:inline-block}
+ .todot.off{background:#3a463f}
+ .optbtn.to{border-color:#d8a23a;background:#2a2516}
  .pclock{display:inline-block;font-weight:800;font-variant-numeric:tabular-nums;background:var(--tile);border:1px solid var(--line);border-radius:8px;padding:4px 11px;font-size:13px;margin:2px 0 7px}
  .pclock.urgent{color:#ef5350;border-color:#ef5350;animation:pulse 1s infinite}
  .tvfield{display:flex;height:78px;margin:14px 0 4px;border-radius:10px;overflow:hidden;border:1px solid #06140d}
@@ -1862,27 +1868,18 @@ function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGam
 
 /* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
 let liveG=null, playBusy=false;
-/* Spieluhr: 1 Min Echtzeit pro Viertel (4), 15 s zum Play-Callen */
-let gameQ=1, gameClock=60, playClock=15, clockIv=null;
-function fmtClock(s){s=Math.max(0,s);return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}
-function startClock(){if(!clockIv)clockIv=setInterval(clockTick,1000);}
-function stopClock(){if(clockIv){clearInterval(clockIv);clockIv=null;}}
-function updateClockUI(){const q=$('gq');if(q)q.textContent='Q'+gameQ;const c=$('clk');if(c)c.textContent=fmtClock(gameClock);
- const p=$('pclk');if(p){p.textContent='⏱ '+Math.max(0,playClock)+'s';p.className='pclock'+(playClock<=5?' urgent':'');}}
-function clockTick(){
- if(!liveG||liveG.over||playBusy)return;             // pausiert bei Animation/Spielende
- playClock--; gameClock--;
- if(gameClock<=0){gameQ++; gameClock=60; if(gameQ>4){stopClock(); endGameByClock(); return;}}
- if(playClock<=0)autoPlay();                          // Zeit fürs Play-Call abgelaufen -> Auto-Call
- updateClockUI();
-}
-function autoPlay(){if(!liveG||playBusy)return;const o=liveG.options||[];if(!o.length)return;gamePlay(o[Math.floor(Math.random()*o.length)].key);}
-async function endGameByClock(){const r=await api('/api/fr/game/end','POST');if(r&&r.error)return;if(r.view)renderMgr(r.view);if(r.result)showGameResult(r.result);}
+/* Echte Spieluhr: Viertelzeit kommt vom Backend und läuft pro Spielzug ab (kein Echtzeit-Ticker). */
+let gameQ=1, gameClock=360;
+function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}
+function qLabel(q){q=q||gameQ;return q>4?('OT'+(q>5?(q-4):'')):('Q'+q);}
+function toDots(n){let s='';for(let i=0;i<3;i++)s+='<span class="todot'+(i<n?'':' off')+'"></span>';return s;}
+function startClock(){}                               // Uhr ist backend-gesteuert (Stubs für Kompatibilität)
+function stopClock(){}
 async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
-function openGame(g){closeGame();liveG=g;gameQ=1;gameClock=60;playClock=15;const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
+function openGame(g){closeGame();liveG=g;gameQ=g.quarter||1;gameClock=(g.clock!=null?g.clock:360);const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
  o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();
- const go=()=>{if(!liveG)return;renderGame(liveG);if(!liveG.over)startClock();};
+ const go=()=>{if(!liveG)return;renderGame(liveG);};
  if(g.log&&g.log.length===0){gameIntro(g,go);}else go();}   // frisches Spiel: Intro -> Münzwurf -> Kickoff
 function gameIntro(g,done){let fin=false;const end=()=>{if(fin)return;fin=true;clearTimeout(window._introT);done();};
  window.introSkip=end;const M=$('gamemodal');if(!M){end();return;}
@@ -1924,18 +1921,20 @@ function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div 
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
 let _preG=null;
 function renderGame(g,play){
- if(!g.over)playClock=15;                                    // jeder neue Snap: Play-Clock zurücksetzen
  const willAnimate=!!(play&&(play.concept||play.kind==='fg'||play.kind==='punt'||play.penalty));   // läuft eine Snap-/Kick-/Flaggen-Animation?
  if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern
- // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Kommentar) erst NACH der Animation
+ // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Uhr, Kommentar) erst NACH der Animation
  const disp=(willAnimate&&_preG)?_preG:g;
  if(!willAnimate)_preG=null;
+ gameQ=disp.quarter||disp.q||1; gameClock=(disp.clock!=null?disp.clock:0);   // Spieluhr aus dem Backend-Stand
+ const tos=disp.timeouts||[3,3];
  let h='<div class="modalhead"><h3><span class="livedot"></span> Dein Spiel</h3>'+
    '<button class="ghost" onclick="abortGame()">Verlassen</button></div>'+
    '<div class="tvscore">'+
      '<div class="tvteam">'+teamLogo(disp.aabbr,disp.acolor,'lg')+'<span class="nm">'+esc(disp.away)+'</span></div>'+
      '<div class="tvpts">'+disp['as']+'</div>'+
-     '<div class="tvmid"><div class="qn" id="gq">Q'+gameQ+'</div><div class="sub clk" id="clk">'+fmtClock(gameClock)+'</div></div>'+
+     '<div class="tvmid"><div class="qn" id="gq">'+qLabel(gameQ)+'</div><div class="sub clk'+(disp.clock_running?' run':'')+'" id="clk">'+fmtClock(gameClock)+'</div>'+
+       '<div class="toline"><span class="tol">'+toDots(tos[1])+'</span><span class="tor">'+toDots(tos[0])+'</span></div></div>'+
      '<div class="tvpts">'+disp.hs+'</div>'+
      '<div class="tvteam r"><span class="nm">'+esc(disp.home)+'</span>'+teamLogo(disp.habbr,disp.hcolor,'lg')+'</div>'+
    '</div>'+
@@ -1949,11 +1948,10 @@ function renderGame(g,play){
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
  else{const ban=disp.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':(disp.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
    h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'?'off':'def')+'">'+ban+'</div>'+
-   '<div class="pclock'+(playClock<=5?' urgent':'')+'" id="pclk">⏱ '+playClock+'s</div>'+
-   '<div class="optgrid">'+(disp.options||[]).map(o=>'<button class="optbtn" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
+   '<div class="optgrid">'+(disp.options||[]).map(o=>'<button class="optbtn'+(o.key==='__TIMEOUT__'?' to':'')+'" '+(playBusy?'disabled':'')+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>').join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+(playBusy?'disabled':'')+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+(playBusy?'disabled':'')+'>Spiel zu Ende simulieren</button></div>';}
- h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">Q'+p.q+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
+ h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">'+qLabel(p.q)+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
  if(play&&play.concept)animateGamePlay(play);
  else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
