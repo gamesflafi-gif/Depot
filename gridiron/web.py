@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v66-tackle"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v67-numbers"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -799,8 +799,8 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{p+=(i?'L':'M')+mapX(pt[0]).toFixed(1)+' '+mapY(pt[1]).toFixed(1)+' ';});
   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.4:1.7)+'" opacity="'+(acc?0.95:0.6)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  svg.innerHTML=s;
- d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i));
- d.offense.forEach((o,i)=>addPlayer(svg,o,offC,'o'+i,preSnap?{pos:o.pos}:o));   // Vor-Snap: keine Ziel-Markierung
+ d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i,null,cols.defAbbr));
+ d.offense.forEach((o,i)=>addPlayer(svg,o,offC,'o'+i,preSnap?{pos:o.pos}:o,cols.offAbbr));   // Vor-Snap: keine Ziel-Markierung
  const qb=d.offense.find(o=>o.pos==='QB');
  const bx=preSnap?26.65:qb.x, by=preSnap?-0.7:qb.y;   // Vor-Snap: Ball ruht am Spot (Line of Scrimmage)
  svg.appendChild(el('ellipse',{id:P+'_pball',cx:mapX(bx),cy:mapY(by),rx:4,ry:2.5,fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:preSnap?1:0}));
@@ -810,11 +810,15 @@ const _ppos={};
 function _shade(c,a){c=(''+(c||'#888888')).replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
  const f=i=>{const v=Math.max(0,Math.min(255,parseInt(c.substr(i,2),16)+a));return v.toString(16).padStart(2,'0');};
  return '#'+f(0)+f(2)+f(4);}
+// Realistische Rückennummer je Position (deterministisch pro Spieler)
+const _NUMRANGE={QB:[1,12],RB:[20,34],FB:[40,46],WR:[80,89],X:[10,19],Z:[80,88],SL:[11,18],TE:[83,89],OL:[60,79],
+ DE:[90,99],DT:[71,98],LB:[40,59],CB:[20,39],S:[20,39],DB:[20,39],K:[1,9]};
+function _jersey(pos,i){const r=_NUMRANGE[pos]||[1,99];return r[0]+((i*7+5)%(r[1]-r[0]+1));}
 /* Detaillierte Spielerfigur (Top-Down): Schulterpolster mit Plastik-Schattierung, Arme & Handschuhe,
    Helm mit Glanz, Mittelstreifen und Facemask-Käfig, Cleats. Figur zeigt immer nach oben; die
    .face-Gruppe dreht sie in Laufrichtung (Defense im Stand um 180° gedreht). */
-function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p.y);
- const side=(id&&id[0]==='d')?-1:1;
+function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const sx=mapX(p.x),sy=mapY(p.y);
+ const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
  const edge=_shade(color,-92),hel=_shade(color,-26),sleeve=_shade(color,-14),glove=_shade(color,92),stripe=_shade(color,104),cleat=_shade(color,-40),fm='#10191333';
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx+' '+sy+')');
  g.appendChild(el('ellipse',{cx:0,cy:5.2,rx:8.0,ry:2.8,fill:'#03100a',opacity:.34}));   // Schatten bleibt flach (an größere Figur angepasst)
@@ -841,10 +845,9 @@ function addPlayer(svg,p,color,id,o){const P=svg.id;const sx=mapX(p.x),sy=mapY(p
  fig.appendChild(el('line',{x1:0,y1:-7.7,x2:0,y2:-4.7,stroke:fm,'stroke-width':.8}));                             // Facemask: Streben
  fig.appendChild(el('line',{x1:-1.45,y1:-7.1,x2:-1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
  fig.appendChild(el('line',{x1:1.45,y1:-7.1,x2:1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
- fig.appendChild(el('path',{d:'M-2.7 -4.2 Q-1.5 -4.9 -0.5 -3.9',fill:'none',stroke:stripe,'stroke-width':.8,opacity:.95}));   // Helm-Logo (kleine Flügel-Decal)
- fig.appendChild(el('path',{d:'M2.7 -4.2 Q1.5 -4.9 0.5 -3.9',fill:'none',stroke:stripe,'stroke-width':.8,opacity:.95}));
+ if(abbr){const t=el('text',{x:0,y:-3.4,'text-anchor':'middle','font-size':3.2,fill:stripe,'font-weight':800,stroke:edge,'stroke-width':.45,'paint-order':'stroke'});t.textContent=(''+abbr)[0];fig.appendChild(t);}   // Team-Logo (Helm-Buchstabe)
  const sc=el('g',{}); sc.setAttribute('transform','scale(1.2)'); sc.appendChild(fig); fc.appendChild(sc); g.appendChild(fc);   // Figur etwas größer (besser sichtbar)
- const lbl=(o?(o.pos==='OL'?'':o.pos):p.pos); if(lbl){const t=el('text',{x:0,y:3.4,'text-anchor':'middle','font-size':6.0,fill:'#ffffff','font-weight':800,stroke:'#0a140f','stroke-width':.8,'paint-order':'stroke'});t.textContent=lbl;g.appendChild(t);}  // Label aufrecht & lesbar
+ if(pos!=='OL'&&pos!=='DT'){const num=_jersey(pos,idx);const t=el('text',{x:0,y:3.6,'text-anchor':'middle','font-size':6.2,fill:'#ffffff','font-weight':800,stroke:'#0a140f','stroke-width':.85,'paint-order':'stroke'});t.textContent=num;g.appendChild(t);}   // Rückennummer (aufrecht, lesbar)
  svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
 // Figur dreht weich in ihre Laufrichtung (alle Figuren zeichnen nach oben -> einheitliche Formel)
@@ -2097,7 +2100,9 @@ async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=fals
    ()=>{_penaltyCard(svg,play);cont();});                 // erst Tackle, dann Flaggen-Info, dann Strafe
  return;
 }
-function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;return userOff?{off:me,def:opp}:{off:opp,def:me};}
+function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;
+ const myAb=(lastView&&lastView.abbr)||(g.user_is_home?g.habbr:g.aabbr),opAb=g.user_is_home?g.aabbr:g.habbr;
+ return userOff?{off:me,def:opp,offAbbr:myAb,defAbbr:opAb}:{off:opp,def:me,offAbbr:opAb,defAbbr:myAb};}
 async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
  const concept=g.user_offense?((g.options[0]&&g.options[0].key)||'Inside Zone'):'Inside Zone';
  const coverage=g.user_offense?'Cover 2':((g.options[0]&&g.options[0].key)||'Cover 2');
