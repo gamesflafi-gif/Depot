@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v82-football"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v83-life"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -258,9 +258,16 @@ _STYLE2 = """
  .fieldwrap{margin:12px 0 10px;border-radius:12px;overflow:hidden;border:1px solid #06140d;box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
  #field{display:block;width:100%;height:auto}
  #field .pl{filter:drop-shadow(0 1.5px 1.5px rgba(0,0,0,.55))}
- .fig{transform-box:fill-box;transform-origin:center;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5))}
+ .fig{transform-box:fill-box;transform-origin:center;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5));animation:idle 3.1s ease-in-out infinite}
+ @keyframes idle{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-.28px) scaleY(1.014)}}   /* leichtes Atmen/Gewicht verlagern im Stand */
+ .dust{transform-box:fill-box;transform-origin:center}
+ .d1{animation:d1 .55s ease-out forwards}@keyframes d1{0%{opacity:.7}100%{transform:translate(7px,-5px) scale(.3);opacity:0}}
+ .d2{animation:d2 .55s ease-out forwards}@keyframes d2{0%{opacity:.7}100%{transform:translate(-7px,-4px) scale(.3);opacity:0}}
+ .d3{animation:d3 .6s ease-out forwards}@keyframes d3{0%{opacity:.6}100%{transform:translate(5px,4px) scale(.3);opacity:0}}
+ .d4{animation:d4 .6s ease-out forwards}@keyframes d4{0%{opacity:.6}100%{transform:translate(-5px,3px) scale(.3);opacity:0}}
  .fig.pop{animation:pop .4s ease}@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.6)}100%{transform:scale(1)}}
  .fig.down{animation:tackle .5s ease forwards}@keyframes tackle{0%{transform:rotate(0) scale(1)}45%{transform:translateY(-1px) rotate(40deg) scale(1.06)}100%{transform:translateY(2px) rotate(82deg) scale(.8);opacity:.72}}
+ .fig.downb{animation:tackleb .5s ease forwards}@keyframes tackleb{0%{transform:rotate(0) scale(1)}45%{transform:translateY(-1px) rotate(-40deg) scale(1.06)}100%{transform:translateY(2px) rotate(-82deg) scale(.8);opacity:.72}}
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
@@ -852,7 +859,7 @@ function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx.toFixed(1)+' '+sy.toFixed(1)+') scale('+ds+')');
  g.appendChild(el('ellipse',{cx:0.7,cy:0.8,rx:4.7,ry:1.55,fill:'#03100a',opacity:.42}));         // Bodenschatten (leicht versetzt)
  const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate(0)');  // wird von faceP leicht in Laufrichtung geneigt
- const fig=el('g',{}); fig.setAttribute('class','fig');                                            // Animations-Gruppe (pop/spin/down/cel)
+ const fig=el('g',{}); fig.setAttribute('class','fig'); fig.setAttribute('style','animation-delay:'+(-((idx*0.41+(side<0?1.3:0))%3.1)).toFixed(2)+'s');   // Animations-Gruppe; Phase pro Spieler versetzt (kein Gleichschritt)
  const num=_jersey(pos,idx);
  if(o&&o.target)fig.appendChild(el('ellipse',{cx:0,cy:0.4,rx:5.6,ry:2.0,fill:'none',stroke:'#ffd34d','stroke-width':1.3,opacity:.9,'class':'pulse'}));
  // Beine in eigenen Gruppen (.legL/.legR), schwingen beim Laufen um die Hüfte
@@ -910,12 +917,12 @@ function _refsOnField(d){const qb=d.offense.find(o=>o.pos==='QB');const a=PJ(qb?
         '<g transform="translate('+b[0].toFixed(1)+' '+b[1].toFixed(1)+') scale('+sb+')">'+_refFig(0,0)+'</g>';}
 function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;const q=PJ(x,y);g.setAttribute('transform','translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+(DS(y)*_FB).toFixed(3)+')');_ppos[P+id]=[x,y];}
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
-function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
+function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block');f.classList.add(((parseInt((''+id).replace(/\D/g,''))||0)%2)?'downb':'down');}}   // Fall mal nach links, mal nach rechts
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','catch');void f.getBBox();f.classList.add('catch');setTimeout(()=>f.classList.remove('catch'),520);}}   // eigene Fang-Animation (greifen)
 function throwFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','throw');void f.getBBox();f.classList.add('throw');setTimeout(()=>f.classList.remove('throw'),440);}}   // QB-Wurfbewegung
 function handFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('hand');void f.getBBox();f.classList.add('hand');setTimeout(()=>f.classList.remove('hand'),340);}}   // Handoff-Geste
-function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','spin');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
+function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','downb','spin','run','block','carry');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
 /* Kino-Jubel: Spiel pausiert, Endzonen-Kamera mit Stadion, Feld, traurigen Gegnern & herbeieilendem Team */
 function _celFig(color,cls,extra){return '<g class="fig '+(cls||'')+'"'+(extra||'')+'>'+
    '<rect x="-2.1" y="3.4" width="4.2" height="5.8" rx="1.3" fill="'+color+'" stroke="#06140d" stroke-width="0.9"/>'+   // Rumpf/Beine
@@ -1162,8 +1169,10 @@ function playAnim(svg,d,res,onDone){
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-// Aufprall-Ring am Tackle-Punkt (kurzer Schockwellen-Effekt)
-function _impact(svg,fx,fy){const q=PJ(fx,fy),sc=DS(fy);svg.appendChild(el('circle',{cx:q[0].toFixed(1),cy:(q[1]-2.5*sc).toFixed(1),r:(8*sc).toFixed(1),fill:'none',stroke:'#fff','stroke-width':(2*sc).toFixed(1),'class':'imp'}));}
+// Aufprall am Tackle-Punkt: Schockwellen-Ring + aufgewirbelte Rasen-/Staub-Partikel
+function _impact(svg,fx,fy){const q=PJ(fx,fy),sc=DS(fy),cx=q[0],cy=q[1]-2.5*sc;
+ svg.appendChild(el('circle',{cx:cx.toFixed(1),cy:cy.toFixed(1),r:(8*sc).toFixed(1),fill:'none',stroke:'#fff','stroke-width':(2*sc).toFixed(1),'class':'imp'}));
+ ['d1','d2','d3','d4'].forEach((c,k)=>svg.appendChild(el('circle',{cx:cx.toFixed(1),cy:(cy+1.5*sc).toFixed(1),r:(1.6*sc).toFixed(1),fill:(k%2?'#b7c4a8':'#9a8f6e'),'class':'dust '+c})));}   // Grasfetzen/Staub
 function showResult(svg,res){
  const td=res.td;
  const label=res.fum?'FUMBLE! Ball verloren':td?'TOUCHDOWN!':res.kind==='incomplete'?'Incomplete':res.kind==='int'?'INTERCEPTION':res.kind==='sack'?('Sack '+Math.round(res.yards)):((res.yards>=0?'+':'')+Number(res.yards).toFixed(res.kind==='run'?0:1)+' Yds');
