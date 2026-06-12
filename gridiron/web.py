@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v86-playart"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v87-fs"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -580,6 +580,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+function goFullscreen(){try{const el=document.documentElement;const rq=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen;if(rq&&!document.fullscreenElement){const r=rq.call(el);if(r&&r.catch)r.catch(()=>{});}}catch(e){}}   // Spielansicht im Vollbild -> alles ohne Scrollen
+function exitFullscreen(){try{if(document.fullscreenElement&&document.exitFullscreen){const r=document.exitFullscreen();if(r&&r.catch)r.catch(()=>{});}}catch(e){}}
 function lockBody(){document.documentElement.classList.add('noscroll');document.body.classList.add('noscroll');}
 function _releaseBody(){document.documentElement.classList.remove('noscroll');document.body.classList.remove('noscroll');document.body.style.top='';}
 function unlockBodyIfNone(){if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();}   // nur sperren solange wirklich ein Overlay offen ist
@@ -2074,8 +2076,8 @@ function qLabel(q){q=q||gameQ;return q>4?('OT'+(q>5?(q-4):'')):('Q'+q);}
 function toDots(n){let s='';for(let i=0;i<3;i++)s+='<span class="todot'+(i<n?'':' off')+'"></span>';return s;}
 function startClock(){}                               // Uhr ist backend-gesteuert (Stubs für Kompatibilität)
 function stopClock(){}
-async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
-async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
+async function startGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
+async function resumeGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 function openGame(g){closeGame();liveG=g;gameQ=g.quarter||1;gameClock=(g.clock!=null?g.clock:360);const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
  o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();
  const go=()=>{if(!liveG)return;renderGame(liveG);};
@@ -2314,7 +2316,7 @@ function toggleResBox(){const b=$('resbox');if(!b)return;if(b.innerHTML){b.inner
  else{b.innerHTML=boxSection({box:_resBox});$('resbtn').textContent='Statistik ausblenden';}}
 function closeResult(){const o=$('resultoverlay');if(o)o.remove();unlockBodyIfNone();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
-function closeGame(){stopClock();const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;unlockBodyIfNone();}
+function closeGame(){stopClock();const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;exitFullscreen();unlockBodyIfNone();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
