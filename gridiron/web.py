@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v93-juke"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v94-tackle"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -270,6 +270,7 @@ _STYLE2 = """
  .fig.downb{animation:tackleb .5s ease forwards}@keyframes tackleb{0%{transform:rotate(0) scale(1)}45%{transform:translateY(-1px) rotate(-40deg) scale(1.06)}100%{transform:translateY(2px) rotate(-82deg) scale(.8);opacity:.72}}
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
  .fig.juke{animation:juke .34s ease}@keyframes juke{0%{transform:translateX(0) rotate(0)}30%{transform:translateX(-1.5px) rotate(-11deg)}68%{transform:translateX(1.5px) rotate(11deg)}100%{transform:translateX(0) rotate(0)}}
+ .fig.dive{animation:dive .5s ease forwards}@keyframes dive{0%{transform:translateY(0) rotate(0)}38%{transform:translateY(-2.4px) rotate(-22deg) scaleY(1.1)}100%{transform:translateY(1px) rotate(-78deg) scale(.84);opacity:.8}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -976,6 +977,7 @@ function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelecto
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block');f.classList.add(((parseInt((''+id).replace(/\D/g,''))||0)%2)?'downb':'down');}}   // Fall mal nach links, mal nach rechts
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function jukeFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('down')){f.classList.remove('juke');void f.getBBox();f.classList.add('juke');setTimeout(()=>f.classList.remove('juke'),350);}}   // Ausweichschritt
+function diveFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block','spin');f.classList.add('dive');}}   // Verteidiger hechtet in den Tackle
 function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','catch');void f.getBBox();f.classList.add('catch');setTimeout(()=>f.classList.remove('catch'),520);}}   // eigene Fang-Animation (greifen)
 function throwFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','throw');void f.getBBox();f.classList.add('throw');setTimeout(()=>f.classList.remove('throw'),440);}}   // QB-Wurfbewegung
 function handFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('hand');void f.getBBox();f.classList.add('hand');setTimeout(()=>f.classList.remove('hand'),340);}}   // Handoff-Geste
@@ -1158,7 +1160,9 @@ function playAnim(svg,d,res,onDone){
      const ahead=(p===nearD)?0.0:Math.min(0.42,Math.max(0,(carrier.y-p.y))/16);                      // der Tackler geht direkt auf den Ballträger
      const boost=(p===nearD)?1.22:1.0;                                                               // Tempo-Edge -> erreicht den Spot mit dem Läufer (echter Tackle, kein Phantom)
      steer(p,carrier.x+(dest[0]-carrier.x)*ahead,carrier.y+(dest[1]-carrier.y)*ahead,sp*boost,dt,rp(p.pos));return;}
-   if(p.role==='rush'){steer(p,qb.x+Math.sin(el*6+p.i)*0.6,qb.y,sp*(p._ol?0.9:1.0),dt,rp(p.pos));return;}   // zum QB – Hand-Fight, von der O-Line geblockt
+   if(p.role==='rush'){
+     if(p._ol&&el>0.5&&el>(p._mvT||0)&&Math.hypot(p._ol.x-p.x,p._ol.y-p.y)<1.8){p._mvT=el+1.3;p.vx=(p.vx||0)+((p.i%2)?1:-1)*2.1;spinFig(P,'d_'+p.i);}   // Rip/Spin-Move um den Blocker herum
+     steer(p,qb.x+Math.sin(el*6+p.i)*0.6,qb.y,sp*(p._ol?0.9:1.0),dt,rp(p.pos));return;}   // zum QB – Hand-Fight, von der O-Line geblockt
    if(p.role==='man'&&p.cover){const r=O.find(o=>o.pos===p.cover);if(r){const trail=Math.min(2.6,0.7+el*0.85);steer(p,r.x+(p.x<r.x?-0.4:0.4),r.y-trail,sp*0.97,dt,rp(p.pos));}else steer(p,p.x,p.y,sp,dt,rp(p.pos));return;}
    if(p.drop){let bestR=null,bd=8.5;O.forEach(o=>{if(o.pos==='QB'||o.pos==='OL')return;const dd=Math.hypot(o.x-p.drop[0],o.y-p.drop[1]);if(dd<bd){bd=dd;bestR=o;}});  // Zone: Landmarke, dann auf den nächsten Receiver brechen
      const tx=bestR?p.drop[0]+(bestR.x-p.drop[0])*0.5:p.drop[0],ty=bestR?p.drop[1]+(bestR.y-p.drop[1])*0.32:p.drop[1];steer(p,tx,ty,sp*0.9,dt,rp(p.pos));return;}
@@ -1230,11 +1234,11 @@ function playAnim(svg,d,res,onDone){
       if(endSpot)carrier.y=endSpot[1];moveP(P,'o'+carrier.i,carrier.x,carrier.y);
       const near=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).sort((a,b)=>a[1]-b[1]);
       downFig(P,'o'+carrier.i);
-      const closers=near.filter(a=>a[1]<3.6).slice(0,2);                          // nur Verteidiger, die WIRKLICH da sind (kein Teleport)
-      if(closers.length)closers.forEach((a,k)=>{const p=a[0],sgn=k?-1:1;
-        if(a[1]<1.7)moveP(P,'d_'+p.i,Math.max(1.5,Math.min(51.8,carrier.x+sgn*0.8)),carrier.y-0.55);  // nur leicht andocken, wenn schon dran
-        downFig(P,'d_'+p.i);});
-      else if(near[0]&&near[0][1]<6)downFig(P,'d_'+near[0][0].i);                 // sonst hechtet der nächste aus der Distanz (an Ort und Stelle)
+      const closers=near.filter(a=>a[1]<3.8).slice(0,2);                          // Verteidiger, die wirklich da sind (kein Teleport)
+      if(closers.length)closers.forEach(a=>{const p=a[0],sgn=(p.x>=carrier.x)?1:-1;   // von SEINER Seite in den Tackle hechten (Gang-Tackle von beiden Seiten)
+        if(a[1]<2.2)moveP(P,'d_'+p.i,Math.max(1.5,Math.min(51.8,carrier.x+sgn*0.85)),carrier.y-0.45);   // nur andocken, wenn schon nah (kein Sprung)
+        diveFig(P,'d_'+p.i);});
+      else if(near[0]&&near[0][1]<6.5)diveFig(P,'d_'+near[0][0].i);               // sonst hechtet der nächste aus der Distanz
       _impact(svg,carrier.x,carrier.y);}                                          // Aufprall-Effekt am Tackle
     if(!res.noResult)showResult(svg,{kind,yards,td,fum:fumble,pt:(fumble&&fumbleSpot?fumbleSpot:(carrier?[carrier.x,carrier.y]:(kind==='int'&&intD?[intD.x,intD.y]:(kind==='sack'?[qb.x,vy]:catchPt))))});
     if(onDone)setTimeout(onDone,res.noResult?800:1050);}
