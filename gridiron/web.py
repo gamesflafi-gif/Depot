@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v83-life"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v85-stadium"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -805,7 +805,13 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  const poly=(a,b,c,e)=>PS(a)+' '+PS(b)+' '+PS(c)+' '+PS(e);
  const xline=(fy,col,w,op,dash)=>{const a=PJ(0,fy),b=PJ(53.3,fy);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="'+op+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';};
  // ---- Reines Spielfeld füllt das Bild (kein Rang/Crowd) — wie in der Referenz ----
- s+='<rect width="533" height="360" fill="#0f3d25"/>';                                    // Basis-Grün (ferne Distanz oben)
+ s+='<rect width="533" height="360" fill="#0c1118"/>';                                    // Stadion-Dunkel (Ränge/Hintergrund)
+ // Ferne Tribüne hinter der Endzone (dünner Rang mit Crowd) + Bande am Feldrand
+ const _top=PY(farFy);
+ s+='<rect x="0" y="0" width="533" height="'+Math.max(0,_top).toFixed(1)+'" fill="url(#cr_'+P+')"/>';
+ for(let r=1;r<=2;r++)s+='<line x1="0" y1="'+(_top*r/3).toFixed(1)+'" x2="533" y2="'+(_top*r/3).toFixed(1)+'" stroke="#0a0f15" stroke-width="1.1" opacity="0.55"/>';
+ s+='<rect x="0" y="'+(_top-1.5).toFixed(1)+'" width="533" height="3" fill="#10241a"/>';   // umlaufende Bande
+ s+='<rect x="0" y="'+_top.toFixed(1)+'" width="533" height="'+(360-_top).toFixed(1)+'" fill="#0f3d25"/>';   // Basis-Grün ab Feldhöhe
  // Mähstreifen je 5 Yards, Gras reicht weit über die Seitenlinien hinaus bis zum Bildrand
  const XW0=-30,XW1=83.3;
  for(let fy=Math.floor(nearFy/5)*5;fy<farFy;fy+=5){const f0=Math.max(fy,nearFy),f1=Math.min(fy+5,farFy);
@@ -827,6 +833,19 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  s+=xline(0,'#5fa8ff','2','0.9');
  if(ytg<=hiFy)s+=xline(ytg,'#ffd34d','1.6','0.7','6 4');
  if(fpos!=null)[0,53.3].forEach(X=>{const p=PJ(X,fpos);s+='<rect x="'+(p[0]-2).toFixed(1)+'" y="'+(p[1]-4).toFixed(1)+'" width="3.5" height="6" rx="1" fill="#ff7a1a"/>';});
+ // ---- Seitenlinien-Zonen: Team-Bänke (Spieler) + Coaches, leicht animiert (idle) ----
+ [[-9,0],[53.3,62.3]].forEach(z=>{const a=PJ(z[0],nearFy),b=PJ(z[1],nearFy),c=PJ(z[1],farFy),e=PJ(z[0],farFy);s+='<polygon points="'+poly(a,b,c,e)+'" fill="#10331f" opacity="0.6"/>';});   // Team-/Bank-Bereich
+ [0,53.3].forEach(X=>{const a=PJ(X-0.5,nearFy),b=PJ(X-0.5,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cfe3d6" stroke-width="1" opacity="0.4"/>';});   // Team-Area-Linie
+ const benchFig=(fx,fy,col,head)=>{const q=PJ(fx,fy);if(q[0]<4||q[0]>529||q[1]<_top+4||q[1]>350)return '';const sc=(DS(fy)*_FB*0.7).toFixed(2),e=_shade(col,-82);
+   return '<g class="fig" style="animation-delay:'+((-((fx*3.3+fy*1.7)%3.1)+3.1)%3.1).toFixed(2)+'s" transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')">'+
+    '<ellipse cx="0.3" cy="0.6" rx="2.3" ry="0.8" fill="#03100a" opacity="0.3"/>'+
+    '<rect x="-1.35" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#1b1e23"/><rect x="0.2" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#1b1e23"/>'+
+    '<path d="M-1.85 -5.2 L1.85 -5.2 L2.15 -9.8 Q2.15 -10.4 1.55 -10.4 L-1.55 -10.4 Q-2.15 -10.4 -2.15 -9.8 Z" fill="'+col+'" stroke="'+e+'" stroke-width="0.5"/>'+
+    '<circle cx="0" cy="-11.3" r="1.55" fill="'+(head||'#e8cba8')+'" stroke="'+e+'" stroke-width="0.4"/></g>';};
+ for(let fy=Math.ceil(nearFy);fy<=farFy-3;fy+=3.2){
+   s+=benchFig(-2.7,fy,offC)+benchFig(55.9,fy,defC);                                            // vordere Bank-Reihe
+   if(Math.round(fy)%2===0)s+=benchFig(-4.7,fy+1.6,offC)+benchFig(57.9,fy+1.6,defC);}           // hintere Reihe sparsamer
+ [[-6.6,offC],[59.9,defC]].forEach(c=>{for(let k=0;k<3;k++)s+=benchFig(c[0],(fpos!=null?Math.min(fpos*0.5,farFy-9):11)+k*2.3,'#2c3037','#caa88a');});   // Coaches (Khaki/Headset)
  // Kettencrew + Schiedsrichter
  s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
@@ -852,7 +871,7 @@ function _jersey(pos,i){const r=_NUMRANGE[pos]||[1,99];return r[0]+((i*7+5)%(r[1
 /* Detaillierte Spielerfigur (Top-Down): Schulterpolster mit Plastik-Schattierung, Arme & Handschuhe,
    Helm mit Glanz, Mittelstreifen und Facemask-Käfig, Cleats. Figur zeigt immer nach oben; die
    .face-Gruppe dreht sie in Laufrichtung (Defense im Stand um 180° gedreht). */
-const _FB=1.08;   // Figur-Grundgröße in der Perspektive
+const _FB=1.22;   // Figur-Grundgröße in der Perspektive (größere Spieler, passende Proportionen)
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
  const edge=_shade(color,-95),hel=_shade(color,-24),pad=_shade(color,12),arm=_shade(color,-14),stripe=_shade(color,108),sock=_shade(color,-34),pants='#e8ecf1';
@@ -901,7 +920,15 @@ function faceP(P,id,vx,vy,o){const lean=Math.max(-15,Math.min(15,(vx||0)*3.2));
  if(o._carry){if(!f.classList.contains('carry'))f.classList.add('carry');}else if(f.classList.contains('carry'))f.classList.remove('carry');}   // Ballträger: Carry-Pose
 // Kleine 2D-Figur (Sideline-Crew / Schiedsrichter)
 function _crewFig(x,y,vest,acc){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.3" ry="3" fill="'+vest+'" stroke="#06140d" stroke-width=".6"/><circle cy="-2.4" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+(acc||'')+'</g>';}
-function _refFig(x,y){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.4" ry="3.1" fill="#1c1c1c" stroke="#06140d" stroke-width=".5"/><rect x="-2.3" y="-0.9" width="4.6" height="1" fill="#f4f4f4"/><rect x="-2.3" y="1.1" width="4.6" height="1" fill="#f4f4f4"/><circle cy="-2.5" r="1.6" fill="#caa07a" stroke="#06140d" stroke-width=".5"/></g>';}
+// Schiedsrichter als kleine stehende Figur (Zebra-Trikot), idle-animiert; White Hat = Hauptschiedsrichter
+function _refFig(fx,fy,white){const q=PJ(fx,fy),sc=(DS(fy)*_FB*0.8).toFixed(2);
+ return '<g class="fig" style="animation-delay:'+(((-((fx*2.7+fy*1.3)%3.1))+3.1)%3.1).toFixed(2)+'s" transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')">'+
+  '<ellipse cx="0.3" cy="0.6" rx="2.3" ry="0.8" fill="#03100a" opacity="0.32"/>'+
+  '<rect x="-1.35" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#23262b"/><rect x="0.2" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#23262b"/>'+
+  '<path d="M-1.9 -5.2 L1.9 -5.2 L2.2 -10 Q2.2 -10.6 1.6 -10.6 L-1.6 -10.6 Q-2.2 -10.6 -2.2 -10 Z" fill="#f4f4f4" stroke="#181818" stroke-width="0.45"/>'+
+  '<rect x="-2.05" y="-9.0" width="4.25" height="0.62" fill="#181818"/><rect x="-2.1" y="-7.7" width="4.35" height="0.62" fill="#181818"/><rect x="-2.0" y="-6.4" width="4.15" height="0.62" fill="#181818"/>'+
+  '<circle cx="0" cy="-11.2" r="1.55" fill="#e8cba8" stroke="#181818" stroke-width="0.4"/>'+
+  '<path d="M-1.75 -11.9 Q0 -13.3 1.75 -11.9 L1.6 -11.2 L-1.6 -11.2 Z" fill="'+(white?'#f6f6f6':'#181818')+'" stroke="#181818" stroke-width="0.3"/></g>';}
 // Kettencrew exakt an Line-of-Scrimmage und First-Down-Linie (Heim-Seitenlinie links)
 function _chainGang(ytg){const a=PJ(0.6,0),sc=(DS(0)*1.1).toFixed(2);let g='';   // Kettencrew an der linken Seitenlinie, perspektivisch skaliert
  g+='<g transform="translate('+a[0].toFixed(1)+' '+a[1].toFixed(1)+') scale('+sc+')">'+
@@ -911,10 +938,11 @@ function _chainGang(ytg){const a=PJ(0.6,0),sc=(DS(0)*1.1).toFixed(2);let g='';  
    g+='<line x1="'+(a[0]+3*sc).toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+(b[0]+3*sb).toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#ffd34d" stroke-width="1" stroke-dasharray="3 2" opacity=".85"/>'+
      '<g transform="translate('+b[0].toFixed(1)+' '+b[1].toFixed(1)+') scale('+sb+')">'+_crewFig(5,0,'#ff7a1a','<line x1="0" y1="-3" x2="0" y2="-12" stroke="#ffb15a" stroke-width="1.6"/>')+'</g>';}
  return g;}
-function _refsOnField(d){const qb=d.offense.find(o=>o.pos==='QB');const a=PJ(qb?qb.x+4.2:30,qb?qb.y:-2),sa=(DS(qb?qb.y:-2)).toFixed(2);
- const b=PJ(50,7),sb=DS(7).toFixed(2);                                       // Referee hinter dem QB + Side Judge rechts
- return '<g transform="translate('+a[0].toFixed(1)+' '+a[1].toFixed(1)+') scale('+sa+')">'+_refFig(0,0)+'</g>'+
-        '<g transform="translate('+b[0].toFixed(1)+' '+b[1].toFixed(1)+') scale('+sb+')">'+_refFig(0,0)+'</g>';}
+function _refsOnField(d){const qb=d.offense.find(o=>o.pos==='QB');const qx=qb?qb.x:26.65,qy=qb?qb.y:-3;
+ return _refFig(qx+6.5,qy-1.2,true)      // Referee (White Hat) hinter/neben dem QB
+  +_refFig(38,7,false)                    // Umpire hinter den Linebackern
+  +_refFig(49,3.5,false)                  // Side Judge rechts
+  +_refFig(6,9.5,false);}                 // Down/Line Judge links
 function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;const q=PJ(x,y);g.setAttribute('transform','translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+(DS(y)*_FB).toFixed(3)+')');_ppos[P+id]=[x,y];}
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block');f.classList.add(((parseInt((''+id).replace(/\D/g,''))||0)%2)?'downb':'down');}}   // Fall mal nach links, mal nach rechts
@@ -1116,7 +1144,7 @@ function playAnim(svg,d,res,onDone){
   // schreiben (die Perspektive ist die Kamera — kein viewBox-Pan mehr nötig)
   O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,o);});
   D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,p);});
-  if(ball){const setB=(fx,fy,ang,arc)=>{const q=PJ(fx,fy),sc=DS(fy),bx=q[0],by=q[1]-(arc||0)*sc;ball.setAttribute('opacity',1);ball.setAttribute('cx',bx.toFixed(1));ball.setAttribute('cy',by.toFixed(1));ball.setAttribute('rx',(4*sc).toFixed(2));ball.setAttribute('ry',(2.5*sc).toFixed(2));ball.setAttribute('transform',ang!=null?'rotate('+ang.toFixed(0)+' '+bx.toFixed(1)+' '+by.toFixed(1)+')':'');};
+  if(ball){const setB=(fx,fy,ang,arc)=>{const q=PJ(fx,fy),sc=DS(fy),bx=q[0],by=q[1]-(7.0*_FB+(arc||0))*sc;ball.setAttribute('opacity',1);ball.setAttribute('cx',bx.toFixed(1));ball.setAttribute('cy',by.toFixed(1));ball.setAttribute('rx',(2.9*_FB*sc).toFixed(2));ball.setAttribute('ry',(1.75*_FB*sc).toFixed(2));ball.setAttribute('transform',ang!=null?'rotate('+ang.toFixed(0)+' '+bx.toFixed(1)+' '+by.toFixed(1)+')':'');};   // Ball auf Hand-/Brusthöhe halten (nicht an den Füßen)
    if(fumbled){const fb=(recovered&&recoverer)?[recoverer.x,recoverer.y]:fumbleSpot;setB(fb[0],fb[1],(el*780)%360,0);}
    else if(!isPass){
      if(!handoffDone)setB(qb.x,qb.y,null,0);                                                  // Ball in QB-Hand bis zum Handoff
