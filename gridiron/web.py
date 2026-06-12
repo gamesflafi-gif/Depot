@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v77-cohesive"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v78-closeup"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -747,12 +747,12 @@ const mapX=x=>x*10, mapY=fy=>10+(26-fy)*10;
 /* 3/4-Perspektive: Feldkoordinaten (fx 0..53.3 seitlich, fy = Yards downfield, LOS=0) -> Screen.
    Kamera hinter dem eigenen Team, schräg von oben. Nahebene fy=_FYN liegt UNTEN, damit das
    Backfield (QB/RB hinter der LOS) im Bild bleibt; Feld als Trapez (fern kleiner & schmaler). */
-const _CX=266.5,_HOR=80,_BOT=351,_FYN=-13,_CB=27,_KX=232;
-const _FCAM=_FYN-_CB,_DN=_CB,_DF=112-_FCAM,_D0=-_FCAM;
+const _CX=266.5,_HOR=22,_BOT=348,_FYN=-9,_CB=50,_KX=262,_FAR=78;
+const _FCAM=_FYN-_CB,_DN=_CB,_DF=_FAR-_FCAM,_D0=-_FCAM;
 const _dep=fy=>fy-_FCAM;
 function PY(fy){const d=_dep(fy);return _HOR+(_BOT-_HOR)*((1/d-1/_DF)/(1/_DN-1/_DF));}
 function PJ(fx,fy){const d=_dep(fy);return [_CX+(fx-26.65)*(_KX/26.65)*(_DN/d), PY(fy)];}
-function DS(fy){return Math.max(0.16,_D0/_dep(fy));}   // Tiefen-Skala (LOS=1, nah größer, fern kleiner)
+function DS(fy){return Math.max(0.22,_D0/_dep(fy));}   // Tiefen-Skala (LOS=1, nah größer, fern kleiner)
 function el(tag,a){const e=document.createElementNS(SVGNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e;}
 function routeLen(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
 function posAlong(pts,frac){if(pts.length<2)return pts[0];const tot=routeLen(pts);let d=frac*tot;for(let i=1;i<pts.length;i++){const seg=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d<=seg||i===pts.length-1){const t=seg?d/seg:0;return [pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t];}d-=seg;}return pts[pts.length-1];}
@@ -770,10 +770,10 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  let s='<defs>'+
   '<linearGradient id="turf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f4a2d"/><stop offset="1" stop-color="#15623a"/></linearGradient>'+
   '<pattern id="cr_'+P+'" width="7" height="7" patternUnits="userSpaceOnUse">'+
-   '<rect width="7" height="7" fill="#161d27"/>'+
-   '<circle cx="1.4" cy="1.6" r=".85" fill="#e4e8ee"/><circle cx="4.7" cy="1.1" r=".85" fill="'+offC+'"/>'+
-   '<circle cx="2.6" cy="4.4" r=".85" fill="'+defC+'"/><circle cx="5.7" cy="5" r=".85" fill="#aeb6c0"/>'+
-   '<circle cx="0.5" cy="5.9" r=".7" fill="#cdd3db"/><circle cx="3.6" cy="6.4" r=".7" fill="#8b94a0"/></pattern>'+
+   '<rect width="7" height="7" fill="#0e131a"/>'+
+   '<circle cx="1.4" cy="1.6" r=".6" fill="#929ba6"/><circle cx="4.7" cy="1.1" r=".6" fill="'+_shade(offC,-34)+'"/>'+
+   '<circle cx="2.6" cy="4.4" r=".6" fill="'+_shade(defC,-34)+'"/><circle cx="5.7" cy="5" r=".6" fill="#7a8490"/>'+
+   '<circle cx="0.5" cy="5.9" r=".5" fill="#7e8893"/><circle cx="3.6" cy="6.4" r=".5" fill="#535b65"/></pattern>'+
   '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05080d" stop-opacity=".85"/><stop offset=".42" stop-color="#0a0e14" stop-opacity="0"/></linearGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
@@ -805,11 +805,14 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   const a=PJ(0,f0),b=PJ(53.3,f0),c=PJ(53.3,f1),e=PJ(0,f1);
   s+='<polygon points="'+poly(a,b,c,e)+'" fill="'+((Math.round(fy/5)&1)?'#15623a':'#1a6e44')+'"/>';}
  for(let fy=-5;fy<=hiFy+0.1;fy+=5)s+=xline(fy,'#eaf6ee',Math.max(0.5,DS(fy)*1.5).toFixed(2),'0.34');
+ // Hashmarks (kurze Striche je Yard an den beiden Hash-Linien) wie auf einem echten Feld
+ for(let fy=Math.ceil(nearFy);fy<=Math.min(hiFy,34);fy++){if(fy%5===0)continue;[23.58,29.72].forEach(hx=>{const a=PJ(hx-0.5,fy),b=PJ(hx+0.5,fy);
+  s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#eaf6ee" stroke-width="'+Math.max(.4,DS(fy)*.9).toFixed(2)+'" opacity="0.3"/>';});}
  if(fpos!=null){
   const gA=PJ(0,fpos),gB=PJ(53.3,fpos),eA=PJ(53.3,fpos+10),eB=PJ(0,fpos+10);
   s+='<polygon points="'+poly(gA,gB,eA,eB)+'" fill="'+defC+'" opacity="0.25"/>'+xline(fpos,'#ffffff',Math.max(0.7,DS(fpos)*2).toFixed(2),'0.85');
   for(let g=0;g<=100;g+=10){const fy=fpos-g; if(fy<-6||fy>fpos||!(g<=50?g:100-g))continue;const lab=(g<=50?g:100-g);
-   const la=PJ(4,fy),lb=PJ(49.3,fy),fs=Math.max(4,DS(fy)*12);
+   const la=PJ(6.5,fy),lb=PJ(46.8,fy),fs=Math.max(7,DS(fy)*17);
    s+='<text x="'+la[0].toFixed(1)+'" y="'+(la[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>'+
       '<text x="'+lb[0].toFixed(1)+'" y="'+(lb[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>';}
  }
@@ -842,7 +845,7 @@ function _jersey(pos,i){const r=_NUMRANGE[pos]||[1,99];return r[0]+((i*7+5)%(r[1
 /* Detaillierte Spielerfigur (Top-Down): Schulterpolster mit Plastik-Schattierung, Arme & Handschuhe,
    Helm mit Glanz, Mittelstreifen und Facemask-Käfig, Cleats. Figur zeigt immer nach oben; die
    .face-Gruppe dreht sie in Laufrichtung (Defense im Stand um 180° gedreht). */
-const _FB=0.82;   // Figur-Grundgröße in der Perspektive
+const _FB=1.08;   // Figur-Grundgröße in der Perspektive
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
  const edge=_shade(color,-95),hel=_shade(color,-24),pad=_shade(color,12),arm=_shade(color,-14),stripe=_shade(color,108),sock=_shade(color,-34),pants='#e8ecf1';
