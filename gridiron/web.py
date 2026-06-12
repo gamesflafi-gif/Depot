@@ -18,17 +18,18 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v75-stadium"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v77-cohesive"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
-   --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
+   --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350;--gold:#ffd34d;--pitch:#1a6e44}
  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
  html{overflow-x:hidden;-webkit-text-size-adjust:100%}
  button,a,.tab,.s,.optbtn,.worldzoom button,select{touch-action:manipulation}
- body{margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;
+ body{margin:0;color:var(--fg);-webkit-font-smoothing:antialiased;
    font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-   width:100%;max-width:100%}
+   width:100%;max-width:100%;
+   background:radial-gradient(135% 90% at 50% -12%,#11281c 0%,#0a1410 42%,var(--bg) 78%) fixed,var(--bg)}
  img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
  .top{background:#0d1411;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
@@ -799,8 +800,11 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  // Vordere Bande (dunkler Rahmen rund ums Feld) + Bowl-Vignette
  const oTL=PJ(-2.2,farFy+0.6),oTR=PJ(55.5,farFy+0.6),oBR=PJ(55.5,nearFy-0.8),oBL=PJ(-2.2,nearFy-0.8);
  s+='<polygon points="'+poly(oBL,oBR,oTR,oTL)+'" fill="#0b1610"/>';
- s+='<polygon points="'+poly(BL,BR,TR,TL)+'" fill="url(#turf_'+P+')"/>';
- for(let fy=-5;fy<=hiFy+0.1;fy+=5)s+=xline(fy,'#cdeede',Math.max(0.5,DS(fy)*1.4).toFixed(2),'0.26');
+ // Rasen mit Mähstreifen (abwechselnd hell/dunkel je 5 Yards) für den gepflegten Stadion-Look
+ for(let fy=Math.floor(nearFy/5)*5;fy<farFy;fy+=5){const f0=Math.max(fy,nearFy),f1=Math.min(fy+5,farFy);
+  const a=PJ(0,f0),b=PJ(53.3,f0),c=PJ(53.3,f1),e=PJ(0,f1);
+  s+='<polygon points="'+poly(a,b,c,e)+'" fill="'+((Math.round(fy/5)&1)?'#15623a':'#1a6e44')+'"/>';}
+ for(let fy=-5;fy<=hiFy+0.1;fy+=5)s+=xline(fy,'#eaf6ee',Math.max(0.5,DS(fy)*1.5).toFixed(2),'0.34');
  if(fpos!=null){
   const gA=PJ(0,fpos),gB=PJ(53.3,fpos),eA=PJ(53.3,fpos+10),eB=PJ(0,fpos+10);
   s+='<polygon points="'+poly(gA,gB,eA,eB)+'" fill="'+defC+'" opacity="0.25"/>'+xline(fpos,'#ffffff',Math.max(0.7,DS(fpos)*2).toFixed(2),'0.85');
@@ -841,41 +845,41 @@ function _jersey(pos,i){const r=_NUMRANGE[pos]||[1,99];return r[0]+((i*7+5)%(r[1
 const _FB=0.82;   // Figur-Grundgröße in der Perspektive
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
- const edge=_shade(color,-92),hel=_shade(color,-26),sleeve=_shade(color,-14),glove=_shade(color,92),stripe=_shade(color,104),cleat=_shade(color,-40),fm='#10191333';
+ const edge=_shade(color,-95),hel=_shade(color,-24),pad=_shade(color,12),arm=_shade(color,-14),stripe=_shade(color,108),sock=_shade(color,-34),pants='#e8ecf1';
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx.toFixed(1)+' '+sy.toFixed(1)+') scale('+ds+')');
- g.appendChild(el('ellipse',{cx:0,cy:5.2,rx:8.0,ry:2.8,fill:'#03100a',opacity:.34}));   // Schatten bleibt flach (an größere Figur angepasst)
- const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate('+(side<0?180:0)+')');   // Blickrichtung
- const fig=el('g',{}); fig.setAttribute('class','fig');                                  // Animations-Gruppe (pop/spin/down/cel)
- if(o&&o.target)fig.appendChild(el('circle',{cx:0,cy:0,r:10.8,fill:'none',stroke:'#ffd34d','stroke-width':1.6,opacity:.9,'class':'pulse'}));
- fig.appendChild(el('ellipse',{cx:-1.9,cy:4.7,rx:1.05,ry:1.7,fill:cleat,stroke:edge,'stroke-width':.5}));          // Cleats (hinten)
- fig.appendChild(el('ellipse',{cx:1.9,cy:4.7,rx:1.05,ry:1.7,fill:cleat,stroke:edge,'stroke-width':.5}));
- fig.appendChild(el('ellipse',{cx:-5.7,cy:1.1,rx:1.95,ry:3.15,fill:sleeve,stroke:edge,'stroke-width':.7}));        // Arme/Ärmel
- fig.appendChild(el('ellipse',{cx:5.7,cy:1.1,rx:1.95,ry:3.15,fill:sleeve,stroke:edge,'stroke-width':.7}));
- fig.appendChild(el('path',{d:'M-6.2 2.3 C-6.7 -1.3 -4.2 -3.0 0 -3.0 C4.2 -3.0 6.7 -1.3 6.2 2.3 C6.0 4.6 3.2 5.2 0 5.2 C-3.2 5.2 -6.0 4.6 -6.2 2.3 Z',fill:color,stroke:edge,'stroke-width':1.2}));   // Schulterpolster
- fig.appendChild(el('ellipse',{cx:0,cy:-0.7,rx:3.7,ry:2.0,fill:'#ffffff',opacity:.17}));                          // Brust-Highlight
- fig.appendChild(el('ellipse',{cx:0,cy:3.5,rx:4.9,ry:1.7,fill:'#000000',opacity:.20}));                           // Rücken-Schatten
- fig.appendChild(el('path',{d:'M-3.6 -2.1 Q0 -1.1 3.6 -2.1',fill:'none',stroke:edge,'stroke-width':.7,opacity:.5}));   // Pad-Trennung
- fig.appendChild(el('line',{x1:0,y1:-1.0,x2:0,y2:4.6,stroke:edge,'stroke-width':.6,opacity:.4}));                 // Mittelnaht
- fig.appendChild(el('ellipse',{cx:-5.1,cy:-1.9,rx:1.25,ry:1.5,fill:glove,stroke:edge,'stroke-width':.5}));        // Handschuhe (vorne)
- fig.appendChild(el('ellipse',{cx:5.1,cy:-1.9,rx:1.25,ry:1.5,fill:glove,stroke:edge,'stroke-width':.5}));
- fig.appendChild(el('ellipse',{cx:0,cy:-2.5,rx:1.8,ry:1.2,fill:hel,stroke:edge,'stroke-width':.5}));              // Hals
- fig.appendChild(el('circle',{cx:0,cy:-4.4,r:3.5,fill:hel,stroke:edge,'stroke-width':1.2}));                      // Helm
- fig.appendChild(el('ellipse',{cx:-1.1,cy:-5.6,rx:1.5,ry:1.0,fill:'#ffffff',opacity:.5}));                        // Helm-Glanz
- fig.appendChild(el('path',{d:'M0 -7.8 L0 -1.7',fill:'none',stroke:stripe,'stroke-width':1.0,opacity:.85}));      // Mittelstreifen
- fig.appendChild(el('path',{d:'M-2.6 -6.1 Q0 -8.5 2.6 -6.1',fill:'none',stroke:fm,'stroke-width':.9}));           // Facemask: Querbügel
- fig.appendChild(el('path',{d:'M-2.1 -5.0 Q0 -7.1 2.1 -5.0',fill:'none',stroke:fm,'stroke-width':.8}));
- fig.appendChild(el('line',{x1:0,y1:-7.7,x2:0,y2:-4.7,stroke:fm,'stroke-width':.8}));                             // Facemask: Streben
- fig.appendChild(el('line',{x1:-1.45,y1:-7.1,x2:-1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
- fig.appendChild(el('line',{x1:1.45,y1:-7.1,x2:1.45,y2:-4.85,stroke:fm,'stroke-width':.7}));
- if(abbr){const t=el('text',{x:0,y:-3.4,'text-anchor':'middle','font-size':3.2,fill:stripe,'font-weight':800,stroke:edge,'stroke-width':.45,'paint-order':'stroke'});t.textContent=(''+abbr)[0];fig.appendChild(t);}   // Team-Logo (Helm-Buchstabe)
- const sc=el('g',{}); sc.setAttribute('transform','scale(1.2)'); sc.appendChild(fig); fc.appendChild(sc); g.appendChild(fc);   // Figur etwas größer (besser sichtbar)
- if(pos!=='OL'&&pos!=='DT'){const num=_jersey(pos,idx);const t=el('text',{x:0,y:3.6,'text-anchor':'middle','font-size':6.2,fill:'#ffffff','font-weight':800,stroke:'#0a140f','stroke-width':.85,'paint-order':'stroke'});t.textContent=num;g.appendChild(t);}   // Rückennummer (aufrecht, lesbar)
+ g.appendChild(el('ellipse',{cx:0.7,cy:0.8,rx:4.7,ry:1.55,fill:'#03100a',opacity:.42}));         // Bodenschatten (leicht versetzt)
+ const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate(0)');  // wird von faceP leicht in Laufrichtung geneigt
+ const fig=el('g',{}); fig.setAttribute('class','fig');                                            // Animations-Gruppe (pop/spin/down/cel)
+ const num=_jersey(pos,idx);
+ if(o&&o.target)fig.appendChild(el('ellipse',{cx:0,cy:0.4,rx:5.6,ry:2.0,fill:'none',stroke:'#ffd34d','stroke-width':1.3,opacity:.9,'class':'pulse'}));
+ // Beine: Oberschenkel (Hose) + Socke (Teamfarbe) + Schuh — stehende Figur, Füße am Boden (y=0)
+ [-1.75,1.75].forEach(lx=>{
+  fig.appendChild(el('path',{d:'M'+(lx-1.1)+' -5.9 L'+(lx+1.1)+' -5.9 L'+(lx+0.95)+' -2.5 L'+(lx-0.95)+' -2.5 Z',fill:pants,stroke:edge,'stroke-width':.5}));
+  fig.appendChild(el('rect',{x:lx-0.86,y:-2.6,width:1.72,height:2.2,rx:.5,fill:sock,stroke:edge,'stroke-width':.45}));
+  fig.appendChild(el('ellipse',{cx:lx+0.25,cy:-0.25,rx:1.3,ry:.72,fill:'#15191c',stroke:edge,'stroke-width':.35}));});
+ // Trikot/Rumpf von hinten: schmale Taille -> breite Schultern
+ fig.appendChild(el('path',{d:'M-2.7 -5.8 L2.7 -5.8 L3.6 -11.3 Q3.6 -12.0 3.0 -12.0 L-3.0 -12.0 Q-3.6 -12.0 -3.6 -11.3 Z',fill:color,stroke:edge,'stroke-width':.9}));
+ fig.appendChild(el('rect',{x:0.15,y:-12,width:3.45,height:6.2,fill:'#000',opacity:.13}));        // Volumen: rechte Hälfte dunkler
+ fig.appendChild(el('rect',{x:-3.6,y:-12,width:1.9,height:6.2,fill:'#fff',opacity:.09}));          // linke Hälfte Highlight
+ // Arme an den Seiten + Hände
+ [-4.2,4.2].forEach(ax=>{fig.appendChild(el('ellipse',{cx:ax,cy:-8.7,rx:1.2,ry:2.7,fill:arm,stroke:edge,'stroke-width':.55}));
+  fig.appendChild(el('ellipse',{cx:ax+(ax<0?0.2:-0.2),cy:-6.0,rx:1.05,ry:1.2,fill:'#e8cba8',stroke:edge,'stroke-width':.4}));});
+ // Rückennummer (groß, auf dem Trikot)
+ const tn=el('text',{x:0,y:-7.9,'text-anchor':'middle','font-size':4.7,fill:'#fff','font-weight':800,stroke:edge,'stroke-width':.5,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
+ // Schulterpolster (breiter Balken) + Highlight
+ fig.appendChild(el('path',{d:'M-4.5 -11.5 Q-4.9 -13.0 -2.8 -13.1 L2.8 -13.1 Q4.9 -13.0 4.5 -11.5 Q0 -10.7 -4.5 -11.5 Z',fill:pad,stroke:edge,'stroke-width':.8}));
+ fig.appendChild(el('ellipse',{cx:0,cy:-12.7,rx:3.1,ry:.7,fill:'#fff',opacity:.16}));
+ // Helm (Hinterkopf) + Glanz + Mittelstreifen
+ fig.appendChild(el('ellipse',{cx:0,cy:-14.6,rx:2.75,ry:2.9,fill:hel,stroke:edge,'stroke-width':.9}));
+ fig.appendChild(el('ellipse',{cx:-0.9,cy:-15.4,rx:1.05,ry:.78,fill:'#fff',opacity:.42}));
+ fig.appendChild(el('path',{d:'M0 -16.8 Q0 -14.6 0 -13.3',fill:'none',stroke:'#eef2f6','stroke-width':.7,opacity:.75}));   // Helm-Mittelstreifen (nur auf der Kuppel)
+ if(abbr){const t=el('text',{x:0,y:-14.0,'text-anchor':'middle','font-size':2.5,fill:'#eef2f6','font-weight':800});t.textContent=(''+abbr)[0];fig.appendChild(t);}
+ const sc=el('g',{}); sc.setAttribute('transform','scale(1.0)'); sc.appendChild(fig); fc.appendChild(sc); g.appendChild(fc);
  svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
-// Figur dreht weich in ihre Laufrichtung (alle Figuren zeichnen nach oben -> einheitliche Formel)
-function faceP(P,id,vx,vy,o){if(Math.hypot(vx,vy)<0.7)return;
- const a=Math.atan2(-vy,vx)*180/Math.PI+90;
- if(o._fa==null)o._fa=a;else{const dd=((a-o._fa+540)%360)-180;o._fa+=dd*0.3;}
+// Stehende Figur neigt sich leicht in ihre seitliche Laufrichtung (Lean um die Füße)
+function faceP(P,id,vx,vy,o){const lean=Math.max(-15,Math.min(15,(vx||0)*3.2));
+ if(o._fa==null)o._fa=lean;else o._fa+=(lean-o._fa)*0.25;
  const g=$(P+'_pl_'+id);if(!g)return;const fcel=g.querySelector('.face');if(fcel)fcel.setAttribute('transform','rotate('+o._fa.toFixed(1)+')');}
 // Kleine 2D-Figur (Sideline-Crew / Schiedsrichter)
 function _crewFig(x,y,vest,acc){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.3" ry="3" fill="'+vest+'" stroke="#06140d" stroke-width=".6"/><circle cy="-2.4" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+(acc||'')+'</g>';}
