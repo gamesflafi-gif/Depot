@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v94-tackle"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v96-weather"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -271,6 +271,9 @@ _STYLE2 = """
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
  .fig.juke{animation:juke .34s ease}@keyframes juke{0%{transform:translateX(0) rotate(0)}30%{transform:translateX(-1.5px) rotate(-11deg)}68%{transform:translateX(1.5px) rotate(11deg)}100%{transform:translateX(0) rotate(0)}}
  .fig.dive{animation:dive .5s ease forwards}@keyframes dive{0%{transform:translateY(0) rotate(0)}38%{transform:translateY(-2.4px) rotate(-22deg) scaleY(1.1)}100%{transform:translateY(1px) rotate(-78deg) scale(.84);opacity:.8}}
+ .fig.stiff{animation:stiff .42s ease}@keyframes stiff{0%{transform:rotate(0) scaleX(1)}40%{transform:translateY(-.6px) rotate(7deg) scaleX(1.12)}100%{transform:rotate(0) scaleX(1)}}
+ .rain{stroke:#aec6e0;stroke-width:.9;opacity:.45;animation:rainf linear infinite}@keyframes rainf{from{transform:translateY(-26px)}to{transform:translateY(380px)}}
+ .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -788,6 +791,13 @@ async function drawPlay(concept,coverage,res){
  renderField($('field'),d,parseInt($('sim_y').value)||10);
  playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0,pa:(concept==='PA Boot')});
 }
+// Football als richtiges Ei: Lederschattierung, Naht, Laces, Tip-Stripes, Glanz (lokal, lange Achse waagerecht)
+function _ballInner(P){return '<ellipse rx="3.1" ry="1.9" fill="url(#ballhi_'+P+')" stroke="#341b06" stroke-width="0.5"/>'+
+ '<path d="M-2.55 -0.95 Q-3.0 0 -2.55 0.95" fill="none" stroke="#f1e7d2" stroke-width="0.5"/>'+
+ '<path d="M2.55 -0.95 Q3.0 0 2.55 0.95" fill="none" stroke="#f1e7d2" stroke-width="0.5"/>'+
+ '<path d="M-1.7 0 H1.7" stroke="#f1e7d2" stroke-width="0.5"/>'+
+ '<g stroke="#f1e7d2" stroke-width="0.42"><line x1="-1.3" y1="-0.45" x2="-1.3" y2="0.45"/><line x1="-0.65" y1="-0.5" x2="-0.65" y2="0.5"/><line x1="0" y1="-0.52" x2="0" y2="0.52"/><line x1="0.65" y1="-0.5" x2="0.65" y2="0.5"/><line x1="1.3" y1="-0.45" x2="1.3" y2="0.45"/></g>'+
+ '<ellipse cx="-0.8" cy="-0.7" rx="1.2" ry="0.5" fill="#fff" opacity="0.16"/>';}
 function renderField(svg,d,ytg,cols,fpos,preSnap){
  cols=cols||{}; const offC=cols.off||'#16c784', defC=cols.def||'#ef5350';
  const P=svg.id;
@@ -799,6 +809,7 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    '<circle cx="2.6" cy="4.4" r=".6" fill="'+_shade(defC,-34)+'"/><circle cx="5.7" cy="5" r=".6" fill="#7a8490"/>'+
    '<circle cx="0.5" cy="5.9" r=".5" fill="#7e8893"/><circle cx="3.6" cy="6.4" r=".5" fill="#535b65"/></pattern>'+
   '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a2c1b" stop-opacity=".92"/><stop offset=".26" stop-color="#0f3d25" stop-opacity="0"/></linearGradient>'+
+  '<radialGradient id="ballhi_'+P+'" cx="0.4" cy="0.32" r="0.85"><stop offset="0" stop-color="#b06a30"/><stop offset="0.6" stop-color="#8b4a22"/><stop offset="1" stop-color="#5e3014"/></radialGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker>'+
@@ -880,13 +891,20 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  }
  s+='<rect width="533" height="360" fill="url(#bowl_'+P+')" pointer-events="none"/>';
+ // ---- Tageszeit & Wetter ----
+ if(_night){[80,200,333,453].forEach(lx=>{s+='<ellipse cx="'+lx+'" cy="'+(_top-3).toFixed(1)+'" rx="74" ry="40" fill="url(#lite_'+P+')" pointer-events="none"/>';});   // Flutlicht-Schein von oben
+   s+='<rect width="533" height="360" fill="#0a1626" opacity="0.16" pointer-events="none"/>';}                                                                          // kühler Nacht-Ton
+ if(_weather===1){let r='';for(let i=0;i<64;i++){const x=(Math.random()*545-6).toFixed(0),du=(0.32+Math.random()*0.3).toFixed(2),de=(-Math.random()).toFixed(2);r+='<line class="rain" x1="'+x+'" y1="-22" x2="'+(x-5)+'" y2="-10" style="animation-duration:'+du+'s;animation-delay:'+de+'s"/>';}
+   s+=r+'<rect width="533" height="360" fill="#34506e" opacity="0.12" pointer-events="none"/>';}                                                                         // Regen + nasser Grau-Ton
+ else if(_weather===2){let r='';for(let i=0;i<70;i++){const x=(Math.random()*533).toFixed(0),rr=(0.7+Math.random()*0.8).toFixed(1),du=(2.2+Math.random()*2.4).toFixed(2),de=(-Math.random()*3).toFixed(2);r+='<circle class="snow" cx="'+x+'" cy="-18" r="'+rr+'" style="animation-duration:'+du+'s;animation-delay:'+de+'s"/>';}
+   s+=r+'<rect width="533" height="360" fill="#dfe9f5" opacity="0.10" pointer-events="none"/>';}                                                                         // Schnee + heller Ton
  svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i,null,cols.defAbbr));
  d.offense.forEach((o,i)=>addPlayer(svg,o,offC,'o'+i,preSnap?{pos:o.pos}:o,cols.offAbbr));   // Vor-Snap: keine Ziel-Markierung
  const qb=d.offense.find(o=>o.pos==='QB');
  const bx=preSnap?26.65:qb.x, by=preSnap?-0.3:qb.y;   // Vor-Snap: Ball ruht am Spot (Line of Scrimmage)
  const bp0=PJ(bx,by);
- svg.appendChild(el('ellipse',{id:P+'_pball',cx:bp0[0],cy:bp0[1],rx:4*DS(by),ry:2.5*DS(by),fill:'#9a5a1e',stroke:'#3a1f08','stroke-width':1,opacity:preSnap?1:0}));
+ const bg=el('g',{id:P+'_pball',transform:'translate('+bp0[0].toFixed(1)+' '+bp0[1].toFixed(1)+') scale('+(_FB*DS(by)*0.94).toFixed(3)+')',opacity:preSnap?1:0});bg.innerHTML=_ballInner(P);svg.appendChild(bg);
 }
 const _ppos={};
 // Hex-Farbe aufhellen/abdunkeln (für plastische Schattierung ohne Verläufe)
@@ -978,6 +996,7 @@ function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelect
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function jukeFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('down')){f.classList.remove('juke');void f.getBBox();f.classList.add('juke');setTimeout(()=>f.classList.remove('juke'),350);}}   // Ausweichschritt
 function diveFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block','spin');f.classList.add('dive');}}   // Verteidiger hechtet in den Tackle
+function stiffFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('down')){f.classList.remove('stiff');void f.getBBox();f.classList.add('stiff');setTimeout(()=>f.classList.remove('stiff'),430);}}   // Stiff-Arm
 function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','catch');void f.getBBox();f.classList.add('catch');setTimeout(()=>f.classList.remove('catch'),520);}}   // eigene Fang-Animation (greifen)
 function throwFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','throw');void f.getBBox();f.classList.add('throw');setTimeout(()=>f.classList.remove('throw'),440);}}   // QB-Wurfbewegung
 function handFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('hand');void f.getBBox();f.classList.add('hand');setTimeout(()=>f.classList.remove('hand'),340);}}   // Handoff-Geste
@@ -1128,7 +1147,9 @@ function playAnim(svg,d,res,onDone){
        steer(o,tx,ty,mx(o.pos),dt,rp(o.pos));}
      // Juke: enger Verfolger -> kurzer Ausweichschritt (nur als Ballträger, vor dem Raumgewinn-Spot)
      if(carrier&&o===carrier&&(gy==null||o.y<gy-1)){let nd=null,nb=2.0;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nb){nb=dd;nd=q;}});
-       if(nd&&el>(o._jukeT||0)){o._jukeT=el+0.7;const side=(nd.x>o.x)?-1:1;o.vx=(o.vx||0)+side*2.6;jukeFig(P,'o'+o.i);}}
+       if(nd&&el>(o._jukeT||0)){o._jukeT=el+0.7;
+         if(nb<1.5){const ux=(nd.x-o.x)/(nb||1),uy=(nd.y-o.y)/(nb||1);nd.x+=ux*1.3;nd.y+=uy*1.3;nd.vx=ux*2.4;nd.vy=Math.max(0,uy*1.5);spinFig(P,'d_'+nd.i);stiffFig(P,'o'+o.i);}   // Stiff-Arm: einzelnen Tackler wegdrücken
+         else{const side=(nd.x>o.x)?-1:1;o.vx=(o.vx||0)+side*2.6;jukeFig(P,'o'+o.i);}}}   // Juke: seitlich vorbei
      return;}
    if(o.route&&!caught)routeStep(o,mx,dt,rp);   // Mitläufer/FB-Lead laufen ihre Wege
   });
@@ -1187,7 +1208,7 @@ function playAnim(svg,d,res,onDone){
   // schreiben (die Perspektive ist die Kamera — kein viewBox-Pan mehr nötig)
   O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,o);});
   D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,p);});
-  if(ball){const setB=(fx,fy,ang,arc)=>{const q=PJ(fx,fy),sc=DS(fy),bx=q[0],by=q[1]-(7.0*_FB+(arc||0))*sc;ball.setAttribute('opacity',1);ball.setAttribute('cx',bx.toFixed(1));ball.setAttribute('cy',by.toFixed(1));ball.setAttribute('rx',(2.9*_FB*sc).toFixed(2));ball.setAttribute('ry',(1.75*_FB*sc).toFixed(2));ball.setAttribute('transform',ang!=null?'rotate('+ang.toFixed(0)+' '+bx.toFixed(1)+' '+by.toFixed(1)+')':'');};   // Ball auf Hand-/Brusthöhe halten (nicht an den Füßen)
+  if(ball){const setB=(fx,fy,ang,arc)=>{const q=PJ(fx,fy),sc=DS(fy),bx=q[0],by=q[1]-(7.0*_FB+(arc||0))*sc,k=(_FB*sc*0.94).toFixed(3);ball.setAttribute('opacity',1);ball.setAttribute('transform','translate('+bx.toFixed(1)+' '+by.toFixed(1)+') scale('+k+')'+(ang!=null?' rotate('+ang.toFixed(0)+')':''));};   // Football auf Hand-/Brusthöhe, zeigt in Flugrichtung
    if(fumbled){const fb=(recovered&&recoverer)?[recoverer.x,recoverer.y]:fumbleSpot;setB(fb[0],fb[1],(el*780)%360,0);}
    else if(!isPass){
      if(!handoffDone)setB(qb.x,qb.y,null,0);                                                  // Ball in QB-Hand bis zum Handoff
@@ -2100,7 +2121,15 @@ function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const 
 function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();unlockBodyIfNone();}
 
 /* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
-let liveG=null, playBusy=false;
+let liveG=null, playBusy=false, _weather=0, _night=1, _disp=null;   // 0 klar /1 Regen /2 Schnee ; _night: Flutlicht ; _disp: Anzeigedaten fürs Feld-HUD
+// Kompaktes Scoreboard/Down&Distance dezent oben aufs Feld
+function _fieldHUD(svg){if(!svg||!_disp)return;const d=_disp,g=el('g',{});g.setAttribute('pointer-events','none');
+ const wi=d.weather===1?'🌧':d.weather===2?'❄':(d.night?'🌙':'☀');
+ g.innerHTML='<rect x="150" y="2.5" width="233" height="16" rx="4" fill="#070b0a" opacity="0.62"/>'+
+  '<rect x="155" y="5.5" width="10" height="10" rx="2" fill="'+esc(d.acolor||"#888")+'"/><text x="168" y="13.8" font-size="9.5" font-weight="800" fill="#fff">'+esc(d.aabbr||"")+' '+(d["as"]||0)+'</text>'+
+  '<text x="266.5" y="13.6" text-anchor="middle" font-size="9" font-weight="700" fill="#ffd34d">'+wi+' '+(d.down||1)+'. &amp; '+(d.dist||10)+'</text>'+
+  '<text x="378" y="13.8" text-anchor="end" font-size="9.5" font-weight="800" fill="#fff">'+(d.hs||0)+' '+esc(d.habbr||"")+'</text><rect x="373" y="5.5" width="10" height="10" rx="2" fill="'+esc(d.hcolor||"#888")+'"/>';
+ svg.appendChild(g);}
 /* Echte Spieluhr: Viertelzeit kommt vom Backend und läuft pro Spielzug ab (kein Echtzeit-Ticker). */
 let gameQ=1, gameClock=360;
 function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}
@@ -2110,7 +2139,9 @@ function startClock(){}                               // Uhr ist backend-gesteue
 function stopClock(){}
 async function startGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
-function openGame(g){closeGame();liveG=g;gameQ=g.quarter||1;gameClock=(g.clock!=null?g.clock:360);const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
+function openGame(g){closeGame();liveG=g;gameQ=g.quarter||1;gameClock=(g.clock!=null?g.clock:360);
+ _weather=(g&&g.weather!=null)?g.weather:0;_night=(g&&g.night!=null)?g.night:1;   // Wetter & Tageszeit kommen vom Server (beeinflussen auch das Spiel)
+ const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
  o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();
  const go=()=>{if(!liveG)return;renderGame(liveG);};
  if(g.log&&g.log.length===0){gameIntro(g,go);}else go();}   // frisches Spiel: Intro -> Münzwurf -> Kickoff
@@ -2157,7 +2188,7 @@ function renderGame(g,play){
  const willAnimate=!!(play&&(play.concept||play.kind==='fg'||play.kind==='punt'||play.penalty));   // läuft eine Snap-/Kick-/Flaggen-Animation?
  if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern
  // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Uhr, Kommentar) erst NACH der Animation
- const disp=(willAnimate&&_preG)?_preG:g;
+ const disp=(willAnimate&&_preG)?_preG:g;_disp=disp;
  if(!willAnimate)_preG=null;
  gameQ=disp.quarter||disp.q||1; gameClock=(disp.clock!=null?disp.clock:0);   // Spieluhr aus dem Backend-Stand
  const tos=disp.timeouts||[3,3];
@@ -2246,7 +2277,7 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
  const concept=g.user_offense?((g.options[0]&&g.options[0].key)||'Inside Zone'):'Inside Zone';
  const coverage=g.user_offense?'Cover 2':((g.options[0]&&g.options[0].key)||'Cover 2');
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
- if(!d.error)renderField(svg,d,g.dist||10,gameCols(g,g.user_offense),g.ytz,true);}   // Vor-Snap-Aufstellung, Ball am aktuellen Spot
+ if(!d.error){renderField(svg,d,g.dist||10,gameCols(g,g.user_offense),g.ytz,true);_fieldHUD(svg);}}   // Vor-Snap-Aufstellung, Ball am aktuellen Spot
 /* Snap-Count: Cadence (Down … Set … HUT!), dann fliegt der Ball aus der Center-Hand zum QB. */
 function _snapSequence(svg,d,onDone){const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
  const qb=d.offense.find(o=>o.pos==='QB');const ball=$(P+'_pball');
@@ -2264,7 +2295,7 @@ function _snapSequence(svg,d,onDone){const P=svg.id;if(_anim[P])cancelAnimationF
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const variant=Math.floor(Math.random()*5);                  // Formation pro Snap mischen (auch Shotgun/FB)
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
- if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Vor-Snap-Aufstellung am Spot
+ if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);_fieldHUD(svg);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
  const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0,pa:(play.concept==='PA Boot')};
  _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}));}   // Cadence + Snap, dann das Play
