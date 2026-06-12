@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v89-sideline"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v90-slfix"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -840,17 +840,17 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  [[-8.5,-0.3],[53.6,61.8]].forEach(z=>{const a=PJ(z[0],nearFy),b=PJ(z[1],nearFy),c=PJ(z[1],farFy),e=PJ(z[0],farFy);s+='<polygon points="'+poly(a,b,c,e)+'" fill="#0d2c1c" opacity="0.72"/>';});   // Bank-/Team-Bereich (Track)
  [-1.2,54.5].forEach(X=>{const a=PJ(X,nearFy),b=PJ(X,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cfe3d6" stroke-width="1" opacity="0.4" stroke-dasharray="4 4"/>';});   // 6-Fuß-Team-Area-Linie
  const benchFig=(fx,fy,col,coach)=>{const q=PJ(fx,fy);if(q[0]<7||q[0]>526||q[1]<_top+6||q[1]>346)return '';const sc=(DS(fy)*_FB*0.58).toFixed(2),e=_shade(col,-82);
-   return '<g class="fig" style="animation-delay:'+((-((fx*3.3+fy*1.7)%3.1)+3.1)%3.1).toFixed(2)+'s" transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')">'+
+   return '<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')"><g class="fig" style="animation-delay:'+((-((fx*3.3+fy*1.7)%3.1)+3.1)%3.1).toFixed(2)+'s">'+
     '<ellipse cx="0.3" cy="0.5" rx="2.2" ry="0.75" fill="#03100a" opacity="0.3"/>'+
     '<rect x="-1.3" y="-5.0" width="1.1" height="4.8" rx="0.4" fill="#1b1e23"/><rect x="0.2" y="-5.0" width="1.1" height="4.8" rx="0.4" fill="#1b1e23"/>'+
     '<path d="M-1.8 -5.1 L1.8 -5.1 L2.1 -9.7 Q2.1 -10.3 1.5 -10.3 L-1.5 -10.3 Q-2.1 -10.3 -2.1 -9.7 Z" fill="'+(coach?'#41474f':col)+'" stroke="'+(coach?'#15181c':e)+'" stroke-width="0.5"/>'+
     '<circle cx="0" cy="-11.1" r="1.5" fill="'+(coach?'#cfa988':'#e8cba8')+'" stroke="#15181c" stroke-width="0.4"/>'+
     (coach?'<path d="M-1.5 -11.7 Q0 -12.8 1.5 -11.7 L1.4 -11.1 L-1.4 -11.1 Z" fill="#15181c"/>':'')+
-    '</g>';};
+    '</g></g>';};
  // zwei gleichmäßig versetzte Reihen je Seitenlinie (Quincunx -> dichte, saubere Bank ohne Zickzack)
  for(let fy=Math.ceil(nearFy);fy<=farFy-3;fy+=2.2){
    s+=benchFig(-2.4,fy,offC)+benchFig(55.7,fy,defC)+benchFig(-4.0,fy+1.1,offC)+benchFig(57.3,fy+1.1,defC);}
- [[-5.8,offC],[58.9,defC]].forEach(c=>{const m=(fpos!=null?Math.min(fpos*0.5,farFy-11):11);for(let k=0;k<3;k++)s+=benchFig(c[0],m+k*2.4,offC,true);});   // Coaches (grau, Cap) an der ~50
+ [[-5.6,offC],[58.7,defC]].forEach(c=>{for(let k=0;k<3;k++)s+=benchFig(c[0],8.5+k*2.7,offC,true);});   // Coaches (grau, Cap) vorne an der Bank, gut sichtbar
  // Kettencrew + Schiedsrichter
  s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap){
@@ -940,19 +940,19 @@ function faceP(P,id,vx,vy,o){const lean=Math.max(-15,Math.min(15,(vx||0)*3.2));
 function _crewFig(x,y,vest,acc){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.3" ry="3" fill="'+vest+'" stroke="#06140d" stroke-width=".6"/><circle cy="-2.4" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+(acc||'')+'</g>';}
 // Schiedsrichter als kleine stehende Figur (Zebra-Trikot), idle-animiert; White Hat = Hauptschiedsrichter
 function _refFig(fx,fy,white){const q=PJ(fx,fy),sc=(DS(fy)*_FB*0.8).toFixed(2);
- return '<g class="fig" style="animation-delay:'+(((-((fx*2.7+fy*1.3)%3.1))+3.1)%3.1).toFixed(2)+'s" transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')">'+
+ return '<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')"><g class="fig" style="animation-delay:'+(((-((fx*2.7+fy*1.3)%3.1))+3.1)%3.1).toFixed(2)+'s">'+
   '<ellipse cx="0.3" cy="0.6" rx="2.3" ry="0.8" fill="#03100a" opacity="0.32"/>'+
   '<rect x="-1.35" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#23262b"/><rect x="0.2" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#23262b"/>'+
   '<path d="M-1.9 -5.2 L1.9 -5.2 L2.2 -10 Q2.2 -10.6 1.6 -10.6 L-1.6 -10.6 Q-2.2 -10.6 -2.2 -10 Z" fill="#f4f4f4" stroke="#181818" stroke-width="0.45"/>'+
   '<rect x="-2.05" y="-9.0" width="4.25" height="0.62" fill="#181818"/><rect x="-2.1" y="-7.7" width="4.35" height="0.62" fill="#181818"/><rect x="-2.0" y="-6.4" width="4.15" height="0.62" fill="#181818"/>'+
   '<circle cx="0" cy="-11.2" r="1.55" fill="#e8cba8" stroke="#181818" stroke-width="0.4"/>'+
-  '<path d="M-1.75 -11.9 Q0 -13.3 1.75 -11.9 L1.6 -11.2 L-1.6 -11.2 Z" fill="'+(white?'#f6f6f6':'#181818')+'" stroke="#181818" stroke-width="0.3"/></g>';}
+  '<path d="M-1.75 -11.9 Q0 -13.3 1.75 -11.9 L1.6 -11.2 L-1.6 -11.2 Z" fill="'+(white?'#f6f6f6':'#181818')+'" stroke="#181818" stroke-width="0.3"/></g></g>';}
 // Kettencrew exakt an Line-of-Scrimmage und First-Down-Linie (Heim-Seitenlinie links)
-function _chainGang(ytg){const a=PJ(0.6,0),sc=(DS(0)*1.1).toFixed(2);let g='';   // Kettencrew an der linken Seitenlinie, perspektivisch skaliert
+function _chainGang(ytg){const a=PJ(-2.4,0),sc=(DS(0)*1.1).toFixed(2);let g='';   // Kettencrew NEBEN dem Feld (außerhalb der linken Seitenlinie)
  g+='<g transform="translate('+a[0].toFixed(1)+' '+a[1].toFixed(1)+') scale('+sc+')">'+
    _crewFig(0,9,'#e08b1a','<rect x="-1.6" y="-9.5" width="3.2" height="5" rx=".6" fill="#ff7a1a" stroke="#06140d" stroke-width=".4"/>')+
    _crewFig(5,0,'#ff7a1a','<line x1="0" y1="-3" x2="0" y2="-12" stroke="#ffb15a" stroke-width="1.6"/>')+'</g>';
- if(ytg<=24){const b=PJ(0.6,ytg),sb=(DS(ytg)*1.1).toFixed(2);
+ if(ytg<=24){const b=PJ(-2.4,ytg),sb=(DS(ytg)*1.1).toFixed(2);
    g+='<line x1="'+(a[0]+3*sc).toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+(b[0]+3*sb).toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#ffd34d" stroke-width="1" stroke-dasharray="3 2" opacity=".85"/>'+
      '<g transform="translate('+b[0].toFixed(1)+' '+b[1].toFixed(1)+') scale('+sb+')">'+_crewFig(5,0,'#ff7a1a','<line x1="0" y1="-3" x2="0" y2="-12" stroke="#ffb15a" stroke-width="1.6"/>')+'</g>';}
  return g;}
