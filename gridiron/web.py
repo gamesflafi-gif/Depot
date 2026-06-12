@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v92-pass"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v93-juke"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -269,6 +269,7 @@ _STYLE2 = """
  .fig.down{animation:tackle .5s ease forwards}@keyframes tackle{0%{transform:rotate(0) scale(1)}45%{transform:translateY(-1px) rotate(40deg) scale(1.06)}100%{transform:translateY(2px) rotate(82deg) scale(.8);opacity:.72}}
  .fig.downb{animation:tackleb .5s ease forwards}@keyframes tackleb{0%{transform:rotate(0) scale(1)}45%{transform:translateY(-1px) rotate(-40deg) scale(1.06)}100%{transform:translateY(2px) rotate(-82deg) scale(.8);opacity:.72}}
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
+ .fig.juke{animation:juke .34s ease}@keyframes juke{0%{transform:translateX(0) rotate(0)}30%{transform:translateX(-1.5px) rotate(-11deg)}68%{transform:translateX(1.5px) rotate(11deg)}100%{transform:translateX(0) rotate(0)}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -974,6 +975,7 @@ function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;const q=PJ(x,y);g.s
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block');f.classList.add(((parseInt((''+id).replace(/\D/g,''))||0)%2)?'downb':'down');}}   // Fall mal nach links, mal nach rechts
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
+function jukeFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('down')){f.classList.remove('juke');void f.getBBox();f.classList.add('juke');setTimeout(()=>f.classList.remove('juke'),350);}}   // Ausweichschritt
 function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','catch');void f.getBBox();f.classList.add('catch');setTimeout(()=>f.classList.remove('catch'),520);}}   // eigene Fang-Animation (greifen)
 function throwFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','throw');void f.getBBox();f.classList.add('throw');setTimeout(()=>f.classList.remove('throw'),440);}}   // QB-Wurfbewegung
 function handFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('hand');void f.getBBox();f.classList.add('hand');setTimeout(()=>f.classList.remove('hand'),340);}}   // Handoff-Geste
@@ -1122,6 +1124,9 @@ function playAnim(svg,d,res,onDone){
        let block=null,bd=3.0;D.forEach(q=>{if(q.y<o.y+0.4)return;const dd=Math.hypot(q.x-o.x,(q.y-o.y)*0.6);if(dd<bd){bd=dd;block=q;}});  // Verteidiger im Weg nach vorn
        if(block){const open=(block.x>=o.x)?-1:1;tx=Math.max(2,Math.min(51,o.x+open*2.4));ty=Math.max(ty,o.y+1.8);if(!o._spun&&bd<1.8){o._spun=1;spinFig(P,'o'+o.i);}}  // zur freien Seite cutten
        steer(o,tx,ty,mx(o.pos),dt,rp(o.pos));}
+     // Juke: enger Verfolger -> kurzer Ausweichschritt (nur als Ballträger, vor dem Raumgewinn-Spot)
+     if(carrier&&o===carrier&&(gy==null||o.y<gy-1)){let nd=null,nb=2.0;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nb){nb=dd;nd=q;}});
+       if(nd&&el>(o._jukeT||0)){o._jukeT=el+0.7;const side=(nd.x>o.x)?-1:1;o.vx=(o.vx||0)+side*2.6;jukeFig(P,'o'+o.i);}}
      return;}
    if(o.route&&!caught)routeStep(o,mx,dt,rp);   // Mitläufer/FB-Lead laufen ihre Wege
   });
@@ -1185,8 +1190,12 @@ function playAnim(svg,d,res,onDone){
      else if(carrier){const ho=Math.min(1,(el-hoT)/0.16);setB(qb.x+(carrier.x-qb.x)*ho,qb.y+(carrier.y-qb.y)*ho,Math.atan2(-(carrier.vy||0),(carrier.vx||0))*180/Math.PI,0);}
      else ball.setAttribute('opacity',0);}
    else if(kind==='sack')setB(qb.x,qb.y,null,0);                                              // Ball beim bedrängten QB
-   else if(thrown){const fp=arrived?1:Math.min(1,(el-tAt)/flightDur);setB(bp[0],bp[1],throwAng+Math.sin(fp*26)*4,Math.sin(fp*Math.PI)*14);
-     ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
+   else if(thrown){const fp=arrived?1:Math.min(1,(el-tAt)/flightDur);
+     const arcH=Math.min(28,7+flightDur*BALLSPD*0.5);                                          // höherer Bogen bei weiten Würfen
+     let arc=Math.sin(fp*Math.PI)*arcH;
+     if(kind==='incomplete'&&arrived){const te=el-arrTime;arc=Math.abs(Math.sin(te*10))*6*Math.max(0,1-te/0.55);}   // unvollständig: Ball fällt zu Boden und hüpft kurz aus
+     setB(bp[0],bp[1],throwAng+Math.sin(fp*26)*4,arc);
+     ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.8):1);}
    else if(PAD&&el>0.12&&el<PAD&&rbF)setB(qb.x+(rbF.x-qb.x)*0.72,qb.y+(rbF.y-qb.y)*0.72,null,0);   // Play-Action: Ball scheinbar zum RB (Fake), dann zurück zum QB
    else setB(qb.x,qb.y,null,0);                                                               // Pass: Ball in QB-Hand bis zum Wurf
   }
@@ -1202,7 +1211,7 @@ function playAnim(svg,d,res,onDone){
   if(fumbled&&!recovered&&recoverer){steer(recoverer,fumbleSpot[0],fumbleSpot[1],mx(recoverer.pos),dt,rp(recoverer.pos));
     if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
   const tackled=!fumble&&atGain&&(contact||el>gainT+1.15);                              // Tackle nur bei ECHTEM Kontakt am Spot (kein Phantom); Notbremse falls Tackler extrem spät
-  const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.6) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
+  const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.85) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (td&&atGain) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
   if(!done)_anim[P]=requestAnimationFrame(frame);
