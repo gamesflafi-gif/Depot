@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v85-stadium"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v86-playart"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -797,7 +797,8 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a2c1b" stop-opacity=".92"/><stop offset=".26" stop-color="#0f3d25" stop-opacity="0"/></linearGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
-  '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
+  '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker>'+
+  '<marker id="arr_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ff7a4d"/></marker></defs>';
  // ---- Perspektivisches Feld (Trapez, fern = schmaler/kleiner) ----
  const nearFy=_FYN, farFy=(fpos!=null)?(fpos+10):24, hiFy=(fpos!=null)?fpos:24;
  const TL=PJ(0,farFy),TR=PJ(53.3,farFy),BR=PJ(53.3,nearFy),BL=PJ(0,nearFy);
@@ -848,8 +849,21 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  [[-6.6,offC],[59.9,defC]].forEach(c=>{for(let k=0;k<3;k++)s+=benchFig(c[0],(fpos!=null?Math.min(fpos*0.5,farFy-9):11)+k*2.3,'#2c3037','#caa88a');});   // Coaches (Khaki/Headset)
  // Kettencrew + Schiedsrichter
  s+=_chainGang(ytg)+_refsOnField(d);
- if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
-  const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
+ if(!preSnap){
+  // Defense-Coverage sichtbar machen: Blitz=Pfeil zum QB, Mann=Linie zum Receiver, Zone=Bereich an der Landmarke
+  d.defense.forEach(p=>{const a=PJ(p.x,p.y);
+   if(p.role==='rush'){const b=PJ(26.65,-2.2);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#ff7a4d" stroke-width="1.5" opacity="0.55" marker-end="url(#arr_'+P+')"/>';}
+   else if(p.role==='man'&&p.cover){const r=d.offense.find(o=>o.pos===p.cover);if(r){const b=PJ(r.x,r.y);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#ff66ad" stroke-width="1.1" opacity="0.5" stroke-dasharray="3 3"/>';}}
+   else if(p.drop){const c=PJ(p.drop[0],p.drop[1]),rr=p.deep?7.5:5.2,rx=Math.abs(PJ(p.drop[0]+rr,p.drop[1])[0]-c[0]);s+='<ellipse cx="'+c[0].toFixed(1)+'" cy="'+c[1].toFixed(1)+'" rx="'+rx.toFixed(1)+'" ry="'+(rx*0.5).toFixed(1)+'" fill="#3aa0ff" fill-opacity="0.09" stroke="#5fb0ff" stroke-width="1" stroke-dasharray="3 3" opacity="0.55"/>';}});
+  // Block-Angaben: T-Marke vor jedem Blocker (O-Line / im Backfield bleibender FB/TE)
+  d.offense.forEach(o=>{if(o.pos!=='OL'&&o.pos!=='FB'&&o.pos!=='TE')return;if(o.route&&o.route.length>1)return;
+   const st=PJ(o.x,o.y-0.1),tip=PJ(o.x,o.y+1.15),l=PJ(o.x-1.0,o.y+1.15),r=PJ(o.x+1.0,o.y+1.15);
+   s+='<line x1="'+st[0].toFixed(1)+'" y1="'+st[1].toFixed(1)+'" x2="'+tip[0].toFixed(1)+'" y2="'+tip[1].toFixed(1)+'" stroke="#08140d" stroke-width="2.7" opacity="0.9"/>'+
+      '<line x1="'+l[0].toFixed(1)+'" y1="'+l[1].toFixed(1)+'" x2="'+r[0].toFixed(1)+'" y2="'+r[1].toFixed(1)+'" stroke="#08140d" stroke-width="2.7" opacity="0.9"/>';});
+  // Offense-Routen
+  d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
+   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
+ }
  s+='<rect width="533" height="360" fill="url(#bowl_'+P+')" pointer-events="none"/>';
  svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i,null,cols.defAbbr));
