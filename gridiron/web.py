@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v74-3d"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v75-stadium"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -744,11 +744,14 @@ let lastDiag=null,lastRes=null;
 const _anim={};
 const mapX=x=>x*10, mapY=fy=>10+(26-fy)*10;
 /* 3/4-Perspektive: Feldkoordinaten (fx 0..53.3 seitlich, fy = Yards downfield, LOS=0) -> Screen.
-   Kamera hinter dem eigenen Team, schräg von oben; Feld als Trapez, fern = kleiner & schmaler. */
-const _CB=15.5,_FO=520,_HOR=42,_BOT=346,_KX=0.222;
-function PJ(fx,fy){const d=fy+_CB;return [266+(fx-26.65)*(_FO/d)*_KX, _HOR+(_CB/d)*(_BOT-_HOR)];}
-function PX(fx,fy){return PJ(fx,fy)[0];} function PY(fy){return _HOR+(_CB/(fy+_CB))*(_BOT-_HOR);}
-function DS(fy){return _CB/(fy+_CB);}                 // Tiefen-Skala (LOS=1, fern kleiner)
+   Kamera hinter dem eigenen Team, schräg von oben. Nahebene fy=_FYN liegt UNTEN, damit das
+   Backfield (QB/RB hinter der LOS) im Bild bleibt; Feld als Trapez (fern kleiner & schmaler). */
+const _CX=266.5,_HOR=80,_BOT=351,_FYN=-13,_CB=27,_KX=232;
+const _FCAM=_FYN-_CB,_DN=_CB,_DF=112-_FCAM,_D0=-_FCAM;
+const _dep=fy=>fy-_FCAM;
+function PY(fy){const d=_dep(fy);return _HOR+(_BOT-_HOR)*((1/d-1/_DF)/(1/_DN-1/_DF));}
+function PJ(fx,fy){const d=_dep(fy);return [_CX+(fx-26.65)*(_KX/26.65)*(_DN/d), PY(fy)];}
+function DS(fy){return Math.max(0.16,_D0/_dep(fy));}   // Tiefen-Skala (LOS=1, nah größer, fern kleiner)
 function el(tag,a){const e=document.createElementNS(SVGNS,tag);for(const k in a)e.setAttribute(k,a[k]);return e;}
 function routeLen(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
 function posAlong(pts,frac){if(pts.length<2)return pts[0];const tot=routeLen(pts);let d=frac*tot;for(let i=1;i<pts.length;i++){const seg=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d<=seg||i===pts.length-1){const t=seg?d/seg:0;return [pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t];}d-=seg;}return pts[pts.length-1];}
@@ -764,15 +767,38 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  cols=cols||{}; const offC=cols.off||'#16c784', defC=cols.def||'#ef5350';
  const P=svg.id;
  let s='<defs>'+
-  '<linearGradient id="turf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#125433"/><stop offset="1" stop-color="#0b3a22"/></linearGradient>'+
+  '<linearGradient id="turf_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f4a2d"/><stop offset="1" stop-color="#15623a"/></linearGradient>'+
+  '<pattern id="cr_'+P+'" width="7" height="7" patternUnits="userSpaceOnUse">'+
+   '<rect width="7" height="7" fill="#161d27"/>'+
+   '<circle cx="1.4" cy="1.6" r=".85" fill="#e4e8ee"/><circle cx="4.7" cy="1.1" r=".85" fill="'+offC+'"/>'+
+   '<circle cx="2.6" cy="4.4" r=".85" fill="'+defC+'"/><circle cx="5.7" cy="5" r=".85" fill="#aeb6c0"/>'+
+   '<circle cx="0.5" cy="5.9" r=".7" fill="#cdd3db"/><circle cx="3.6" cy="6.4" r=".7" fill="#8b94a0"/></pattern>'+
+  '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05080d" stop-opacity=".85"/><stop offset=".42" stop-color="#0a0e14" stop-opacity="0"/></linearGradient>'+
+  '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
  // ---- Perspektivisches Feld (Trapez, fern = schmaler/kleiner) ----
- const nearFy=-8.5, farFy=(fpos!=null)?(fpos+10):24, hiFy=(fpos!=null)?fpos:24;
+ const nearFy=_FYN, farFy=(fpos!=null)?(fpos+10):24, hiFy=(fpos!=null)?fpos:24;
  const TL=PJ(0,farFy),TR=PJ(53.3,farFy),BR=PJ(53.3,nearFy),BL=PJ(0,nearFy);
- const poly=(a,b,c,e)=>a[0].toFixed(1)+','+a[1].toFixed(1)+' '+b[0].toFixed(1)+','+b[1].toFixed(1)+' '+c[0].toFixed(1)+','+c[1].toFixed(1)+' '+e[0].toFixed(1)+','+e[1].toFixed(1);
+ const PS=p=>p[0].toFixed(1)+','+p[1].toFixed(1);
+ const poly=(a,b,c,e)=>PS(a)+' '+PS(b)+' '+PS(c)+' '+PS(e);
  const xline=(fy,col,w,op,dash)=>{const a=PJ(0,fy),b=PJ(53.3,fy);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="'+op+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';};
- s+='<rect x="0" y="0" width="533" height="360" fill="#0a2a1a"/>';
+ // ---- Stadion: dunkler Hintergrund + Ränge (Crowd) links/rechts/oben um das Feld ----
+ const horY=TL[1];
+ s+='<rect width="533" height="360" fill="#0a0e14"/>';
+ s+='<polygon points="'+poly([0,0],TL,BL,[0,360])+'" fill="url(#cr_'+P+')"/>'+      // linker Rang
+    '<polygon points="'+poly([533,0],TR,BR,[533,360])+'" fill="url(#cr_'+P+')"/>'+   // rechter Rang
+    '<polygon points="'+PS([0,0])+' '+PS([533,0])+' '+PS(TR)+' '+PS(TL)+'" fill="url(#cr_'+P+')"/>';   // oberer Rang
+ // Tier-Linien (Gänge) in den Seitenrängen für Tiefe
+ for(let k=1;k<=3;k++){const f=k/4;s+='<line x1="'+(TL[0]*f).toFixed(1)+'" y1="'+(horY*f).toFixed(1)+'" x2="'+(BL[0]*f).toFixed(1)+'" y2="'+(360-(360-BL[1])*f).toFixed(1)+'" stroke="#0a0e14" stroke-width="1.4" opacity=".5"/>'+
+   '<line x1="'+(533-(533-TR[0])*f).toFixed(1)+'" y1="'+(horY*f).toFixed(1)+'" x2="'+(533-(533-BR[0])*f).toFixed(1)+'" y2="'+(360-(360-BR[1])*f).toFixed(1)+'" stroke="#0a0e14" stroke-width="1.4" opacity=".5"/>';}
+ // Flutlichter + Scoreboard am oberen Rand
+ [62,200,333,471].forEach(lx=>{s+='<rect x="'+(lx-11)+'" y="3" width="22" height="4.5" rx="1.2" fill="#2b3543"/><rect x="'+(lx-9)+'" y="3.6" width="18" height="3.2" rx="1" fill="#f4eed0"/><ellipse cx="'+lx+'" cy="9" rx="16" ry="9" fill="url(#lite_'+P+')"/>';});
+ s+='<rect x="231" y="2" width="71" height="15" rx="2.5" fill="#0c1016" stroke="#2b3543" stroke-width="1"/>'+
+    '<text x="266.5" y="12.6" text-anchor="middle" font-size="9" font-weight="800" fill="#ffd34d" letter-spacing="1">'+((cols.offAbbr||'HOME')+' · '+(cols.defAbbr||'AWAY'))+'</text>';
+ // Vordere Bande (dunkler Rahmen rund ums Feld) + Bowl-Vignette
+ const oTL=PJ(-2.2,farFy+0.6),oTR=PJ(55.5,farFy+0.6),oBR=PJ(55.5,nearFy-0.8),oBL=PJ(-2.2,nearFy-0.8);
+ s+='<polygon points="'+poly(oBL,oBR,oTR,oTL)+'" fill="#0b1610"/>';
  s+='<polygon points="'+poly(BL,BR,TR,TL)+'" fill="url(#turf_'+P+')"/>';
  for(let fy=-5;fy<=hiFy+0.1;fy+=5)s+=xline(fy,'#cdeede',Math.max(0.5,DS(fy)*1.4).toFixed(2),'0.26');
  if(fpos!=null){
@@ -791,6 +817,7 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
+ s+='<rect width="533" height="360" fill="url(#bowl_'+P+')" pointer-events="none"/>';
  svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i,null,cols.defAbbr));
  d.offense.forEach((o,i)=>addPlayer(svg,o,offC,'o'+i,preSnap?{pos:o.pos}:o,cols.offAbbr));   // Vor-Snap: keine Ziel-Markierung
