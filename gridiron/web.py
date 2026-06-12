@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v72-fixcam"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v73-pace"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -2124,9 +2124,9 @@ function _snapSequence(svg,d,onDone){const P=svg.id;if(_anim[P])cancelAnimationF
  if(ball){ball.setAttribute('opacity',1);ball.setAttribute('cx',losX);ball.setAttribute('cy',losY);ball.setAttribute('transform','');}
  const t0=performance.now();
  function fr(now){const e=(now-t0)/1000;
-  if(cap)cap.textContent=e<0.45?'DOWN …':e<0.85?'SET …':'HUT!';
-  if(e>=0.85&&ball){const t=Math.min(1,(e-0.85)/0.2);ball.setAttribute('cx',losX+(qbX-losX)*t);ball.setAttribute('cy',losY+(qbY-losY)*t);}   // Snap zum QB
-  if(e<1.08)_anim[P]=requestAnimationFrame(fr);
+  if(cap)cap.textContent=e<0.30?'DOWN …':e<0.58?'SET …':'HUT!';
+  if(e>=0.58&&ball){const t=Math.min(1,(e-0.58)/0.16);ball.setAttribute('cx',losX+(qbX-losX)*t);ball.setAttribute('cy',losY+(qbY-losY)*t);}   // Snap zum QB
+  if(e<0.78)_anim[P]=requestAnimationFrame(fr);
   else{if(cap&&cap.remove)cap.remove();onDone();}
  }
  _anim[P]=requestAnimationFrame(fr);}
