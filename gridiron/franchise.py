@@ -2096,15 +2096,15 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         if weather and o.get("kind") not in ("sack", "int"):
             is_pass = (concept in PASS_CONCEPTS) or o.get("pass")
             if weather == 1:                                              # Regen (nass)
-                if is_pass and o.get("kind") == "complete" and random.random() < 0.08:
-                    o["kind"], o["yards"] = "incomplete", 0               # nasser Ball -> Drop
+                if is_pass and o.get("kind") == "complete" and random.random() < 0.04:
+                    o["kind"], o["yards"] = "incomplete", 0               # nasser Ball -> selten ein Drop
                 else:
-                    o["yards"] = int(round(o["yards"] * (0.85 if is_pass else 1.06)))
-            elif weather == 2:                                           # Schnee (alles schwerer)
-                if is_pass and o.get("kind") == "complete" and random.random() < 0.13:
+                    o["yards"] = int(round(o["yards"] * (0.90 if is_pass else 1.05)))
+            elif weather == 2:                                           # Schnee (alles etwas schwerer)
+                if is_pass and o.get("kind") == "complete" and random.random() < 0.07:
                     o["kind"], o["yards"] = "incomplete", 0
                 else:
-                    o["yards"] = int(round(o["yards"] * (0.82 if is_pass else 0.90)))
+                    o["yards"] = int(round(o["yards"] * (0.88 if is_pass else 0.93)))
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     # Strafen (nur normale Snaps – nicht bei Trick-Plays/FG/PAT)
