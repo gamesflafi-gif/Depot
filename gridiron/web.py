@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v91-zones"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v92-pass"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1135,8 +1135,10 @@ function playAnim(svg,d,res,onDone){
      const timed=tgt&&el>0.5&&recvTime<=ballTime+0.05;                      // jetzt werfen -> Receiver läuft den Ball an
      if((timed||(qbPressed&&el>0.6)||el>2.4)&&el>=PAD){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;throwFig(P,'o'+qb.i);}   // Wurf erst nach dem Play-Action-Fake
    }
-   if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
-     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;catchFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)catchFig(P,'d_'+intD.i);}}   // Fang-Animation
+   if(thrown&&!arrived){const fd=(kind==='complete'&&tgt)?[tgt.x,tgt.y]:dest;   // Completion: Ball fliegt zum Receiver (nicht hinter ihn), INT zum festen Punkt
+     const o2={x:bp[0],y:bp[1]};_toward(o2,fd[0],fd[1],BALLSPD*dt);bp=[o2.x,o2.y];
+     throwAng=Math.atan2(-(fd[1]-bp[1]),(fd[0]-bp[0]))*180/Math.PI;             // Ball zeigt in die aktuelle Flugrichtung (zum Ziel)
+     if(Math.hypot(fd[0]-bp[0],fd[1]-bp[1])<0.7){arrived=true;arrTime=el;if(kind==='complete'){caught=true;catchFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)catchFig(P,'d_'+intD.i);}}   // Fang-Animation
    else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[bp[0]+(intD.x-bp[0])*0.3,bp[1]+(intD.y-bp[1])*0.3];}   // INT: Ball gleitet weich zum Eroberer (kein Sprung)
   }
   if(kind==='incomplete'&&arrived&&!swatted&&swatD){swatted=true;popFig(P,'d_'+swatD.i);}   // DB verteidigt den Pass (Reaktion)
