@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v87-fs"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v88-pa"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -784,7 +784,7 @@ async function drawPlay(concept,coverage,res){
  $('sim_fieldcard').style.display='block';
  $('field_title').textContent=concept+' vs '+coverage.replace(/ —.*/,'');
  renderField($('field'),d,parseInt($('sim_y').value)||10);
- playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0});
+ playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0,pa:(concept==='PA Boot')});
 }
 function renderField(svg,d,ytg,cols,fpos,preSnap){
  cols=cols||{}; const offC=cols.off||'#16c784', defC=cols.def||'#ef5350';
@@ -1052,6 +1052,7 @@ function playAnim(svg,d,res,onDone){
  const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry,_fa:0}));
  const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop,_fa:180}));
  const qb=O.find(o=>o.pos==='QB'),tgt=O.find(o=>o.target||o.carry),ols=O.filter(o=>o.pos==='OL');
+ const PAD=(res.pa&&isPass)?0.62:0, rbF=O.find(o=>o.pos==='RB'||o.pos==='FB');   // Play-Action: Fake-Handoff-Dauer + Back für den Fake
  // Ballträger-Route auf den tatsächlichen Raumgewinn kürzen (Completion: Fang dann YAC; Lauf: bis Yards, auch negativ)
  if((kind==='complete'||kind==='run')&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1];
    const cy=(kind==='complete')?Math.min(rY,Math.max(1,vy)):Math.min(rY,vy);
@@ -1084,10 +1085,13 @@ function playAnim(svg,d,res,onDone){
   const picked=(kind==='int'&&arrived);                        // nach Interception: Rollen drehen (Defense returnt)
   const pressure=isPass&&rushers.some(r=>(!r._ol||el>1.6)&&Math.hypot(r.x-qb.x,r.y-qb.y)<2.3);   // freier/durchgebrochener Rusher
   // ---- QB: Drop in die Pocket, Schritt nach vorn beim Wurf ----
-  if(isPass&&!sacked){const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C,Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}
+  if(isPass&&!sacked){
+   if(el<PAD){steer(qb,C-0.8,-1.5,mx('QB')*0.55,dt,rp('QB'));if(!qb._paf&&el>0.12){qb._paf=1;handFig(P,'o'+qb.i);}}   // Play-Action: am Mesh faken (Übergabe-Geste)
+   else{const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C+(res.pa?2.6:0),Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}}   // danach Drop (Boot: leicht herausrollen)
   else if(!isPass){steer(qb,C-0.4,-3.4,mx('QB')*0.7,dt,rp('QB'));}
   // ---- Offense: Blocker (Pocket/Run-Block), Ballträger, Routen ----
   O.forEach(o=>{if(o.pos==='QB')return;
+   if(PAD&&o===rbF){if(el<PAD+0.28)steer(o,C+1.4,3.0,mx(o.pos),dt,rp(o.pos));else steer(o,C+3.2,-1.6,mx(o.pos)*0.7,dt,rp(o.pos));return;}   // Play-Action: RB täuscht Lauf durch die Line, sichert danach die Boot-Seite
    if(picked){steer(o,intD.x,intD.y,mx(o.pos),dt,rp(o.pos));return;}   // nach INT: Offense jagt den Interceptor
    if((o.pos==='X'||o.pos==='Z'||o.pos==='SL'||o.pos==='TE')&&el<0.4&&!o._rel){o._rel=1;o.vx=(o.vx||0)+((o.i%2)?1.1:-1.1);}   // Release/Stem am Snap
    if(o.pos==='OL'){
@@ -1118,7 +1122,7 @@ function playAnim(svg,d,res,onDone){
      const recvTime=tgt?Math.hypot(dest[0]-tgt.x,dest[1]-tgt.y)/Math.max(4,_spd(tgt.pos)):0;  // Zeit des Receivers zum Punkt
      const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
      const timed=tgt&&el>0.5&&recvTime<=ballTime+0.05;                      // jetzt werfen -> Receiver läuft den Ball an
-     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;throwFig(P,'o'+qb.i);}   // Wurf + Wurfbewegung
+     if((timed||(qbPressed&&el>0.6)||el>2.4)&&el>=PAD){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;throwFig(P,'o'+qb.i);}   // Wurf erst nach dem Play-Action-Fake
    }
    if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
      if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;catchFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)catchFig(P,'d_'+intD.i);}}   // Fang-Animation
@@ -1131,6 +1135,7 @@ function playAnim(svg,d,res,onDone){
    if(picked){if(p===intD)steer(p,intD.x,Math.max(intD.y-11,-5.5),sp,dt,rp(p.pos));else steer(p,p.x+(intD.x-p.x)*0.05,p.y,sp*0.6,dt,rp(p.pos));return;}   // INT-Return: Interceptor läuft zurück, Rest begleitet
    if(kind==='int'&&p===intD){steer(p,catchPt[0],catchPt[1],sp*1.05,dt,rp(p.pos));return;}   // Interceptor bricht auf den Ball (sitzt am Fangpunkt)
    if(kind==='sack'){steer(p,qb.x,qb.y,sp,dt,rp(p.pos));return;}
+   if(PAD&&el<PAD&&(p.pos==='LB'||(p.role==='zone'&&!p.deep))){steer(p,p.x,Math.max(1.5,p.y-2.6),sp*0.92,dt,rp(p.pos));return;}   // Play-Action: Underneath-Defender beißt am Run-Fake an, erholt sich danach
    if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                              // Verfolgungswinkel: leicht vor den Läufer
      const ahead=(p===nearD)?0.0:Math.min(0.42,Math.max(0,(carrier.y-p.y))/16);                      // der Tackler geht direkt auf den Ballträger
      const boost=(p===nearD)?1.22:1.0;                                                               // Tempo-Edge -> erreicht den Spot mit dem Läufer (echter Tackle, kein Phantom)
@@ -1169,6 +1174,7 @@ function playAnim(svg,d,res,onDone){
    else if(kind==='sack')setB(qb.x,qb.y,null,0);                                              // Ball beim bedrängten QB
    else if(thrown){const fp=arrived?1:Math.min(1,(el-tAt)/flightDur);setB(bp[0],bp[1],throwAng+Math.sin(fp*26)*4,Math.sin(fp*Math.PI)*14);
      ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
+   else if(PAD&&el>0.12&&el<PAD&&rbF)setB(qb.x+(rbF.x-qb.x)*0.72,qb.y+(rbF.y-qb.y)*0.72,null,0);   // Play-Action: Ball scheinbar zum RB (Fake), dann zurück zum QB
    else setB(qb.x,qb.y,null,0);                                                               // Pass: Ball in QB-Hand bis zum Wurf
   }
   // Ende: Lauf/Fang endet bei ECHTEM Kontakt am Raumgewinn-Spot (kein Phantom-Tackle); sonst Pass/Sack/Aus/Timeout
@@ -2234,7 +2240,7 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
- const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0};
+ const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0,pa:(play.concept==='PA Boot')};
  _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}));}   // Cadence + Snap, dann das Play
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
