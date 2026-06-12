@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v83-life"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v84-ball"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -852,7 +852,7 @@ function _jersey(pos,i){const r=_NUMRANGE[pos]||[1,99];return r[0]+((i*7+5)%(r[1
 /* Detaillierte Spielerfigur (Top-Down): Schulterpolster mit Plastik-Schattierung, Arme & Handschuhe,
    Helm mit Glanz, Mittelstreifen und Facemask-Käfig, Cleats. Figur zeigt immer nach oben; die
    .face-Gruppe dreht sie in Laufrichtung (Defense im Stand um 180° gedreht). */
-const _FB=1.08;   // Figur-Grundgröße in der Perspektive
+const _FB=1.22;   // Figur-Grundgröße in der Perspektive (größere Spieler, passende Proportionen)
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
  const edge=_shade(color,-95),hel=_shade(color,-24),pad=_shade(color,12),arm=_shade(color,-14),stripe=_shade(color,108),sock=_shade(color,-34),pants='#e8ecf1';
@@ -1116,7 +1116,7 @@ function playAnim(svg,d,res,onDone){
   // schreiben (die Perspektive ist die Kamera — kein viewBox-Pan mehr nötig)
   O.forEach(o=>{moveP(P,'o'+o.i,o.x,o.y);faceP(P,'o'+o.i,o.vx||0,o.vy||0,o);});
   D.forEach(p=>{moveP(P,'d_'+p.i,p.x,p.y);faceP(P,'d_'+p.i,p.vx||0,p.vy||0,p);});
-  if(ball){const setB=(fx,fy,ang,arc)=>{const q=PJ(fx,fy),sc=DS(fy),bx=q[0],by=q[1]-(arc||0)*sc;ball.setAttribute('opacity',1);ball.setAttribute('cx',bx.toFixed(1));ball.setAttribute('cy',by.toFixed(1));ball.setAttribute('rx',(4*sc).toFixed(2));ball.setAttribute('ry',(2.5*sc).toFixed(2));ball.setAttribute('transform',ang!=null?'rotate('+ang.toFixed(0)+' '+bx.toFixed(1)+' '+by.toFixed(1)+')':'');};
+  if(ball){const setB=(fx,fy,ang,arc)=>{const q=PJ(fx,fy),sc=DS(fy),bx=q[0],by=q[1]-(7.0*_FB+(arc||0))*sc;ball.setAttribute('opacity',1);ball.setAttribute('cx',bx.toFixed(1));ball.setAttribute('cy',by.toFixed(1));ball.setAttribute('rx',(2.9*_FB*sc).toFixed(2));ball.setAttribute('ry',(1.75*_FB*sc).toFixed(2));ball.setAttribute('transform',ang!=null?'rotate('+ang.toFixed(0)+' '+bx.toFixed(1)+' '+by.toFixed(1)+')':'');};   // Ball auf Hand-/Brusthöhe halten (nicht an den Füßen)
    if(fumbled){const fb=(recovered&&recoverer)?[recoverer.x,recoverer.y]:fumbleSpot;setB(fb[0],fb[1],(el*780)%360,0);}
    else if(!isPass){
      if(!handoffDone)setB(qb.x,qb.y,null,0);                                                  // Ball in QB-Hand bis zum Handoff
