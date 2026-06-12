@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v78-closeup"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v79-purefield"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -774,7 +774,7 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    '<circle cx="1.4" cy="1.6" r=".6" fill="#929ba6"/><circle cx="4.7" cy="1.1" r=".6" fill="'+_shade(offC,-34)+'"/>'+
    '<circle cx="2.6" cy="4.4" r=".6" fill="'+_shade(defC,-34)+'"/><circle cx="5.7" cy="5" r=".6" fill="#7a8490"/>'+
    '<circle cx="0.5" cy="5.9" r=".5" fill="#7e8893"/><circle cx="3.6" cy="6.4" r=".5" fill="#535b65"/></pattern>'+
-  '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05080d" stop-opacity=".85"/><stop offset=".42" stop-color="#0a0e14" stop-opacity="0"/></linearGradient>'+
+  '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a2c1b" stop-opacity=".92"/><stop offset=".26" stop-color="#0f3d25" stop-opacity="0"/></linearGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
@@ -784,25 +784,12 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  const PS=p=>p[0].toFixed(1)+','+p[1].toFixed(1);
  const poly=(a,b,c,e)=>PS(a)+' '+PS(b)+' '+PS(c)+' '+PS(e);
  const xline=(fy,col,w,op,dash)=>{const a=PJ(0,fy),b=PJ(53.3,fy);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="'+op+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';};
- // ---- Stadion: dunkler Hintergrund + Ränge (Crowd) links/rechts/oben um das Feld ----
- const horY=TL[1];
- s+='<rect width="533" height="360" fill="#0a0e14"/>';
- s+='<polygon points="'+poly([0,0],TL,BL,[0,360])+'" fill="url(#cr_'+P+')"/>'+      // linker Rang
-    '<polygon points="'+poly([533,0],TR,BR,[533,360])+'" fill="url(#cr_'+P+')"/>'+   // rechter Rang
-    '<polygon points="'+PS([0,0])+' '+PS([533,0])+' '+PS(TR)+' '+PS(TL)+'" fill="url(#cr_'+P+')"/>';   // oberer Rang
- // Tier-Linien (Gänge) in den Seitenrängen für Tiefe
- for(let k=1;k<=3;k++){const f=k/4;s+='<line x1="'+(TL[0]*f).toFixed(1)+'" y1="'+(horY*f).toFixed(1)+'" x2="'+(BL[0]*f).toFixed(1)+'" y2="'+(360-(360-BL[1])*f).toFixed(1)+'" stroke="#0a0e14" stroke-width="1.4" opacity=".5"/>'+
-   '<line x1="'+(533-(533-TR[0])*f).toFixed(1)+'" y1="'+(horY*f).toFixed(1)+'" x2="'+(533-(533-BR[0])*f).toFixed(1)+'" y2="'+(360-(360-BR[1])*f).toFixed(1)+'" stroke="#0a0e14" stroke-width="1.4" opacity=".5"/>';}
- // Flutlichter + Scoreboard am oberen Rand
- [62,200,333,471].forEach(lx=>{s+='<rect x="'+(lx-11)+'" y="3" width="22" height="4.5" rx="1.2" fill="#2b3543"/><rect x="'+(lx-9)+'" y="3.6" width="18" height="3.2" rx="1" fill="#f4eed0"/><ellipse cx="'+lx+'" cy="9" rx="16" ry="9" fill="url(#lite_'+P+')"/>';});
- s+='<rect x="231" y="2" width="71" height="15" rx="2.5" fill="#0c1016" stroke="#2b3543" stroke-width="1"/>'+
-    '<text x="266.5" y="12.6" text-anchor="middle" font-size="9" font-weight="800" fill="#ffd34d" letter-spacing="1">'+((cols.offAbbr||'HOME')+' · '+(cols.defAbbr||'AWAY'))+'</text>';
- // Vordere Bande (dunkler Rahmen rund ums Feld) + Bowl-Vignette
- const oTL=PJ(-2.2,farFy+0.6),oTR=PJ(55.5,farFy+0.6),oBR=PJ(55.5,nearFy-0.8),oBL=PJ(-2.2,nearFy-0.8);
- s+='<polygon points="'+poly(oBL,oBR,oTR,oTL)+'" fill="#0b1610"/>';
- // Rasen mit Mähstreifen (abwechselnd hell/dunkel je 5 Yards) für den gepflegten Stadion-Look
+ // ---- Reines Spielfeld füllt das Bild (kein Rang/Crowd) — wie in der Referenz ----
+ s+='<rect width="533" height="360" fill="#0f3d25"/>';                                    // Basis-Grün (ferne Distanz oben)
+ // Mähstreifen je 5 Yards, Gras reicht weit über die Seitenlinien hinaus bis zum Bildrand
+ const XW0=-30,XW1=83.3;
  for(let fy=Math.floor(nearFy/5)*5;fy<farFy;fy+=5){const f0=Math.max(fy,nearFy),f1=Math.min(fy+5,farFy);
-  const a=PJ(0,f0),b=PJ(53.3,f0),c=PJ(53.3,f1),e=PJ(0,f1);
+  const a=PJ(XW0,f0),b=PJ(XW1,f0),c=PJ(XW1,f1),e=PJ(XW0,f1);
   s+='<polygon points="'+poly(a,b,c,e)+'" fill="'+((Math.round(fy/5)&1)?'#15623a':'#1a6e44')+'"/>';}
  for(let fy=-5;fy<=hiFy+0.1;fy+=5)s+=xline(fy,'#eaf6ee',Math.max(0.5,DS(fy)*1.5).toFixed(2),'0.34');
  // Hashmarks (kurze Striche je Yard an den beiden Hash-Linien) wie auf einem echten Feld
