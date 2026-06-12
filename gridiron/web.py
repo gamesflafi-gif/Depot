@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v97-motion"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v98-mgr"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -32,7 +32,7 @@ _STYLE = """
    background:radial-gradient(135% 90% at 50% -12%,#11281c 0%,#0a1410 42%,var(--bg) 78%) fixed,var(--bg)}
  img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
- .top{background:#0d1411;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+ .top{background:linear-gradient(180deg,#103a25,#0d1411 72%),repeating-linear-gradient(90deg,#0e2c1c 0 26px,#10331f 26px 52px);border-bottom:2px solid var(--pitch);position:sticky;top:0;z-index:10;box-shadow:0 2px 10px -4px rgba(0,0,0,.6)}
  .topin{max-width:1040px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
  .brand{font-size:18px;font-weight:800;letter-spacing:.04em;display:flex;align-items:center;gap:14px}
  .brand .mk{width:4px;height:20px;background:var(--acc);border-radius:1px;
