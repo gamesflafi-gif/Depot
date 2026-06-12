@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v80-tackle"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v81-motion"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -262,7 +262,14 @@ _STYLE2 = """
  .fig.pop{animation:pop .4s ease}@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.6)}100%{transform:scale(1)}}
  .fig.down{animation:tackle .5s ease forwards}@keyframes tackle{0%{transform:rotate(0) scale(1)}45%{transform:translateY(-1px) rotate(40deg) scale(1.06)}100%{transform:translateY(2px) rotate(82deg) scale(.8);opacity:.72}}
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
- .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0) rotate(-1.6deg)}50%{transform:translateY(-1.2px) rotate(1.6deg)}}
+ .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
+ .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
+ .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
+ .fig.run .armL{animation:armB .30s ease-in-out infinite}.fig.run .armR{animation:armA .30s ease-in-out infinite}
+ @keyframes strdA{0%,100%{transform:rotate(17deg)}50%{transform:rotate(-17deg)}}@keyframes strdB{0%,100%{transform:rotate(-17deg)}50%{transform:rotate(17deg)}}
+ @keyframes armA{0%,100%{transform:rotate(12deg)}50%{transform:rotate(-12deg)}}@keyframes armB{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}}
+ .fig.block{animation:blk .24s ease-in-out infinite}@keyframes blk{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(.7px) scaleY(.96)}}
+ .fig.catch{animation:catchm .5s ease-out}@keyframes catchm{0%{transform:translateY(-2.4px) scale(1.16)}45%{transform:translateY(0) scale(1.04)}100%{transform:scale(1)}}
  .imp{transform-box:fill-box;transform-origin:center;animation:imp .42s ease-out forwards}@keyframes imp{0%{transform:scale(.2);opacity:.85}100%{transform:scale(1.6);opacity:0}}
  /* Touchdown-Jubel: 10 verschiedene Tänze/Bewegungen */
  .fig.cel{filter:drop-shadow(0 0 4px rgba(255,211,77,.9))}
@@ -844,18 +851,19 @@ function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx
  const fig=el('g',{}); fig.setAttribute('class','fig');                                            // Animations-Gruppe (pop/spin/down/cel)
  const num=_jersey(pos,idx);
  if(o&&o.target)fig.appendChild(el('ellipse',{cx:0,cy:0.4,rx:5.6,ry:2.0,fill:'none',stroke:'#ffd34d','stroke-width':1.3,opacity:.9,'class':'pulse'}));
- // Beine: Oberschenkel (Hose) + Socke (Teamfarbe) + Schuh — stehende Figur, Füße am Boden (y=0)
- [-1.75,1.75].forEach(lx=>{
-  fig.appendChild(el('path',{d:'M'+(lx-1.1)+' -5.9 L'+(lx+1.1)+' -5.9 L'+(lx+0.95)+' -2.5 L'+(lx-0.95)+' -2.5 Z',fill:pants,stroke:edge,'stroke-width':.5}));
-  fig.appendChild(el('rect',{x:lx-0.86,y:-2.6,width:1.72,height:2.2,rx:.5,fill:sock,stroke:edge,'stroke-width':.45}));
-  fig.appendChild(el('ellipse',{cx:lx+0.25,cy:-0.25,rx:1.3,ry:.72,fill:'#15191c',stroke:edge,'stroke-width':.35}));});
+ // Beine in eigenen Gruppen (.legL/.legR), schwingen beim Laufen um die Hüfte
+ [-1.75,1.75].forEach((lx,li)=>{const leg=el('g',{});leg.setAttribute('class',li?'legR':'legL');
+  leg.appendChild(el('path',{d:'M'+(lx-1.1)+' -5.9 L'+(lx+1.1)+' -5.9 L'+(lx+0.95)+' -2.5 L'+(lx-0.95)+' -2.5 Z',fill:pants,stroke:edge,'stroke-width':.5}));
+  leg.appendChild(el('rect',{x:lx-0.86,y:-2.6,width:1.72,height:2.2,rx:.5,fill:sock,stroke:edge,'stroke-width':.45}));
+  leg.appendChild(el('ellipse',{cx:lx+0.25,cy:-0.25,rx:1.3,ry:.72,fill:'#15191c',stroke:edge,'stroke-width':.35}));fig.appendChild(leg);});
  // Trikot/Rumpf von hinten: schmale Taille -> breite Schultern
  fig.appendChild(el('path',{d:'M-2.7 -5.8 L2.7 -5.8 L3.6 -11.3 Q3.6 -12.0 3.0 -12.0 L-3.0 -12.0 Q-3.6 -12.0 -3.6 -11.3 Z',fill:color,stroke:edge,'stroke-width':.9}));
  fig.appendChild(el('rect',{x:0.15,y:-12,width:3.45,height:6.2,fill:'#000',opacity:.13}));        // Volumen: rechte Hälfte dunkler
  fig.appendChild(el('rect',{x:-3.6,y:-12,width:1.9,height:6.2,fill:'#fff',opacity:.09}));          // linke Hälfte Highlight
- // Arme an den Seiten + Hände
- [-4.2,4.2].forEach(ax=>{fig.appendChild(el('ellipse',{cx:ax,cy:-8.7,rx:1.2,ry:2.7,fill:arm,stroke:edge,'stroke-width':.55}));
-  fig.appendChild(el('ellipse',{cx:ax+(ax<0?0.2:-0.2),cy:-6.0,rx:1.05,ry:1.2,fill:'#e8cba8',stroke:edge,'stroke-width':.4}));});
+ // Arme in eigenen Gruppen (.armL/.armR), pumpen gegengleich zu den Beinen
+ [-4.2,4.2].forEach((ax,ai)=>{const a2=el('g',{});a2.setAttribute('class',ai?'armR':'armL');
+  a2.appendChild(el('ellipse',{cx:ax,cy:-8.7,rx:1.2,ry:2.7,fill:arm,stroke:edge,'stroke-width':.55}));
+  a2.appendChild(el('ellipse',{cx:ax+(ax<0?0.2:-0.2),cy:-6.0,rx:1.05,ry:1.2,fill:'#e8cba8',stroke:edge,'stroke-width':.4}));fig.appendChild(a2);});
  // Rückennummer (groß, auf dem Trikot)
  const tn=el('text',{x:0,y:-7.9,'text-anchor':'middle','font-size':4.7,fill:'#fff','font-weight':800,stroke:edge,'stroke-width':.5,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
  // Schulterpolster (breiter Balken) + Highlight
@@ -873,9 +881,12 @@ function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx
 function faceP(P,id,vx,vy,o){const lean=Math.max(-15,Math.min(15,(vx||0)*3.2));
  if(o._fa==null)o._fa=lean;else o._fa+=(lean-o._fa)*0.25;
  const g=$(P+'_pl_'+id);if(!g)return;const fcel=g.querySelector('.face');if(fcel)fcel.setAttribute('transform','rotate('+o._fa.toFixed(1)+')');
- const f=o._figEl||(o._figEl=g.querySelector('.fig'));if(!f)return;            // Lauf-Animation (Wippen) wenn in Bewegung
- const moving=Math.hypot(vx||0,vy||0)>2.0, busy=f.classList.contains('down')||f.classList.contains('cel')||f.classList.contains('spin');
- if(moving&&!busy){if(!f.classList.contains('run'))f.classList.add('run');}else if(f.classList.contains('run'))f.classList.remove('run');}
+ const f=o._figEl||(o._figEl=g.querySelector('.fig'));if(!f)return;            // Lauf-/Block-Animation je nach Zustand
+ const busy=f.classList.contains('down')||f.classList.contains('cel')||f.classList.contains('spin')||f.classList.contains('catch');
+ const blk=!!o._blk&&!busy;
+ if(blk){if(!f.classList.contains('block'))f.classList.add('block');}else if(f.classList.contains('block'))f.classList.remove('block');
+ const moving=!blk&&!busy&&Math.hypot(vx||0,vy||0)>2.0;
+ if(moving){if(!f.classList.contains('run'))f.classList.add('run');}else if(f.classList.contains('run'))f.classList.remove('run');}
 // Kleine 2D-Figur (Sideline-Crew / Schiedsrichter)
 function _crewFig(x,y,vest,acc){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.3" ry="3" fill="'+vest+'" stroke="#06140d" stroke-width=".6"/><circle cy="-2.4" r="1.6" fill="#e7c39c" stroke="#06140d" stroke-width=".5"/>'+(acc||'')+'</g>';}
 function _refFig(x,y){return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')"><ellipse cy="3" rx="2.6" ry="1.4" fill="#06140d" fill-opacity=".3"/><ellipse cy="1" rx="2.4" ry="3.1" fill="#1c1c1c" stroke="#06140d" stroke-width=".5"/><rect x="-2.3" y="-0.9" width="4.6" height="1" fill="#f4f4f4"/><rect x="-2.3" y="1.1" width="4.6" height="1" fill="#f4f4f4"/><circle cy="-2.5" r="1.6" fill="#caa07a" stroke="#06140d" stroke-width=".5"/></g>';}
@@ -896,6 +907,7 @@ function moveP(P,id,x,y){const g=$(P+'_pl_'+id);if(!g)return;const q=PJ(x,y);g.s
 function popFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('pop');void f.getBBox();f.classList.add('pop');}}
 function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.add('down');}}
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
+function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','catch');void f.getBBox();f.classList.add('catch');setTimeout(()=>f.classList.remove('catch'),520);}}   // eigene Fang-Animation (greifen)
 function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','spin');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
 /* Kino-Jubel: Spiel pausiert, Endzonen-Kamera mit Stadion, Feld, traurigen Gegnern & herbeieilendem Team */
 function _celFig(color,cls,extra){return '<g class="fig '+(cls||'')+'"'+(extra||'')+'>'+
@@ -1020,11 +1032,11 @@ function playAnim(svg,d,res,onDone){
    if((o.pos==='X'||o.pos==='Z'||o.pos==='SL'||o.pos==='TE')&&el<0.4&&!o._rel){o._rel=1;o.vx=(o.vx||0)+((o.i%2)?1.1:-1.1);}   // Release/Stem am Snap
    if(o.pos==='OL'){
      if(isPass){const r=o._asg;
-       if(r){const dx=qb.x-r.x,dy=qb.y-r.y,dd=Math.hypot(dx,dy)||1;steer(o,r.x+dx/dd*0.85,Math.max(-3.4,Math.min(-0.2,r.y+dy/dd*0.85)),mx('OL'),dt,rp('OL'));}  // goalside vor dem Rusher -> Wall
-       else{const slot=C+(olsX.indexOf(o)-(olsX.length-1)/2)*1.7;steer(o,slot,-1.9,mx('OL'),dt,rp('OL'));}}               // unbeschäftigt -> Pocket füllen
+       if(r){const dx=qb.x-r.x,dy=qb.y-r.y,dd=Math.hypot(dx,dy)||1;steer(o,r.x+dx/dd*0.85,Math.max(-3.4,Math.min(-0.2,r.y+dy/dd*0.85)),mx('OL'),dt,rp('OL'));o._blk=Math.hypot(r.x-o.x,r.y-o.y)<1.8;}  // goalside vor dem Rusher -> Wall
+       else{const slot=C+(olsX.indexOf(o)-(olsX.length-1)/2)*1.7;steer(o,slot,-1.9,mx('OL'),dt,rp('OL'));o._blk=false;}}               // unbeschäftigt -> Pocket füllen
      else{const lane=runEnd?runEnd[0]:C;let r=null,bd=1e9;D.forEach(p=>{if(p.role==='man'||p.drop)return;const dd=Math.hypot(p.x-o.x,p.y-o.y);if(dd<bd){bd=dd;r=p;}});
-       if(r){const toLane=(r.x<=lane)?0.6:-0.6;steer(o,r.x+toLane,Math.max(o.y,r.y+0.3),mx('OL')*1.05,dt,rp('OL'));}     // an die lochnahe Schulter -> Verteidiger vom Loch wegtreiben
-       else steer(o,o.x+(lane-o.x)*0.25,Math.min(4.5,o.y+2.6),mx('OL'),dt,rp('OL'));}                                   // frei -> zum Second Level
+       if(r){const toLane=(r.x<=lane)?0.6:-0.6;steer(o,r.x+toLane,Math.max(o.y,r.y+0.3),mx('OL')*1.05,dt,rp('OL'));o._blk=bd<1.8;}     // an die lochnahe Schulter -> Verteidiger vom Loch wegtreiben
+       else{steer(o,o.x+(lane-o.x)*0.25,Math.min(4.5,o.y+2.6),mx('OL'),dt,rp('OL'));o._blk=false;}}                                   // frei -> zum Second Level
      return;}
    if(o===tgt){if(fumbled){o.vx=o.vy=0;return;}   // nach Fumble bleibt der Ballträger liegen
      if(isPass){if(!caught)routeStep(o,mx,dt,rp);else steer(o,gain[0],gain[1]+2.0,mx(o.pos),dt,rp(o.pos));}   // Fang -> upfield (YAC), läuft durch bis zum Tackle
@@ -1049,7 +1061,7 @@ function playAnim(svg,d,res,onDone){
      if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;}   // Ball zeigt in Flugrichtung
    }
    if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
-     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;popFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)popFig(P,'d_'+intD.i);}}   // INT-Fang
+     if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;catchFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)catchFig(P,'d_'+intD.i);}}   // Fang-Animation
    else if(arrived){if(kind==='complete'&&caught)bp=[tgt.x,tgt.y];else if(intD)bp=[bp[0]+(intD.x-bp[0])*0.3,bp[1]+(intD.y-bp[1])*0.3];}   // INT: Ball gleitet weich zum Eroberer (kein Sprung)
   }
   if(kind==='incomplete'&&arrived&&!swatted&&swatD){swatted=true;popFig(P,'d_'+swatD.i);}   // DB verteidigt den Pass (Reaktion)
@@ -1125,8 +1137,12 @@ function playAnim(svg,d,res,onDone){
       const endSpot=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                 // exakt am Raumgewinn-Spot enden -> akkurate Yards
       if(endSpot)carrier.y=endSpot[1];moveP(P,'o'+carrier.i,carrier.x,carrier.y);
       const near=D.map(p=>[p,Math.hypot(p.x-carrier.x,p.y-carrier.y)]).sort((a,b)=>a[1]-b[1]);
-      downFig(P,'o'+carrier.i);const gang=near.slice(0,2);                        // 1-2 nächste Verteidiger stürzen in den Tackle (Lunge)
-      gang.forEach((a,k)=>{const p=a[0],sgn=k?-1:1;moveP(P,'d_'+p.i,Math.max(1.5,Math.min(51.8,carrier.x+sgn*0.85)),carrier.y-0.6);downFig(P,'d_'+p.i);});
+      downFig(P,'o'+carrier.i);
+      const closers=near.filter(a=>a[1]<3.6).slice(0,2);                          // nur Verteidiger, die WIRKLICH da sind (kein Teleport)
+      if(closers.length)closers.forEach((a,k)=>{const p=a[0],sgn=k?-1:1;
+        if(a[1]<1.7)moveP(P,'d_'+p.i,Math.max(1.5,Math.min(51.8,carrier.x+sgn*0.8)),carrier.y-0.55);  // nur leicht andocken, wenn schon dran
+        downFig(P,'d_'+p.i);});
+      else if(near[0]&&near[0][1]<6)downFig(P,'d_'+near[0][0].i);                 // sonst hechtet der nächste aus der Distanz (an Ort und Stelle)
       _impact(svg,carrier.x,carrier.y);}                                          // Aufprall-Effekt am Tackle
     if(!res.noResult)showResult(svg,{kind,yards,td,fum:fumble,pt:(fumble&&fumbleSpot?fumbleSpot:(carrier?[carrier.x,carrier.y]:(kind==='int'&&intD?[intD.x,intD.y]:(kind==='sack'?[qb.x,vy]:catchPt))))});
     if(onDone)setTimeout(onDone,res.noResult?800:1050);}
