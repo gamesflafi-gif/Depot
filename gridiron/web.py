@@ -18,17 +18,18 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v76-artstyle"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v77-cohesive"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
-   --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350}
+   --line:#33403a;--acc:#16c784;--accsoft:#0f2a20;--warn:#e9b949;--bad:#ef5350;--gold:#ffd34d;--pitch:#1a6e44}
  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
  html{overflow-x:hidden;-webkit-text-size-adjust:100%}
  button,a,.tab,.s,.optbtn,.worldzoom button,select{touch-action:manipulation}
- body{margin:0;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;
+ body{margin:0;color:var(--fg);-webkit-font-smoothing:antialiased;
    font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-   width:100%;max-width:100%}
+   width:100%;max-width:100%;
+   background:radial-gradient(135% 90% at 50% -12%,#11281c 0%,#0a1410 42%,var(--bg) 78%) fixed,var(--bg)}
  img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
  .top{background:#0d1411;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
