@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v85-stadium"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v88-pa"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -580,6 +580,8 @@ _PAGE = """<!doctype html><html lang="de"><head>
 <script>
 const $=id=>document.getElementById(id);
 function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+function goFullscreen(){try{const el=document.documentElement;const rq=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen;if(rq&&!document.fullscreenElement){const r=rq.call(el);if(r&&r.catch)r.catch(()=>{});}}catch(e){}}   // Spielansicht im Vollbild -> alles ohne Scrollen
+function exitFullscreen(){try{if(document.fullscreenElement&&document.exitFullscreen){const r=document.exitFullscreen();if(r&&r.catch)r.catch(()=>{});}}catch(e){}}
 function lockBody(){document.documentElement.classList.add('noscroll');document.body.classList.add('noscroll');}
 function _releaseBody(){document.documentElement.classList.remove('noscroll');document.body.classList.remove('noscroll');document.body.style.top='';}
 function unlockBodyIfNone(){if(!document.querySelector('.overlay')&&!$('tutspot'))_releaseBody();}   // nur sperren solange wirklich ein Overlay offen ist
@@ -782,7 +784,7 @@ async function drawPlay(concept,coverage,res){
  $('sim_fieldcard').style.display='block';
  $('field_title').textContent=concept+' vs '+coverage.replace(/ —.*/,'');
  renderField($('field'),d,parseInt($('sim_y').value)||10);
- playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0});
+ playAnim($('field'),d,{kind:(d.kind==='run')?'run':'complete',yards:res?res.mean_yards:0,pa:(concept==='PA Boot')});
 }
 function renderField(svg,d,ytg,cols,fpos,preSnap){
  cols=cols||{}; const offC=cols.off||'#16c784', defC=cols.def||'#ef5350';
@@ -797,7 +799,8 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a2c1b" stop-opacity=".92"/><stop offset=".26" stop-color="#0f3d25" stop-opacity="0"/></linearGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
-  '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker></defs>';
+  '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker>'+
+  '<marker id="arr_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ff7a4d"/></marker></defs>';
  // ---- Perspektivisches Feld (Trapez, fern = schmaler/kleiner) ----
  const nearFy=_FYN, farFy=(fpos!=null)?(fpos+10):24, hiFy=(fpos!=null)?fpos:24;
  const TL=PJ(0,farFy),TR=PJ(53.3,farFy),BR=PJ(53.3,nearFy),BL=PJ(0,nearFy);
@@ -848,8 +851,21 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  [[-6.6,offC],[59.9,defC]].forEach(c=>{for(let k=0;k<3;k++)s+=benchFig(c[0],(fpos!=null?Math.min(fpos*0.5,farFy-9):11)+k*2.3,'#2c3037','#caa88a');});   // Coaches (Khaki/Headset)
  // Kettencrew + Schiedsrichter
  s+=_chainGang(ytg)+_refsOnField(d);
- if(!preSnap)d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
-  const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
+ if(!preSnap){
+  // Defense-Coverage sichtbar machen: Blitz=Pfeil zum QB, Mann=Linie zum Receiver, Zone=Bereich an der Landmarke
+  d.defense.forEach(p=>{const a=PJ(p.x,p.y);
+   if(p.role==='rush'){const b=PJ(26.65,-2.2);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#ff7a4d" stroke-width="1.5" opacity="0.55" marker-end="url(#arr_'+P+')"/>';}
+   else if(p.role==='man'&&p.cover){const r=d.offense.find(o=>o.pos===p.cover);if(r){const b=PJ(r.x,r.y);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#ff66ad" stroke-width="1.1" opacity="0.5" stroke-dasharray="3 3"/>';}}
+   else if(p.drop){const c=PJ(p.drop[0],p.drop[1]),rr=p.deep?7.5:5.2,rx=Math.abs(PJ(p.drop[0]+rr,p.drop[1])[0]-c[0]);s+='<ellipse cx="'+c[0].toFixed(1)+'" cy="'+c[1].toFixed(1)+'" rx="'+rx.toFixed(1)+'" ry="'+(rx*0.5).toFixed(1)+'" fill="#3aa0ff" fill-opacity="0.09" stroke="#5fb0ff" stroke-width="1" stroke-dasharray="3 3" opacity="0.55"/>';}});
+  // Block-Angaben: T-Marke vor jedem Blocker (O-Line / im Backfield bleibender FB/TE)
+  d.offense.forEach(o=>{if(o.pos!=='OL'&&o.pos!=='FB'&&o.pos!=='TE')return;if(o.route&&o.route.length>1)return;
+   const st=PJ(o.x,o.y-0.1),tip=PJ(o.x,o.y+1.15),l=PJ(o.x-1.0,o.y+1.15),r=PJ(o.x+1.0,o.y+1.15);
+   s+='<line x1="'+st[0].toFixed(1)+'" y1="'+st[1].toFixed(1)+'" x2="'+tip[0].toFixed(1)+'" y2="'+tip[1].toFixed(1)+'" stroke="#08140d" stroke-width="2.7" opacity="0.9"/>'+
+      '<line x1="'+l[0].toFixed(1)+'" y1="'+l[1].toFixed(1)+'" x2="'+r[0].toFixed(1)+'" y2="'+r[1].toFixed(1)+'" stroke="#08140d" stroke-width="2.7" opacity="0.9"/>';});
+  // Offense-Routen
+  d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
+   const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
+ }
  s+='<rect width="533" height="360" fill="url(#bowl_'+P+')" pointer-events="none"/>';
  svg.innerHTML=s;
  d.defense.forEach((p,i)=>addPlayer(svg,p,defC,'d_'+i,null,cols.defAbbr));
@@ -1036,6 +1052,7 @@ function playAnim(svg,d,res,onDone){
  const O=d.offense.map((o,i)=>({i,pos:o.pos,x:o.x,y:o.y,sy:o.y,route:(o.route&&o.route.length>1)?o.route:null,ri:1,target:!!o.target,carry:!!o.carry,_fa:0}));
  const D=d.defense.map((p,i)=>({i,pos:p.pos,x:p.x,y:p.y,role:p.role,cover:p.cover,drop:p.drop,_fa:180}));
  const qb=O.find(o=>o.pos==='QB'),tgt=O.find(o=>o.target||o.carry),ols=O.filter(o=>o.pos==='OL');
+ const PAD=(res.pa&&isPass)?0.62:0, rbF=O.find(o=>o.pos==='RB'||o.pos==='FB');   // Play-Action: Fake-Handoff-Dauer + Back für den Fake
  // Ballträger-Route auf den tatsächlichen Raumgewinn kürzen (Completion: Fang dann YAC; Lauf: bis Yards, auch negativ)
  if((kind==='complete'||kind==='run')&&tgt&&tgt.route){const r=tgt.route,rY=r[r.length-1][1];
    const cy=(kind==='complete')?Math.min(rY,Math.max(1,vy)):Math.min(rY,vy);
@@ -1068,10 +1085,13 @@ function playAnim(svg,d,res,onDone){
   const picked=(kind==='int'&&arrived);                        // nach Interception: Rollen drehen (Defense returnt)
   const pressure=isPass&&rushers.some(r=>(!r._ol||el>1.6)&&Math.hypot(r.x-qb.x,r.y-qb.y)<2.3);   // freier/durchgebrochener Rusher
   // ---- QB: Drop in die Pocket, Schritt nach vorn beim Wurf ----
-  if(isPass&&!sacked){const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C,Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}
+  if(isPass&&!sacked){
+   if(el<PAD){steer(qb,C-0.8,-1.5,mx('QB')*0.55,dt,rp('QB'));if(!qb._paf&&el>0.12){qb._paf=1;handFig(P,'o'+qb.i);}}   // Play-Action: am Mesh faken (Übergabe-Geste)
+   else{const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C+(res.pa?2.6:0),Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}}   // danach Drop (Boot: leicht herausrollen)
   else if(!isPass){steer(qb,C-0.4,-3.4,mx('QB')*0.7,dt,rp('QB'));}
   // ---- Offense: Blocker (Pocket/Run-Block), Ballträger, Routen ----
   O.forEach(o=>{if(o.pos==='QB')return;
+   if(PAD&&o===rbF){if(el<PAD+0.28)steer(o,C+1.4,3.0,mx(o.pos),dt,rp(o.pos));else steer(o,C+3.2,-1.6,mx(o.pos)*0.7,dt,rp(o.pos));return;}   // Play-Action: RB täuscht Lauf durch die Line, sichert danach die Boot-Seite
    if(picked){steer(o,intD.x,intD.y,mx(o.pos),dt,rp(o.pos));return;}   // nach INT: Offense jagt den Interceptor
    if((o.pos==='X'||o.pos==='Z'||o.pos==='SL'||o.pos==='TE')&&el<0.4&&!o._rel){o._rel=1;o.vx=(o.vx||0)+((o.i%2)?1.1:-1.1);}   // Release/Stem am Snap
    if(o.pos==='OL'){
@@ -1102,7 +1122,7 @@ function playAnim(svg,d,res,onDone){
      const recvTime=tgt?Math.hypot(dest[0]-tgt.x,dest[1]-tgt.y)/Math.max(4,_spd(tgt.pos)):0;  // Zeit des Receivers zum Punkt
      const qbPressed=D.some(q=>q.role==='rush'&&Math.hypot(q.x-qb.x,q.y-qb.y)<1.7);
      const timed=tgt&&el>0.5&&recvTime<=ballTime+0.05;                      // jetzt werfen -> Receiver läuft den Ball an
-     if(timed||(qbPressed&&el>0.6)||el>2.4){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;throwFig(P,'o'+qb.i);}   // Wurf + Wurfbewegung
+     if((timed||(qbPressed&&el>0.6)||el>2.4)&&el>=PAD){thrown=true;tAt=el;bp=[qb.x,qb.y];throwAng=Math.atan2(-(dest[1]-qb.y),(dest[0]-qb.x))*180/Math.PI;throwFig(P,'o'+qb.i);}   // Wurf erst nach dem Play-Action-Fake
    }
    if(thrown&&!arrived){const o2={x:bp[0],y:bp[1]};_toward(o2,dest[0],dest[1],BALLSPD*dt);bp=[o2.x,o2.y];
      if(Math.hypot(dest[0]-bp[0],dest[1]-bp[1])<0.6){arrived=true;arrTime=el;if(kind==='complete'){caught=true;catchFig(P,'o'+tgt.i);}else if(kind==='int'&&intD)catchFig(P,'d_'+intD.i);}}   // Fang-Animation
@@ -1115,6 +1135,7 @@ function playAnim(svg,d,res,onDone){
    if(picked){if(p===intD)steer(p,intD.x,Math.max(intD.y-11,-5.5),sp,dt,rp(p.pos));else steer(p,p.x+(intD.x-p.x)*0.05,p.y,sp*0.6,dt,rp(p.pos));return;}   // INT-Return: Interceptor läuft zurück, Rest begleitet
    if(kind==='int'&&p===intD){steer(p,catchPt[0],catchPt[1],sp*1.05,dt,rp(p.pos));return;}   // Interceptor bricht auf den Ball (sitzt am Fangpunkt)
    if(kind==='sack'){steer(p,qb.x,qb.y,sp,dt,rp(p.pos));return;}
+   if(PAD&&el<PAD&&(p.pos==='LB'||(p.role==='zone'&&!p.deep))){steer(p,p.x,Math.max(1.5,p.y-2.6),sp*0.92,dt,rp(p.pos));return;}   // Play-Action: Underneath-Defender beißt am Run-Fake an, erholt sich danach
    if(carrier){const dest=(!isPass?runEnd:gain)||[carrier.x,carrier.y];                              // Verfolgungswinkel: leicht vor den Läufer
      const ahead=(p===nearD)?0.0:Math.min(0.42,Math.max(0,(carrier.y-p.y))/16);                      // der Tackler geht direkt auf den Ballträger
      const boost=(p===nearD)?1.22:1.0;                                                               // Tempo-Edge -> erreicht den Spot mit dem Läufer (echter Tackle, kein Phantom)
@@ -1153,6 +1174,7 @@ function playAnim(svg,d,res,onDone){
    else if(kind==='sack')setB(qb.x,qb.y,null,0);                                              // Ball beim bedrängten QB
    else if(thrown){const fp=arrived?1:Math.min(1,(el-tAt)/flightDur);setB(bp[0],bp[1],throwAng+Math.sin(fp*26)*4,Math.sin(fp*Math.PI)*14);
      ball.setAttribute('opacity',(kind==='incomplete'&&arrived)?Math.max(0,1-(el-arrTime)/0.4):1);}
+   else if(PAD&&el>0.12&&el<PAD&&rbF)setB(qb.x+(rbF.x-qb.x)*0.72,qb.y+(rbF.y-qb.y)*0.72,null,0);   // Play-Action: Ball scheinbar zum RB (Fake), dann zurück zum QB
    else setB(qb.x,qb.y,null,0);                                                               // Pass: Ball in QB-Hand bis zum Wurf
   }
   // Ende: Lauf/Fang endet bei ECHTEM Kontakt am Raumgewinn-Spot (kein Phantom-Tackle); sonst Pass/Sack/Aus/Timeout
@@ -2060,8 +2082,8 @@ function qLabel(q){q=q||gameQ;return q>4?('OT'+(q>5?(q-4):'')):('Q'+q);}
 function toDots(n){let s='';for(let i=0;i<3;i++)s+='<span class="todot'+(i<n?'':' off')+'"></span>';return s;}
 function startClock(){}                               // Uhr ist backend-gesteuert (Stubs für Kompatibilität)
 function stopClock(){}
-async function startGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
-async function resumeGame(){const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
+async function startGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
+async function resumeGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 function openGame(g){closeGame();liveG=g;gameQ=g.quarter||1;gameClock=(g.clock!=null?g.clock:360);const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
  o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();
  const go=()=>{if(!liveG)return;renderGame(liveG);};
@@ -2218,7 +2240,7 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
- const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0};
+ const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0,pa:(play.concept==='PA Boot')};
  _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}));}   // Cadence + Snap, dann das Play
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
@@ -2300,7 +2322,7 @@ function toggleResBox(){const b=$('resbox');if(!b)return;if(b.innerHTML){b.inner
  else{b.innerHTML=boxSection({box:_resBox});$('resbtn').textContent='Statistik ausblenden';}}
 function closeResult(){const o=$('resultoverlay');if(o)o.remove();unlockBodyIfNone();}
 async function abortGame(){if(confirm('Spiel verlassen? Der Fortschritt geht verloren.')){await api('/api/fr/game/abort','POST');closeGame();loadMgr();}}
-function closeGame(){stopClock();const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;unlockBodyIfNone();}
+function closeGame(){stopClock();const o=$('gameoverlay');if(o)o.remove();liveG=null;playBusy=false;exitFullscreen();unlockBodyIfNone();}
 async function upg(u){const r=await api('/api/fr/upgrade?unit='+u,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
 async function setScheme(){const r=await api('/api/fr/scheme?off='+encodeURIComponent($('sc_off').value)+'&deff='+encodeURIComponent($('sc_def').value),'POST');if(r.view)renderMgr(r.view);}
 async function trainWeek(kind){const r=await api('/api/fr/train_week?kind='+kind,'POST');if(r.result&&r.result.error)alert(r.result.error);if(r.view)renderMgr(r.view);}
