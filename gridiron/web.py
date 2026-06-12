@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v95-atmos"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v96-weather"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -271,6 +271,7 @@ _STYLE2 = """
  .fig.spin{animation:spinmove .45s ease}@keyframes spinmove{0%{transform:rotate(0)}50%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
  .fig.juke{animation:juke .34s ease}@keyframes juke{0%{transform:translateX(0) rotate(0)}30%{transform:translateX(-1.5px) rotate(-11deg)}68%{transform:translateX(1.5px) rotate(11deg)}100%{transform:translateX(0) rotate(0)}}
  .fig.dive{animation:dive .5s ease forwards}@keyframes dive{0%{transform:translateY(0) rotate(0)}38%{transform:translateY(-2.4px) rotate(-22deg) scaleY(1.1)}100%{transform:translateY(1px) rotate(-78deg) scale(.84);opacity:.8}}
+ .fig.stiff{animation:stiff .42s ease}@keyframes stiff{0%{transform:rotate(0) scaleX(1)}40%{transform:translateY(-.6px) rotate(7deg) scaleX(1.12)}100%{transform:rotate(0) scaleX(1)}}
  .rain{stroke:#aec6e0;stroke-width:.9;opacity:.45;animation:rainf linear infinite}@keyframes rainf{from{transform:translateY(-26px)}to{transform:translateY(380px)}}
  .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
@@ -995,6 +996,7 @@ function downFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelect
 function spinFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('spin')&&!f.classList.contains('down')){f.classList.add('spin');setTimeout(()=>f.classList.remove('spin'),460);}}
 function jukeFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('down')){f.classList.remove('juke');void f.getBBox();f.classList.add('juke');setTimeout(()=>f.classList.remove('juke'),350);}}   // Ausweichschritt
 function diveFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','block','spin');f.classList.add('dive');}}   // Verteidiger hechtet in den Tackle
+function stiffFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f&&!f.classList.contains('down')){f.classList.remove('stiff');void f.getBBox();f.classList.add('stiff');setTimeout(()=>f.classList.remove('stiff'),430);}}   // Stiff-Arm
 function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','catch');void f.getBBox();f.classList.add('catch');setTimeout(()=>f.classList.remove('catch'),520);}}   // eigene Fang-Animation (greifen)
 function throwFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','throw');void f.getBBox();f.classList.add('throw');setTimeout(()=>f.classList.remove('throw'),440);}}   // QB-Wurfbewegung
 function handFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('hand');void f.getBBox();f.classList.add('hand');setTimeout(()=>f.classList.remove('hand'),340);}}   // Handoff-Geste
@@ -1145,7 +1147,9 @@ function playAnim(svg,d,res,onDone){
        steer(o,tx,ty,mx(o.pos),dt,rp(o.pos));}
      // Juke: enger Verfolger -> kurzer Ausweichschritt (nur als Ballträger, vor dem Raumgewinn-Spot)
      if(carrier&&o===carrier&&(gy==null||o.y<gy-1)){let nd=null,nb=2.0;D.forEach(q=>{const dd=Math.hypot(q.x-o.x,q.y-o.y);if(dd<nb){nb=dd;nd=q;}});
-       if(nd&&el>(o._jukeT||0)){o._jukeT=el+0.7;const side=(nd.x>o.x)?-1:1;o.vx=(o.vx||0)+side*2.6;jukeFig(P,'o'+o.i);}}
+       if(nd&&el>(o._jukeT||0)){o._jukeT=el+0.7;
+         if(nb<1.5){const ux=(nd.x-o.x)/(nb||1),uy=(nd.y-o.y)/(nb||1);nd.x+=ux*1.3;nd.y+=uy*1.3;nd.vx=ux*2.4;nd.vy=Math.max(0,uy*1.5);spinFig(P,'d_'+nd.i);stiffFig(P,'o'+o.i);}   // Stiff-Arm: einzelnen Tackler wegdrücken
+         else{const side=(nd.x>o.x)?-1:1;o.vx=(o.vx||0)+side*2.6;jukeFig(P,'o'+o.i);}}}   // Juke: seitlich vorbei
      return;}
    if(o.route&&!caught)routeStep(o,mx,dt,rp);   // Mitläufer/FB-Lead laufen ihre Wege
   });
@@ -2120,9 +2124,10 @@ function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGam
 let liveG=null, playBusy=false, _weather=0, _night=1, _disp=null;   // 0 klar /1 Regen /2 Schnee ; _night: Flutlicht ; _disp: Anzeigedaten fürs Feld-HUD
 // Kompaktes Scoreboard/Down&Distance dezent oben aufs Feld
 function _fieldHUD(svg){if(!svg||!_disp)return;const d=_disp,g=el('g',{});g.setAttribute('pointer-events','none');
+ const wi=d.weather===1?'🌧':d.weather===2?'❄':(d.night?'🌙':'☀');
  g.innerHTML='<rect x="150" y="2.5" width="233" height="16" rx="4" fill="#070b0a" opacity="0.62"/>'+
   '<rect x="155" y="5.5" width="10" height="10" rx="2" fill="'+esc(d.acolor||"#888")+'"/><text x="168" y="13.8" font-size="9.5" font-weight="800" fill="#fff">'+esc(d.aabbr||"")+' '+(d["as"]||0)+'</text>'+
-  '<text x="266.5" y="13.6" text-anchor="middle" font-size="9" font-weight="700" fill="#ffd34d">'+(d.down||1)+'. &amp; '+(d.dist||10)+'</text>'+
+  '<text x="266.5" y="13.6" text-anchor="middle" font-size="9" font-weight="700" fill="#ffd34d">'+wi+' '+(d.down||1)+'. &amp; '+(d.dist||10)+'</text>'+
   '<text x="378" y="13.8" text-anchor="end" font-size="9.5" font-weight="800" fill="#fff">'+(d.hs||0)+' '+esc(d.habbr||"")+'</text><rect x="373" y="5.5" width="10" height="10" rx="2" fill="'+esc(d.hcolor||"#888")+'"/>';
  svg.appendChild(g);}
 /* Echte Spieluhr: Viertelzeit kommt vom Backend und läuft pro Spielzug ab (kein Echtzeit-Ticker). */
@@ -2135,7 +2140,7 @@ function stopClock(){}
 async function startGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 async function resumeGame(){goFullscreen();const r=await api('/api/fr/game/start','POST');if(r.error){alert(r.error);return;}openGame(r.game);}
 function openGame(g){closeGame();liveG=g;gameQ=g.quarter||1;gameClock=(g.clock!=null?g.clock:360);
- {const wr=Math.random();_weather=wr<0.16?2:(wr<0.40?1:0);_night=(Math.random()<0.6)?1:0;}   // Wetter & Tageszeit pro Spiel
+ _weather=(g&&g.weather!=null)?g.weather:0;_night=(g&&g.night!=null)?g.night:1;   // Wetter & Tageszeit kommen vom Server (beeinflussen auch das Spiel)
  const o=document.createElement('div');o.className='overlay';o.id='gameoverlay';
  o.innerHTML='<div class="modal" id="gamemodal"></div>';document.body.appendChild(o);lockBody();
  const go=()=>{if(!liveG)return;renderGame(liveG);};

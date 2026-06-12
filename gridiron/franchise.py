@@ -1791,6 +1791,10 @@ def start_game(cfg: Config, state: dict) -> dict:
         g.setdefault("two_min", [g["quarter"] > 2, g["quarter"] > 2])
         g.setdefault("open_receiver", g.get("pos", 0))
         g.setdefault("playoff", state.get("phase") == "playoffs")
+        if "weather" not in g:                           # laufende Spiele mit Wetter/Tageszeit nachrüsten
+            _wr = random.random()
+            g["weather"] = 2 if _wr < 0.16 else (1 if _wr < 0.40 else 0)
+            g["night"] = 1 if random.random() < 0.6 else 0
         if "opts" not in g:                              # alte laufende Spiele nachrüsten
             _new_decision_options(state)
             save(cfg, state)
@@ -1809,8 +1813,12 @@ def start_game(cfg: Config, state: dict) -> dict:
     user_receives = random.random() < 0.5
     pos = (0 if user_is_home else 1) if user_receives else (1 if user_is_home else 0)
     ret_to, ret_td = _kickoff_return(random)
+    _wr = random.random()                                # Wetter & Tageszeit fürs ganze Spiel
+    _weather = 2 if _wr < 0.16 else (1 if _wr < 0.40 else 0)   # 0 klar / 1 Regen / 2 Schnee
+    _night = 1 if random.random() < 0.6 else 0
     g = {
         "hi": hi, "ai": ai, "user_is_home": user_is_home,
+        "weather": _weather, "night": _night,
         "score": [0, 0], "pos": pos, "drive": 0, "q": 1,
         "down": 1, "dist": 10, "ytz": 75.0,
         "absx": 75.0 if pos == 0 else 25.0,
@@ -2083,6 +2091,20 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         edge = _matchup_edge(off, deff, concept in PASS_CONCEPTS)        # Stärke beider Teams zählt jetzt mit
         o = play_outcome(concept, coverage,
                          {"yardline_100": g["ytz"], "down": g["down"], "ydstogo": g["dist"]}, _RNG, edge=edge)
+        # Wetter-Einfluss (gering): Regen -> Pass schwerer, Lauf leicht besser; Schnee -> beides schwerer; Nacht = normal
+        weather = g.get("weather", 0)
+        if weather and o.get("kind") not in ("sack", "int"):
+            is_pass = (concept in PASS_CONCEPTS) or o.get("pass")
+            if weather == 1:                                              # Regen (nass)
+                if is_pass and o.get("kind") == "complete" and random.random() < 0.08:
+                    o["kind"], o["yards"] = "incomplete", 0               # nasser Ball -> Drop
+                else:
+                    o["yards"] = int(round(o["yards"] * (0.85 if is_pass else 1.06)))
+            elif weather == 2:                                           # Schnee (alles schwerer)
+                if is_pass and o.get("kind") == "complete" and random.random() < 0.13:
+                    o["kind"], o["yards"] = "incomplete", 0
+                else:
+                    o["yards"] = int(round(o["yards"] * (0.82 if is_pass else 0.90)))
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     # Strafen (nur normale Snaps – nicht bei Trick-Plays/FG/PAT)
@@ -2570,4 +2592,5 @@ def _game_view(state: dict) -> dict:
         "options": opts, "log": g["log"][:12],
         "user_is_home": g["user_is_home"],
         "coin": g.get("coin"), "kickoff": g.get("kickoff"),
+        "weather": g.get("weather", 0), "night": g.get("night", 1),
     }
