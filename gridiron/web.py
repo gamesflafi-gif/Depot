@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v90-slfix"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v91-zones"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -809,11 +809,12 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  const xline=(fy,col,w,op,dash)=>{const a=PJ(0,fy),b=PJ(53.3,fy);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="'+op+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';};
  // ---- Reines Spielfeld füllt das Bild (kein Rang/Crowd) — wie in der Referenz ----
  s+='<rect width="533" height="360" fill="#0c1118"/>';                                    // Stadion-Dunkel (Ränge/Hintergrund)
- // Ferne Tribüne hinter der Endzone (dünner Rang mit Crowd) + Bande am Feldrand
- const _top=PY(farFy);
- s+='<rect x="0" y="0" width="533" height="'+Math.max(0,_top).toFixed(1)+'" fill="url(#cr_'+P+')"/>';
- for(let r=1;r<=2;r++)s+='<line x1="0" y1="'+(_top*r/3).toFixed(1)+'" x2="533" y2="'+(_top*r/3).toFixed(1)+'" stroke="#0a0f15" stroke-width="1.1" opacity="0.55"/>';
- s+='<rect x="0" y="'+(_top-1.5).toFixed(1)+'" width="533" height="3" fill="#10241a"/>';   // umlaufende Bande
+ // Hinter der Endzone: erst freier Bereich (Puffer), dann Tribüne
+ const _top=PY(farFy), _buf=Math.max(0,_top-7);
+ s+='<rect x="0" y="0" width="533" height="'+_buf.toFixed(1)+'" fill="url(#cr_'+P+')"/>';   // ferne Tribüne (Crowd)
+ for(let r=1;r<=2;r++)s+='<line x1="0" y1="'+(_buf*r/3).toFixed(1)+'" x2="533" y2="'+(_buf*r/3).toFixed(1)+'" stroke="#0a0f15" stroke-width="1.1" opacity="0.55"/>';
+ s+='<rect x="0" y="'+_buf.toFixed(1)+'" width="533" height="'+(_top-_buf).toFixed(1)+'" fill="#11331f"/>';   // freier Bereich hinter der Endzone
+ s+='<rect x="0" y="'+(_top-1.5).toFixed(1)+'" width="533" height="2.5" fill="#10241a"/>';   // umlaufende Bande
  s+='<rect x="0" y="'+_top.toFixed(1)+'" width="533" height="'+(360-_top).toFixed(1)+'" fill="#0f3d25"/>';   // Basis-Grün ab Feldhöhe
  // Mähstreifen je 5 Yards, Gras reicht weit über die Seitenlinien hinaus bis zum Bildrand
  const XW0=-30,XW1=83.3;
@@ -836,10 +837,17 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  s+=xline(0,'#5fa8ff','2','0.9');
  if(ytg<=hiFy)s+=xline(ytg,'#ffd34d','1.6','0.7','6 4');
  if(fpos!=null)[0,53.3].forEach(X=>{const p=PJ(X,fpos);s+='<rect x="'+(p[0]-2).toFixed(1)+'" y="'+(p[1]-4).toFixed(1)+'" width="3.5" height="6" rx="1" fill="#ff7a1a"/>';});
- // ---- Seitenlinien-Zonen: saubere Team-Bank (gleichmäßige kleine Figuren) + Coaches ----
- [[-8.5,-0.3],[53.6,61.8]].forEach(z=>{const a=PJ(z[0],nearFy),b=PJ(z[1],nearFy),c=PJ(z[1],farFy),e=PJ(z[0],farFy);s+='<polygon points="'+poly(a,b,c,e)+'" fill="#0d2c1c" opacity="0.72"/>';});   // Bank-/Team-Bereich (Track)
- [-1.2,54.5].forEach(X=>{const a=PJ(X,nearFy),b=PJ(X,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cfe3d6" stroke-width="1" opacity="0.4" stroke-dasharray="4 4"/>';});   // 6-Fuß-Team-Area-Linie
- const benchFig=(fx,fy,col,coach)=>{const q=PJ(fx,fy);if(q[0]<7||q[0]>526||q[1]<_top+6||q[1]>346)return '';const sc=(DS(fy)*_FB*0.58).toFixed(2),e=_shade(col,-82);
+ // ---- Stadion in Zonen: Feld -> Offiziellen/Ketten-Track -> Coaches-Box -> Team-Bank -> Tribüne ----
+ const zband=(x0,x1,fill,pat)=>{const a=PJ(x0,nearFy),b=PJ(x1,nearFy),c=PJ(x1,farFy),e=PJ(x0,farFy),pts=poly(a,b,c,e);return '<polygon points="'+pts+'" fill="'+fill+'"/>'+(pat?'<polygon points="'+pts+'" fill="url(#cr_'+P+')" opacity="0.9"/>':'');};
+ const zline=(x,col,w,op,dash)=>{const a=PJ(x,nearFy),b=PJ(x,farFy);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="'+op+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';};
+ [[0,-1],[53.3,1]].forEach(sd=>{const fx=o=>sd[0]+sd[1]*o;
+   s+=zband(fx(11.5),fx(30),'#0c1118',true)            // Tribüne (Ränge mit Crowd) ganz hinten
+     +zband(fx(11.0),fx(11.7),'#0a1f15')               // Mauer/Bande vor der Tribüne
+     +zband(fx(5.0),fx(11.0),'#0e2a1a')                // Team-Bank-Zone
+     +zband(fx(2.6),fx(5.0),'#163a23')                 // Coaches-Box
+     +zband(fx(0),fx(2.6),'#2c4035');                  // Offiziellen-/Ketten-Track
+   s+=zline(fx(5.0),'#cfe3d6',1,0.45,'4 4')+zline(fx(2.6),'#cfe3d6',0.8,0.3);});   // Coaches-Restraining-Linie + Track-Kante
+ const benchFig=(fx,fy,col,coach,mul)=>{const q=PJ(fx,fy);if(q[0]<6||q[0]>527||q[1]<_buf+4||q[1]>348)return '';const sc=(DS(fy)*_FB*(mul||0.52)).toFixed(2),e=_shade(col,-82);
    return '<g transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')"><g class="fig" style="animation-delay:'+((-((fx*3.3+fy*1.7)%3.1)+3.1)%3.1).toFixed(2)+'s">'+
     '<ellipse cx="0.3" cy="0.5" rx="2.2" ry="0.75" fill="#03100a" opacity="0.3"/>'+
     '<rect x="-1.3" y="-5.0" width="1.1" height="4.8" rx="0.4" fill="#1b1e23"/><rect x="0.2" y="-5.0" width="1.1" height="4.8" rx="0.4" fill="#1b1e23"/>'+
@@ -847,10 +855,11 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
     '<circle cx="0" cy="-11.1" r="1.5" fill="'+(coach?'#cfa988':'#e8cba8')+'" stroke="#15181c" stroke-width="0.4"/>'+
     (coach?'<path d="M-1.5 -11.7 Q0 -12.8 1.5 -11.7 L1.4 -11.1 L-1.4 -11.1 Z" fill="#15181c"/>':'')+
     '</g></g>';};
- // zwei gleichmäßig versetzte Reihen je Seitenlinie (Quincunx -> dichte, saubere Bank ohne Zickzack)
- for(let fy=Math.ceil(nearFy);fy<=farFy-3;fy+=2.2){
-   s+=benchFig(-2.4,fy,offC)+benchFig(55.7,fy,defC)+benchFig(-4.0,fy+1.1,offC)+benchFig(57.3,fy+1.1,defC);}
- [[-5.6,offC],[58.7,defC]].forEach(c=>{for(let k=0;k<3;k++)s+=benchFig(c[0],8.5+k*2.7,offC,true);});   // Coaches (grau, Cap) vorne an der Bank, gut sichtbar
+ // Team-Bank: drei dichte Reihen in der Bank-Zone; Coaches: eine Reihe in der Coaches-Box
+ [[0,-1,offC],[53.3,1,defC]].forEach(sd=>{const fx=o=>sd[0]+sd[1]*o,col=sd[2];
+   for(let fy=Math.ceil(nearFy);fy<=farFy-3;fy+=2.0){
+     s+=benchFig(fx(6.6),fy,col)+benchFig(fx(8.4),fy+1.0,col)+benchFig(fx(10.2),fy,col);}        // Bank (3 Reihen)
+   for(let fy=Math.ceil(nearFy)+1;fy<=farFy-4;fy+=2.6)s+=benchFig(fx(3.7),fy,col,true,0.6);});   // Coaches-Box
  // Kettencrew + Schiedsrichter
  s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap){
