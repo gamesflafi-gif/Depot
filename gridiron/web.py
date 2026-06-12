@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v88-pa"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v89-sideline"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -836,19 +836,21 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  s+=xline(0,'#5fa8ff','2','0.9');
  if(ytg<=hiFy)s+=xline(ytg,'#ffd34d','1.6','0.7','6 4');
  if(fpos!=null)[0,53.3].forEach(X=>{const p=PJ(X,fpos);s+='<rect x="'+(p[0]-2).toFixed(1)+'" y="'+(p[1]-4).toFixed(1)+'" width="3.5" height="6" rx="1" fill="#ff7a1a"/>';});
- // ---- Seitenlinien-Zonen: Team-Bänke (Spieler) + Coaches, leicht animiert (idle) ----
- [[-9,0],[53.3,62.3]].forEach(z=>{const a=PJ(z[0],nearFy),b=PJ(z[1],nearFy),c=PJ(z[1],farFy),e=PJ(z[0],farFy);s+='<polygon points="'+poly(a,b,c,e)+'" fill="#10331f" opacity="0.6"/>';});   // Team-/Bank-Bereich
- [0,53.3].forEach(X=>{const a=PJ(X-0.5,nearFy),b=PJ(X-0.5,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cfe3d6" stroke-width="1" opacity="0.4"/>';});   // Team-Area-Linie
- const benchFig=(fx,fy,col,head)=>{const q=PJ(fx,fy);if(q[0]<4||q[0]>529||q[1]<_top+4||q[1]>350)return '';const sc=(DS(fy)*_FB*0.7).toFixed(2),e=_shade(col,-82);
+ // ---- Seitenlinien-Zonen: saubere Team-Bank (gleichmäßige kleine Figuren) + Coaches ----
+ [[-8.5,-0.3],[53.6,61.8]].forEach(z=>{const a=PJ(z[0],nearFy),b=PJ(z[1],nearFy),c=PJ(z[1],farFy),e=PJ(z[0],farFy);s+='<polygon points="'+poly(a,b,c,e)+'" fill="#0d2c1c" opacity="0.72"/>';});   // Bank-/Team-Bereich (Track)
+ [-1.2,54.5].forEach(X=>{const a=PJ(X,nearFy),b=PJ(X,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#cfe3d6" stroke-width="1" opacity="0.4" stroke-dasharray="4 4"/>';});   // 6-Fuß-Team-Area-Linie
+ const benchFig=(fx,fy,col,coach)=>{const q=PJ(fx,fy);if(q[0]<7||q[0]>526||q[1]<_top+6||q[1]>346)return '';const sc=(DS(fy)*_FB*0.58).toFixed(2),e=_shade(col,-82);
    return '<g class="fig" style="animation-delay:'+((-((fx*3.3+fy*1.7)%3.1)+3.1)%3.1).toFixed(2)+'s" transform="translate('+q[0].toFixed(1)+' '+q[1].toFixed(1)+') scale('+sc+')">'+
-    '<ellipse cx="0.3" cy="0.6" rx="2.3" ry="0.8" fill="#03100a" opacity="0.3"/>'+
-    '<rect x="-1.35" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#1b1e23"/><rect x="0.2" y="-5.1" width="1.15" height="4.9" rx="0.4" fill="#1b1e23"/>'+
-    '<path d="M-1.85 -5.2 L1.85 -5.2 L2.15 -9.8 Q2.15 -10.4 1.55 -10.4 L-1.55 -10.4 Q-2.15 -10.4 -2.15 -9.8 Z" fill="'+col+'" stroke="'+e+'" stroke-width="0.5"/>'+
-    '<circle cx="0" cy="-11.3" r="1.55" fill="'+(head||'#e8cba8')+'" stroke="'+e+'" stroke-width="0.4"/></g>';};
- for(let fy=Math.ceil(nearFy);fy<=farFy-3;fy+=3.2){
-   s+=benchFig(-2.7,fy,offC)+benchFig(55.9,fy,defC);                                            // vordere Bank-Reihe
-   if(Math.round(fy)%2===0)s+=benchFig(-4.7,fy+1.6,offC)+benchFig(57.9,fy+1.6,defC);}           // hintere Reihe sparsamer
- [[-6.6,offC],[59.9,defC]].forEach(c=>{for(let k=0;k<3;k++)s+=benchFig(c[0],(fpos!=null?Math.min(fpos*0.5,farFy-9):11)+k*2.3,'#2c3037','#caa88a');});   // Coaches (Khaki/Headset)
+    '<ellipse cx="0.3" cy="0.5" rx="2.2" ry="0.75" fill="#03100a" opacity="0.3"/>'+
+    '<rect x="-1.3" y="-5.0" width="1.1" height="4.8" rx="0.4" fill="#1b1e23"/><rect x="0.2" y="-5.0" width="1.1" height="4.8" rx="0.4" fill="#1b1e23"/>'+
+    '<path d="M-1.8 -5.1 L1.8 -5.1 L2.1 -9.7 Q2.1 -10.3 1.5 -10.3 L-1.5 -10.3 Q-2.1 -10.3 -2.1 -9.7 Z" fill="'+(coach?'#41474f':col)+'" stroke="'+(coach?'#15181c':e)+'" stroke-width="0.5"/>'+
+    '<circle cx="0" cy="-11.1" r="1.5" fill="'+(coach?'#cfa988':'#e8cba8')+'" stroke="#15181c" stroke-width="0.4"/>'+
+    (coach?'<path d="M-1.5 -11.7 Q0 -12.8 1.5 -11.7 L1.4 -11.1 L-1.4 -11.1 Z" fill="#15181c"/>':'')+
+    '</g>';};
+ // zwei gleichmäßig versetzte Reihen je Seitenlinie (Quincunx -> dichte, saubere Bank ohne Zickzack)
+ for(let fy=Math.ceil(nearFy);fy<=farFy-3;fy+=2.2){
+   s+=benchFig(-2.4,fy,offC)+benchFig(55.7,fy,defC)+benchFig(-4.0,fy+1.1,offC)+benchFig(57.3,fy+1.1,defC);}
+ [[-5.8,offC],[58.9,defC]].forEach(c=>{const m=(fpos!=null?Math.min(fpos*0.5,farFy-11):11);for(let k=0;k<3;k++)s+=benchFig(c[0],m+k*2.4,offC,true);});   // Coaches (grau, Cap) an der ~50
  // Kettencrew + Schiedsrichter
  s+=_chainGang(ytg)+_refsOnField(d);
  if(!preSnap){
