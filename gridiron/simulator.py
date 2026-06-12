@@ -218,7 +218,7 @@ def _pass_params(c: dict, cov: dict):
     Liefert (Matchup-Faktor, Tiefenband, Completion-, Sack-, Int-Wahrsch.)."""
     mf = _pass_matchup(c, cov)
     band = _depth_band(c["depth"])
-    comp_base = {"screen": 0.89, "short": 0.755, "inter": 0.65, "deep": 0.50}[band]   # realistischere Trefferquote (~64% gesamt)
+    comp_base = {"screen": 0.90, "short": 0.79, "inter": 0.69, "deep": 0.54}[band]   # Trefferquote (~69% gesamt — Receiver fangen zuverlässiger)
     comp_p = float(np.clip(comp_base + 0.20 * (mf - 1.0), 0.20, 0.95))
     sack_p = float(np.clip(0.045 + 0.09 * cov["blitz"] * (2.0 - c["beats_blitz"]), 0.01, 0.20))
     int_p = float(np.clip(0.018 + 0.020 * (1 - comp_p) * (1.6 if band == "deep" else 1.0), 0.005, 0.07))
