@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v96-weather"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v98-mgr"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -32,7 +32,7 @@ _STYLE = """
    background:radial-gradient(135% 90% at 50% -12%,#11281c 0%,#0a1410 42%,var(--bg) 78%) fixed,var(--bg)}
  img,svg,table,pre{max-width:100%}
  a{color:var(--acc);text-decoration:none}
- .top{background:#0d1411;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+ .top{background:linear-gradient(180deg,#103a25,#0d1411 72%),repeating-linear-gradient(90deg,#0e2c1c 0 26px,#10331f 26px 52px);border-bottom:2px solid var(--pitch);position:sticky;top:0;z-index:10;box-shadow:0 2px 10px -4px rgba(0,0,0,.6)}
  .topin{max-width:1040px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
  .brand{font-size:18px;font-weight:800;letter-spacing:.04em;display:flex;align-items:center;gap:14px}
  .brand .mk{width:4px;height:20px;background:var(--acc);border-radius:1px;
@@ -1057,7 +1057,9 @@ function steer(o,tx,ty,maxspd,dt,resp){const dx=tx-o.x,dy=ty-o.y,d=Math.hypot(dx
 // Route weich ablaufen (an jedem Break abbremsen/cutten) und danach in Endrichtung weiter, ohne ins Aus
 function routeStep(o,mx,dt,rp){if(!o.route)return;
  if(o.ri<o.route.length){const wp=o.route[o.ri];steer(o,wp[0],wp[1],mx(o.pos),dt,rp(o.pos));if(Math.hypot(wp[0]-o.x,wp[1]-o.y)<0.7)o.ri++;}
- else{if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=1;dd=1;}o._dir=[dx/dd,dy/dd];}
+ else{const _last=o.route[o.route.length-1];
+   if(_last[1]<11){steer(o,_last[0],_last[1],mx(o.pos)*0.3,dt,rp(o.pos));return;}   // kurze Route (Hitch/Curl/Comeback): am Punkt absetzen und zum Ball kommen
+   if(!o._dir){const r=o.route,n=r.length,a=r[Math.max(0,n-2)],b=r[n-1];let dx=b[0]-a[0],dy=b[1]-a[1],dd=Math.hypot(dx,dy);if(dd<0.05){dx=0;dy=1;dd=1;}o._dir=[dx/dd,dy/dd];}
    let dx=o._dir[0],dy=Math.max(o._dir[1],0.25);   // nie rückwärts weiterlaufen (kein Lauf in die eigene Endzone)
    if((o.x<6&&dx<0)||(o.x>47.3&&dx>0)){dx=(o.x>26.65?-0.3:0.3);dy=Math.abs(dy)+0.7;}
    const dd=Math.hypot(dx,dy)||1;steer(o,o.x+dx/dd*5,o.y+dy/dd*5,mx(o.pos),dt,rp(o.pos));}}
@@ -2279,15 +2281,17 @@ async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return
  const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
  if(!d.error){renderField(svg,d,g.dist||10,gameCols(g,g.user_offense),g.ytz,true);_fieldHUD(svg);}}   // Vor-Snap-Aufstellung, Ball am aktuellen Spot
 /* Snap-Count: Cadence (Down … Set … HUT!), dann fliegt der Ball aus der Center-Hand zum QB. */
-function _snapSequence(svg,d,onDone){const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
+function _snapSequence(svg,d,onDone,mot){const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
  const qb=d.offense.find(o=>o.pos==='QB');const ball=$(P+'_pball');
  const _l=PJ(26.65,-0.3),losX=_l[0],losY=_l[1],_qq=qb?PJ(qb.x,qb.y):_l,qbX=_qq[0],qbY=_qq[1];
  const cap=el('text',{id:P+'_cad',x:266,y:42,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'#ffd34d'});cap.textContent='DOWN …';svg.appendChild(cap);
- if(ball){ball.setAttribute('opacity',1);ball.setAttribute('cx',losX);ball.setAttribute('cy',losY);ball.setAttribute('transform','');}
+ const bk=(_FB*DS(-0.3)*0.94).toFixed(3),setBall=(x,y)=>{if(ball)ball.setAttribute('transform','translate('+x.toFixed(1)+' '+y.toFixed(1)+') scale('+bk+')');};
+ if(ball){ball.setAttribute('opacity',1);setBall(losX,losY);}
  const t0=performance.now();
  function fr(now){const e=(now-t0)/1000;
   if(cap)cap.textContent=e<0.30?'DOWN …':e<0.58?'SET …':'HUT!';
-  if(e>=0.58&&ball){const t=Math.min(1,(e-0.58)/0.16);ball.setAttribute('cx',losX+(qbX-losX)*t);ball.setAttribute('cy',losY+(qbY-losY)*t);}   // Snap zum QB
+  if(mot&&e<0.55){const t=Math.min(1,e/0.5);moveP(P,'o'+mot.i,mot.x0+(mot.x1-mot.x0)*t,mot.y);}   // Pre-Snap-Motion: Receiver läuft quer
+  if(e>=0.58&&ball){const t=Math.min(1,(e-0.58)/0.16);setBall(losX+(qbX-losX)*t,losY+(qbY-losY)*t);}   // Snap zum QB
   if(e<0.78)_anim[P]=requestAnimationFrame(fr);
   else{if(cap&&cap.remove)cap.remove();onDone();}
  }
@@ -2298,7 +2302,12 @@ async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concep
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);_fieldHUD(svg);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
  const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0,pa:(play.concept==='PA Boot')};
- _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}));}   // Cadence + Snap, dann das Play
+ // Pre-Snap-Motion: auf ~35% der Spielzüge läuft ein Slot/Flügel-Receiver quer (Jet-Motion)
+ let mot=null;
+ if(Math.random()<0.35){const elig=d.offense.map((o,i)=>({o,i})).filter(z=>['SL','Z','TE','X'].indexOf(z.o.pos)>=0&&z.o.route&&z.o.route.length>1);
+   if(elig.length){const z=elig[Math.floor(Math.random()*elig.length)],M=z.o,dir=M.x<26.65?1:-1,x1=Math.max(5,Math.min(48,M.x+dir*(7+Math.random()*4)));
+     mot={i:z.i,x0:M.x,x1:x1,y:M.y};const dx=x1-M.x;M.x=x1;if(M.route)M.route=M.route.map(p=>[Math.max(3,Math.min(50,p[0]+dx)),p[1]]);}}   // Position + Route mitziehen
+ _snapSequence(svg,d,()=>playAnim(svg,d,res,()=>{playBusy=false;if(liveG)renderGame(liveG);}),mot);}   // Cadence + Motion + Snap, dann das Play
 function _fgFig(x,y,c){return '<g transform="translate('+x+' '+y+')"><ellipse cx="0" cy="2" rx="7" ry="5" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/><circle cx="0" cy="-4" r="3.6" fill="'+c+'" stroke="#06140d" stroke-width="1.4"/></g>';}
 function _fgResult(svg,made){const g=el('g',{}),x=266,y=150;
  g.appendChild(el('rect',{x:x-72,y:y-19,width:144,height:34,rx:8,fill:'#0a0f0d',stroke:made?'#19e08f':'#ef5350','stroke-width':2}));
