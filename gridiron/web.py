@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v99-catch"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v101-world"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -274,6 +274,7 @@ _STYLE2 = """
  .fig.stiff{animation:stiff .42s ease}@keyframes stiff{0%{transform:rotate(0) scaleX(1)}40%{transform:translateY(-.6px) rotate(7deg) scaleX(1.12)}100%{transform:rotate(0) scaleX(1)}}
  .rain{stroke:#aec6e0;stroke-width:.9;opacity:.45;animation:rainf linear infinite}@keyframes rainf{from{transform:translateY(-26px)}to{transform:translateY(380px)}}
  .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
+ .flash{fill:#fffceb;animation:flash 2.4s steps(1) infinite}@keyframes flash{0%,90%{opacity:0}92%,96%{opacity:.95}100%{opacity:0}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -809,6 +810,8 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    '<circle cx="2.6" cy="4.4" r=".6" fill="'+_shade(defC,-34)+'"/><circle cx="5.7" cy="5" r=".6" fill="#7a8490"/>'+
    '<circle cx="0.5" cy="5.9" r=".5" fill="#7e8893"/><circle cx="3.6" cy="6.4" r=".5" fill="#535b65"/></pattern>'+
   '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a2c1b" stop-opacity=".92"/><stop offset=".26" stop-color="#0f3d25" stop-opacity="0"/></linearGradient>'+
+  '<linearGradient id="bodyShade_'+P+'" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".24"/><stop offset=".48" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".30"/></linearGradient>'+
+  '<radialGradient id="domeShade_'+P+'" cx="0.34" cy="0.28" r="0.85"><stop offset="0" stop-color="#ffffff" stop-opacity=".44"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".42"/></radialGradient>'+
   '<radialGradient id="ballhi_'+P+'" cx="0.4" cy="0.32" r="0.85"><stop offset="0" stop-color="#b06a30"/><stop offset="0.6" stop-color="#8b4a22"/><stop offset="1" stop-color="#5e3014"/></radialGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
@@ -845,6 +848,13 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    const la=PJ(6.5,fy),lb=PJ(46.8,fy),fs=Math.max(7,DS(fy)*17);
    s+='<text x="'+la[0].toFixed(1)+'" y="'+(la[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>'+
       '<text x="'+lb[0].toFixed(1)+'" y="'+(lb[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>';}
+  // Endzonen-Wortmarke (verteidigendes Team) auf den Rasen gemalt
+  {const ez=PJ(26.65,fpos+5.2),efs=Math.max(5,DS(fpos+5)*15);
+   s+='<text x="'+ez[0].toFixed(1)+'" y="'+(ez[1]+efs*0.34).toFixed(1)+'" text-anchor="middle" font-size="'+efs.toFixed(1)+'" font-weight="900" fill="#ffffff" opacity="0.34" letter-spacing="'+(efs*0.16).toFixed(1)+'">'+esc(((cols.defAbbr||'')+'').toUpperCase())+'</text>';}
+  // Mittelkreis-Logo an der 50-Yard-Linie
+  {const mf=fpos-50; if(mf>0.6&&mf<fpos-0.6){const mp=PJ(26.65,mf),mr=Math.max(2.6,DS(mf)*8.5);
+   s+='<circle cx="'+mp[0].toFixed(1)+'" cy="'+mp[1].toFixed(1)+'" r="'+mr.toFixed(1)+'" fill="none" stroke="#eef6f0" stroke-width="'+(mr*0.12).toFixed(2)+'" opacity="0.42"/>'+
+      '<text x="'+mp[0].toFixed(1)+'" y="'+(mp[1]+mr*0.4).toFixed(1)+'" text-anchor="middle" font-size="'+(mr*1.05).toFixed(1)+'" font-weight="900" fill="#eef6f0" opacity="0.5">'+esc(((cols.offAbbr||'★')+'')[0])+'</text>';}}
  }
  [0,53.3].forEach(X=>{const a=PJ(X,nearFy),b=PJ(X,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#eef6f0" stroke-width="2.4" opacity="0.9"/>';});
  s+=xline(0,'#5fa8ff','2','0.9');
@@ -890,6 +900,9 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
    const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  }
+ // Lebendige Tribüne: vereinzelte Kamerablitze in den Rängen
+ {let fl='';for(let i=0;i<16;i++){const x=(6+Math.random()*521).toFixed(0),y=(3+Math.random()*Math.max(6,_buf-4)).toFixed(0),de=(Math.random()*2.4).toFixed(2);fl+='<circle class="flash" cx="'+x+'" cy="'+y+'" r="'+(0.7+Math.random()*0.7).toFixed(1)+'" style="animation-delay:'+de+'s"/>';}
+  for(let i=0;i<8;i++){const lr=Math.random()<0.5,x=(lr?2+Math.random()*22:509+Math.random()*22).toFixed(0),y=(_top+4+Math.random()*150).toFixed(0),de=(Math.random()*2.4).toFixed(2);fl+='<circle class="flash" cx="'+x+'" cy="'+y+'" r="'+(0.6+Math.random()*0.6).toFixed(1)+'" style="animation-delay:'+de+'s"/>';}s+=fl;}
  s+='<rect width="533" height="360" fill="url(#bowl_'+P+')" pointer-events="none"/>';
  // ---- Tageszeit & Wetter ----
  if(_night){[80,200,333,453].forEach(lx=>{s+='<ellipse cx="'+lx+'" cy="'+(_top-3).toFixed(1)+'" rx="74" ry="40" fill="url(#lite_'+P+')" pointer-events="none"/>';});   // Flutlicht-Schein von oben
@@ -918,39 +931,58 @@ function _jersey(pos,i){const r=_NUMRANGE[pos]||[1,99];return r[0]+((i*7+5)%(r[1
 /* Detaillierte Spielerfigur (Top-Down): Schulterpolster mit Plastik-Schattierung, Arme & Handschuhe,
    Helm mit Glanz, Mittelstreifen und Facemask-Käfig, Cleats. Figur zeigt immer nach oben; die
    .face-Gruppe dreht sie in Laufrichtung (Defense im Stand um 180° gedreht). */
-const _FB=1.22;   // Figur-Grundgröße in der Perspektive (größere Spieler, passende Proportionen)
+const _FB=1.22;   // Figur-Grundgröße in der Perspektive
+const _SKIN=['#ead0ad','#d9ad80','#bd864f','#8a5530','#f2d8b6','#c68a5b','#a06a3e'];   // Hauttöne (deterministisch je Spieler)
+const _BUILD2={OL:1.24,DT:1.24,NT:1.26,DE:1.08,TE:1.06,FB:1.10,LB:1.02,MLB:1.04,S:0.98,CB:0.92,DB:0.92,QB:0.97,RB:0.97,WR:0.90,X:0.90,Z:0.90,SL:0.90,K:0.88};
+/* Echter Football-Charakter (Rückenansicht): Helm mit Kugel-Schattierung & Mittelstreifen,
+   Schulterpolster-Silhouette, Trikot mit Nummer/Nameplate, Ärmel + Haut-Unterarme + Handschuhe,
+   Hose mit Seitenstreifen/Knie, Stutzen + Cleats. Licht von oben-links (Verlauf-Schattierung). */
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
- const edge=_shade(color,-95),hel=_shade(color,-24),pad=_shade(color,12),arm=_shade(color,-14),stripe=_shade(color,108),sock=_shade(color,-34),pants='#e8ecf1';
+ const edge=_shade(color,-102),hel=_shade(color,-22),pad=_shade(color,20),arm=_shade(color,-8),trim=_shade(color,118),sock=_shade(color,-40),pants='#eef1f5',pantsh='#cbd2db',glove=_shade(color,-58),skin=_SKIN[(idx*5+3)%_SKIN.length],W=_BUILD2[pos]||1.0;
+ const BS='url(#bodyShade_'+P+')',n=x=>x.toFixed(2);
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx.toFixed(1)+' '+sy.toFixed(1)+') scale('+ds+')');
- g.appendChild(el('ellipse',{cx:0.7,cy:0.8,rx:4.7,ry:1.55,fill:'#03100a',opacity:.42}));         // Bodenschatten (leicht versetzt)
- const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate(0)');  // wird von faceP leicht in Laufrichtung geneigt
- const fig=el('g',{}); fig.setAttribute('class','fig'); fig.setAttribute('style','animation-delay:'+(-((idx*0.41+(side<0?1.3:0))%3.1)).toFixed(2)+'s');   // Animations-Gruppe; Phase pro Spieler versetzt (kein Gleichschritt)
+ g.appendChild(el('ellipse',{cx:1.1,cy:0.7,rx:5.0*W,ry:1.45,fill:'#03100a',opacity:.4}));          // Bodenschatten (Licht oben-links)
+ const fc=el('g',{}); fc.setAttribute('class','face'); fc.setAttribute('transform','rotate(0)');
+ const fig=el('g',{}); fig.setAttribute('class','fig'); fig.setAttribute('style','animation-delay:'+(-((idx*0.41+(side<0?1.3:0))%3.1)).toFixed(2)+'s');
  const num=_jersey(pos,idx);
- if(o&&o.target)fig.appendChild(el('ellipse',{cx:0,cy:0.4,rx:5.6,ry:2.0,fill:'none',stroke:'#ffd34d','stroke-width':1.3,opacity:.9,'class':'pulse'}));
- // Beine in eigenen Gruppen (.legL/.legR), schwingen beim Laufen um die Hüfte
- [-1.75,1.75].forEach((lx,li)=>{const leg=el('g',{});leg.setAttribute('class',li?'legR':'legL');
-  leg.appendChild(el('path',{d:'M'+(lx-1.1)+' -5.9 L'+(lx+1.1)+' -5.9 L'+(lx+0.95)+' -2.5 L'+(lx-0.95)+' -2.5 Z',fill:pants,stroke:edge,'stroke-width':.5}));
-  leg.appendChild(el('rect',{x:lx-0.86,y:-2.6,width:1.72,height:2.2,rx:.5,fill:sock,stroke:edge,'stroke-width':.45}));
-  leg.appendChild(el('ellipse',{cx:lx+0.25,cy:-0.25,rx:1.3,ry:.72,fill:'#15191c',stroke:edge,'stroke-width':.35}));fig.appendChild(leg);});
- // Trikot/Rumpf von hinten: schmale Taille -> breite Schultern
- fig.appendChild(el('path',{d:'M-2.7 -5.8 L2.7 -5.8 L3.6 -11.3 Q3.6 -12.0 3.0 -12.0 L-3.0 -12.0 Q-3.6 -12.0 -3.6 -11.3 Z',fill:color,stroke:edge,'stroke-width':.9}));
- fig.appendChild(el('rect',{x:0.15,y:-12,width:3.45,height:6.2,fill:'#000',opacity:.13}));        // Volumen: rechte Hälfte dunkler
- fig.appendChild(el('rect',{x:-3.6,y:-12,width:1.9,height:6.2,fill:'#fff',opacity:.09}));          // linke Hälfte Highlight
- // Arme in eigenen Gruppen (.armL/.armR), pumpen gegengleich zu den Beinen
- [-4.2,4.2].forEach((ax,ai)=>{const a2=el('g',{});a2.setAttribute('class',ai?'armR':'armL');
-  a2.appendChild(el('ellipse',{cx:ax,cy:-8.7,rx:1.2,ry:2.7,fill:arm,stroke:edge,'stroke-width':.55}));
-  a2.appendChild(el('ellipse',{cx:ax+(ax<0?0.2:-0.2),cy:-6.0,rx:1.05,ry:1.2,fill:'#e8cba8',stroke:edge,'stroke-width':.4}));fig.appendChild(a2);});
- // Rückennummer (groß, auf dem Trikot)
- const tn=el('text',{x:0,y:-7.9,'text-anchor':'middle','font-size':4.7,fill:'#fff','font-weight':800,stroke:edge,'stroke-width':.5,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
- // Schulterpolster (breiter Balken) + Highlight
- fig.appendChild(el('path',{d:'M-4.5 -11.5 Q-4.9 -13.0 -2.8 -13.1 L2.8 -13.1 Q4.9 -13.0 4.5 -11.5 Q0 -10.7 -4.5 -11.5 Z',fill:pad,stroke:edge,'stroke-width':.8}));
- fig.appendChild(el('ellipse',{cx:0,cy:-12.7,rx:3.1,ry:.7,fill:'#fff',opacity:.16}));
- // Helm (Hinterkopf) + Glanz + Mittelstreifen
- fig.appendChild(el('ellipse',{cx:0,cy:-14.6,rx:2.75,ry:2.9,fill:hel,stroke:edge,'stroke-width':.9}));
- fig.appendChild(el('ellipse',{cx:-0.9,cy:-15.4,rx:1.05,ry:.78,fill:'#fff',opacity:.42}));
- fig.appendChild(el('path',{d:'M0 -16.8 Q0 -14.6 0 -13.3',fill:'none',stroke:'#eef2f6','stroke-width':.7,opacity:.75}));   // Helm-Mittelstreifen (nur auf der Kuppel)
- if(abbr){const t=el('text',{x:0,y:-14.0,'text-anchor':'middle','font-size':2.5,fill:'#eef2f6','font-weight':800});t.textContent=(''+abbr)[0];fig.appendChild(t);}
+ if(o&&o.target)fig.appendChild(el('ellipse',{cx:0,cy:0.4,rx:6.2*W,ry:2.1,fill:'none',stroke:'#ffd34d','stroke-width':1.3,opacity:.9,'class':'pulse'}));
+ // ---- Beine: Hose + Seitenstreifen + Knie + Stutzen + Schuh ----
+ [[-1.85*W,'legL'],[1.85*W,'legR']].forEach(z=>{const lx=z[0],leg=el('g',{});leg.setAttribute('class',z[1]);
+   leg.appendChild(el('path',{d:'M'+n(lx-1.15)+' -6.3 L'+n(lx+1.15)+' -6.3 L'+n(lx+0.98)+' -2.8 L'+n(lx-0.98)+' -2.8 Z',fill:pants,stroke:edge,'stroke-width':.4}));
+   leg.appendChild(el('rect',{x:n(lx-1.15),y:-6.3,width:n(2.3),height:3.5,fill:BS}));
+   leg.appendChild(el('line',{x1:n(lx+(lx<0?-1.05:1.05)),y1:-6.1,x2:n(lx+(lx<0?-0.9:0.9)),y2:-3.0,stroke:trim,'stroke-width':.42,opacity:.85}));
+   leg.appendChild(el('ellipse',{cx:n(lx),cy:-3.05,rx:1.0,ry:.8,fill:pantsh,opacity:.65}));         // Knie
+   leg.appendChild(el('rect',{x:n(lx-0.92),y:-2.9,width:n(1.84),height:2.55,rx:.5,fill:sock,stroke:edge,'stroke-width':.4}));
+   leg.appendChild(el('rect',{x:n(lx-0.92),y:-1.5,width:n(1.84),height:.5,fill:trim,opacity:.85}));  // Stutzen-Ring
+   leg.appendChild(el('ellipse',{cx:n(lx+0.35),cy:-0.28,rx:1.4,ry:.74,fill:'#14181b',stroke:'#000','stroke-width':.3}));
+   leg.appendChild(el('ellipse',{cx:n(lx+0.35),cy:-0.02,rx:1.25,ry:.28,fill:'#33393f'}));fig.appendChild(leg);});  // Sohle
+ // ---- Arme (Ärmel + Haut-Unterarm + Handschuh) hinter dem Rumpf ----
+ [[-4.25*W,'armL'],[4.25*W,'armR']].forEach(z=>{const ax=z[0],a2=el('g',{});a2.setAttribute('class',z[1]);
+   a2.appendChild(el('path',{d:'M'+n(ax-1.05)+' -12.0 Q'+n(ax-1.3)+' -8.5 '+n(ax-0.6)+' -6.6 L'+n(ax+0.7)+' -6.6 Q'+n(ax+1.2)+' -8.5 '+n(ax+0.95)+' -12.0 Z',fill:arm,stroke:edge,'stroke-width':.45}));
+   a2.appendChild(el('path',{d:'M'+n(ax-1.05)+' -12.0 Q'+n(ax-1.3)+' -8.5 '+n(ax-0.6)+' -6.6 L'+n(ax+0.7)+' -6.6 Q'+n(ax+1.2)+' -8.5 '+n(ax+0.95)+' -12.0 Z',fill:BS}));
+   a2.appendChild(el('rect',{x:n(ax-0.5),y:-7.0,width:1.4,height:.55,fill:trim,opacity:.8}));        // Ärmel-Bündchen
+   a2.appendChild(el('ellipse',{cx:n(ax+0.15),cy:-5.7,rx:1.0,ry:1.4,fill:skin,stroke:edge,'stroke-width':.35}));   // Unterarm (Haut)
+   a2.appendChild(el('ellipse',{cx:n(ax+0.2),cy:-4.3,rx:1.05,ry:1.0,fill:glove,stroke:edge,'stroke-width':.35}));fig.appendChild(a2);});   // Handschuh
+ // ---- Rumpf / Trikot (Rückenansicht) ----
+ const tor='M'+n(-2.6*W)+' -6.1 Q'+n(-3.05*W)+' -9 '+n(-3.4*W)+' -11.6 Q'+n(-3.5*W)+' -12.5 '+n(-2.6*W)+' -12.7 L'+n(2.6*W)+' -12.7 Q'+n(3.5*W)+' -12.5 '+n(3.4*W)+' -11.6 Q'+n(3.05*W)+' -9 '+n(2.6*W)+' -6.1 Z';
+ fig.appendChild(el('path',{d:tor,fill:color,stroke:edge,'stroke-width':.6}));
+ fig.appendChild(el('path',{d:tor,fill:BS}));
+ fig.appendChild(el('line',{x1:0,y1:-6.4,x2:0,y2:-12.4,stroke:'#000','stroke-width':.35,opacity:.18}));   // Rücken-Mittelnaht
+ const np=el('rect',{x:n(-2.0),y:-11.6,width:n(4.0),height:1.3,rx:.3,fill:'#0b0e12',opacity:.5});fig.appendChild(np);  // Nameplate
+ const tn=el('text',{x:0,y:-8.2,'text-anchor':'middle','font-size':4.8,fill:'#fff','font-weight':800,stroke:edge,'stroke-width':.45,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
+ // ---- Schulterpolster-Silhouette ----
+ const sp='M'+n(-4.7*W)+' -12.0 Q'+n(-5.2*W)+' -13.6 '+n(-2.9*W)+' -13.6 L'+n(2.9*W)+' -13.6 Q'+n(5.2*W)+' -13.6 '+n(4.7*W)+' -12.0 Q0 -11.0 '+n(-4.7*W)+' -12.0 Z';
+ fig.appendChild(el('path',{d:sp,fill:pad,stroke:edge,'stroke-width':.6}));
+ fig.appendChild(el('path',{d:sp,fill:BS}));
+ fig.appendChild(el('path',{d:'M0 -13.3 L0 -11.3',stroke:'#000','stroke-width':.4,opacity:.2}));          // Pad-Mitte
+ // ---- Hals (Haut) + Helm (Kugel-Schattierung) ----
+ fig.appendChild(el('rect',{x:-1.1,y:-13.8,width:2.2,height:1.4,rx:.4,fill:skin,stroke:edge,'stroke-width':.3}));
+ fig.appendChild(el('ellipse',{cx:0,cy:-15.5,rx:2.55,ry:2.75,fill:hel,stroke:edge,'stroke-width':.7}));
+ fig.appendChild(el('ellipse',{cx:0,cy:-15.5,rx:2.55,ry:2.75,fill:'url(#domeShade_'+P+')'}));
+ fig.appendChild(el('path',{d:'M0 -18.0 Q0 -15.5 0 -13.6',fill:'none',stroke:trim,'stroke-width':.7,opacity:.85}));   // Helm-Mittelstreifen
+ fig.appendChild(el('path',{d:'M-2.4 -14.2 Q0 -13.0 2.4 -14.2',fill:'none',stroke:'#1a1f24','stroke-width':.5,opacity:.7}));   // unterer Helmrand/Facemask-Ansatz
+ if(abbr){const t=el('text',{x:0,y:-14.9,'text-anchor':'middle','font-size':2.4,fill:trim,'font-weight':800,opacity:.95});t.textContent=(''+abbr)[0];fig.appendChild(t);}
  const sc=el('g',{}); sc.setAttribute('transform','scale(1.0)'); sc.appendChild(fig); fc.appendChild(sc); g.appendChild(fc);
  svg.appendChild(g); _ppos[P+id]=[p.x,p.y];
 }
