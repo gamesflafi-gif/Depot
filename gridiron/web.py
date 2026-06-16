@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v100-chars"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v101-world"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -274,6 +274,7 @@ _STYLE2 = """
  .fig.stiff{animation:stiff .42s ease}@keyframes stiff{0%{transform:rotate(0) scaleX(1)}40%{transform:translateY(-.6px) rotate(7deg) scaleX(1.12)}100%{transform:rotate(0) scaleX(1)}}
  .rain{stroke:#aec6e0;stroke-width:.9;opacity:.45;animation:rainf linear infinite}@keyframes rainf{from{transform:translateY(-26px)}to{transform:translateY(380px)}}
  .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
+ .flash{fill:#fffceb;animation:flash 2.4s steps(1) infinite}@keyframes flash{0%,90%{opacity:0}92%,96%{opacity:.95}100%{opacity:0}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -847,6 +848,13 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    const la=PJ(6.5,fy),lb=PJ(46.8,fy),fs=Math.max(7,DS(fy)*17);
    s+='<text x="'+la[0].toFixed(1)+'" y="'+(la[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>'+
       '<text x="'+lb[0].toFixed(1)+'" y="'+(lb[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>';}
+  // Endzonen-Wortmarke (verteidigendes Team) auf den Rasen gemalt
+  {const ez=PJ(26.65,fpos+5.2),efs=Math.max(5,DS(fpos+5)*15);
+   s+='<text x="'+ez[0].toFixed(1)+'" y="'+(ez[1]+efs*0.34).toFixed(1)+'" text-anchor="middle" font-size="'+efs.toFixed(1)+'" font-weight="900" fill="#ffffff" opacity="0.34" letter-spacing="'+(efs*0.16).toFixed(1)+'">'+esc(((cols.defAbbr||'')+'').toUpperCase())+'</text>';}
+  // Mittelkreis-Logo an der 50-Yard-Linie
+  {const mf=fpos-50; if(mf>0.6&&mf<fpos-0.6){const mp=PJ(26.65,mf),mr=Math.max(2.6,DS(mf)*8.5);
+   s+='<circle cx="'+mp[0].toFixed(1)+'" cy="'+mp[1].toFixed(1)+'" r="'+mr.toFixed(1)+'" fill="none" stroke="#eef6f0" stroke-width="'+(mr*0.12).toFixed(2)+'" opacity="0.42"/>'+
+      '<text x="'+mp[0].toFixed(1)+'" y="'+(mp[1]+mr*0.4).toFixed(1)+'" text-anchor="middle" font-size="'+(mr*1.05).toFixed(1)+'" font-weight="900" fill="#eef6f0" opacity="0.5">'+esc(((cols.offAbbr||'★')+'')[0])+'</text>';}}
  }
  [0,53.3].forEach(X=>{const a=PJ(X,nearFy),b=PJ(X,farFy);s+='<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="#eef6f0" stroke-width="2.4" opacity="0.9"/>';});
  s+=xline(0,'#5fa8ff','2','0.9');
@@ -892,6 +900,9 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
    const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  }
+ // Lebendige Tribüne: vereinzelte Kamerablitze in den Rängen
+ {let fl='';for(let i=0;i<16;i++){const x=(6+Math.random()*521).toFixed(0),y=(3+Math.random()*Math.max(6,_buf-4)).toFixed(0),de=(Math.random()*2.4).toFixed(2);fl+='<circle class="flash" cx="'+x+'" cy="'+y+'" r="'+(0.7+Math.random()*0.7).toFixed(1)+'" style="animation-delay:'+de+'s"/>';}
+  for(let i=0;i<8;i++){const lr=Math.random()<0.5,x=(lr?2+Math.random()*22:509+Math.random()*22).toFixed(0),y=(_top+4+Math.random()*150).toFixed(0),de=(Math.random()*2.4).toFixed(2);fl+='<circle class="flash" cx="'+x+'" cy="'+y+'" r="'+(0.6+Math.random()*0.6).toFixed(1)+'" style="animation-delay:'+de+'s"/>';}s+=fl;}
  s+='<rect width="533" height="360" fill="url(#bowl_'+P+')" pointer-events="none"/>';
  // ---- Tageszeit & Wetter ----
  if(_night){[80,200,333,453].forEach(lx=>{s+='<ellipse cx="'+lx+'" cy="'+(_top-3).toFixed(1)+'" rx="74" ry="40" fill="url(#lite_'+P+')" pointer-events="none"/>';});   // Flutlicht-Schein von oben
