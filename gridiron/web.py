@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v105-deadball"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v106-aim"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -397,6 +397,9 @@ _STYLE2 = """
  .optbtn.kick:hover{border-color:#ffd34d;background:#352d18}
  .optbtn.to.sm{margin-left:auto;flex:0 0 auto;padding:7px 11px;font-size:12px;font-weight:700;text-align:center;border-color:#46544e;background:var(--tile);color:#cdeede}
  .optbtn.philly{border-color:#6f8;background:#16321f}
+ .aimhdr{grid-column:1/-1;font-size:12.5px;color:var(--gold);font-weight:800;margin:1px 0 3px}
+ .optbtn.aim{text-align:center;border-color:var(--gold);background:#241f12}.optbtn.aim:hover{background:#322a16}
+ .optbtn.aim.back{grid-column:1/-1;border-color:#46544e;background:var(--tile);color:var(--mut)}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
@@ -2279,7 +2282,7 @@ function renderGame(g,play){
      kicks.map(o=>'<button class="optbtn kick" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+(o.key==='__FG__'?'🥅 ':'🦵 ')+esc(o.label)+'</button>').join('')+
      (to?'<button class="optbtn to sm" '+dis+' data-k="__TIMEOUT__" onclick="gamePlay(this.dataset.k)">⏱ '+esc(to.label)+'</button>':'')+
      '</div>';
-   h+='<div class="optgrid">'+plays.map(pbtn).join('')+'</div>'+
+   h+='<div class="optgrid" id="optgrid">'+plays.map(pbtn).join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+dis+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+dis+'>Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">'+qLabel(p.q)+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
@@ -2314,7 +2317,7 @@ async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=fals
  const cont=()=>{setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},1500);};   // danach normaler Folgesnap
  const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
  let d=null;
- if(play.concept){try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();}catch(e){d=null;}}
+ if(play.concept){try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&aim='+encodeURIComponent(play.aim||''))).json();}catch(e){d=null;}}
  if(play.pre_snap||!d||d.error){                          // Vor-Snap-Foul: kein Snap, sofort Pfiff
    if(d&&!d.error)renderField(svg,d,play.dist0||10,cols,play.ytz0,true);
    else{let s='<rect width="533" height="360" fill="#0e4a2d"/>';for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';s+=_refFig(258,250);svg.innerHTML=s;}
@@ -2354,7 +2357,7 @@ function _snapSequence(svg,d,onDone,mot){const P=svg.id;if(_anim[P])cancelAnimat
  _anim[P]=requestAnimationFrame(fr);}
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const variant=Math.floor(Math.random()*5);                  // Formation pro Snap mischen (auch Shotgun/FB)
- const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
+ const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant+'&aim='+encodeURIComponent(play.aim||''))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);_fieldHUD(svg);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
  const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0,pa:(play.concept==='PA Boot')};
@@ -2426,7 +2429,21 @@ function animatePunt(play){const svg=$('gfield');if(!svg){playBusy=false;return;
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-async function gamePlay(choice){if(playBusy)return;playBusy=true;_preG=liveG;const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+function gamePlay(choice,aim){if(playBusy)return;
+ if(!aim&&liveG&&liveG.user_offense&&(''+choice).indexOf('__')<0){const opt=(liveG.options||[]).find(o=>o.key===choice);
+   if(opt&&(opt.type==='Pass'||opt.type==='Lauf')){_aimMenu(choice,opt.type,opt.label);return;}}   // Stufe 2: Seite/Ziel wählen
+ playBusy=true;_preG=liveG;_doPlay(choice,aim);}
+async function _doPlay(choice,aim){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice)+(aim&&aim!=='auto'?'&aim='+encodeURIComponent(aim):''),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+async function _aimMenu(choice,type,label){const grid=$('optgrid');if(!grid)return;
+ const ab=(k,a,t)=>'<button class="optbtn aim" data-k="'+esc(choice)+'" data-a="'+esc(a)+'" onclick="gamePlay(this.dataset.k,this.dataset.a)">'+esc(t)+'</button>';
+ let h='<div class="aimhdr">'+esc(label)+' — '+(type==='Lauf'?'Laufseite wählen':'Ziel wählen')+'</div>';
+ if(type==='Lauf'){h+=ab(0,'L','◀ Links')+ab(0,'M','▲ Mitte')+ab(0,'R','Rechts ▶');}
+ else{let d=null;try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(choice)+'&coverage='+encodeURIComponent('Cover 2'))).json();}catch(e){}
+   const NM={X:'WR außen-links',Z:'WR außen-rechts',SL:'Slot',TE:'Tight End',RB:'Running Back',FB:'Fullback'};
+   h+=ab(0,'auto','🎯 Auto (offener Mann)');
+   (d&&d.offense||[]).filter(o=>NM[o.pos]&&o.route&&o.route.length>1).forEach(o=>{h+=ab(0,o.pos,esc(NM[o.pos])+' — '+esc(o.rname||'Route'));});}
+ h+='<button class="optbtn aim back" onclick="renderGame(liveG)">↩ Zurück</button>';
+ grid.innerHTML=h;}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 async function simDrive(){if(playBusy)return;const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
  if(r.result){if(r.view)renderMgr(r.view);showGameResult(r.result);}else renderGame(r.game);}
@@ -2663,10 +2680,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return matrix(cfg, _sit(down, ydstogo, yardline, personnel, box))
 
     @app.get("/api/sim/diagram")
-    def sim_diagram(concept: str, coverage: str, variant: int = 0):
+    def sim_diagram(concept: str, coverage: str, variant: int = 0, aim: str = ""):
         from gridiron.playviz import diagram
         try:
-            return diagram(concept, coverage, variant)
+            return diagram(concept, coverage, variant, aim or None)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -2877,12 +2894,12 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return F.start_game(cfg, st)
 
     @app.post("/api/fr/game/play")
-    def fr_game_play(choice: str):
+    def fr_game_play(choice: str, aim: str = ""):
         from gridiron import franchise as F
         st, err = _fr_load_or_404()
         if err:
             return err
-        return F.game_play(cfg, st, choice)
+        return F.game_play(cfg, st, choice, aim or None)
 
     @app.post("/api/fr/game/finish")
     def fr_game_finish():

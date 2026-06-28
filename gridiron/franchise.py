@@ -2042,7 +2042,7 @@ def _apply_penalty(g: dict, pen: dict, o: dict, yards: int,
     return True
 
 
-def game_play(cfg: Config, state: dict, choice: str) -> dict:
+def game_play(cfg: Config, state: dict, choice: str, aim: str | None = None) -> dict:
     g = state.get("active_game")
     if not g or g["over"]:
         return {"error": "Kein laufendes Spiel."}
@@ -2105,6 +2105,21 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
                     o["kind"], o["yards"] = "incomplete", 0
                 else:
                     o["yards"] = int(round(o["yards"] * (0.88 if is_pass else 0.93)))
+        # Spieler-Wahl (aim): Pass-Ziel / Laufseite beeinflusst Ausgang leicht
+        if aim and o.get("kind") not in ("sack", "int"):
+            if (concept in PASS_CONCEPTS) or o.get("pass"):
+                if aim in ("X", "Z"):                                      # tiefer Außenreceiver: mehr Risiko/Ertrag
+                    if o.get("kind") == "complete" and random.random() < 0.10:
+                        o["kind"], o["yards"] = "incomplete", 0
+                    else:
+                        o["yards"] = int(round(o["yards"] * 1.18))
+                elif aim in ("RB", "FB"):                                  # Checkdown: sicher, aber kurz
+                    if o.get("kind") == "incomplete" and random.random() < 0.45:
+                        o["kind"], o["yards"] = "complete", random.randint(1, 5)
+                    o["yards"] = int(round(o["yards"] * 0.72)) if o.get("kind") == "complete" else o["yards"]
+            elif aim in ("L", "M", "R"):                                   # Laufseite: passende Seite -> kleiner Bonus
+                soft = ["L", "M", "R"][_RNG.integers(0, 3)]                # "weiche" Seite dieses Snaps
+                o["yards"] = int(round(o["yards"] * (1.18 if aim == soft else 0.9)))
     yards = max(-12, min(o["yards"], int(g["ytz"])))
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     # Strafen (nur normale Snaps – nicht bei Trick-Plays/FG/PAT)
@@ -2117,7 +2132,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
         cos_y = 0 if pen["pre_snap"] else max(-8, min(yards, int(ytz0) - 2))   # kosmetischer Raumgewinn (wird zurückgepfiffen)
         return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
                                      "kind": "penalty", "penalty": True, "user_off": user_has_ball,
-                                     "concept": concept, "coverage": coverage,
+                                     "concept": concept, "coverage": coverage, "aim": aim,
                                      "pre_snap": bool(pen["pre_snap"]), "pen_name": pen["name"],
                                      "pen_side": pen["side"], "play_kind": o["kind"], "play_yards": cos_y,
                                      "ytz0": round(ytz0), "dist0": round(dist0)},
@@ -2193,7 +2208,7 @@ def game_play(cfg: Config, state: dict, choice: str) -> dict:
     spd = {"off": _spd_factor(off["units"].get("RB" if concept in RUN_CONCEPTS else "WR", 70)),
            "def": _spd_factor(deff["units"].get("DB", 70))}     # Tempo aus den Spielerwerten
     return {"ok": True, "play": {"desc": label, "yards": yards, "scored": scored, "td": is_td,
-                                 "kind": o["kind"], "concept": concept, "coverage": coverage,
+                                 "kind": o["kind"], "concept": concept, "coverage": coverage, "aim": aim,
                                  "turnover": bool(o["turnover"]),   # Fumble (Lauf/Fang) -> Animation zeigt Ballverlust
                                  "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0),
                                  "spd": spd},
