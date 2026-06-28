@@ -1996,24 +1996,25 @@ def _roll_penalty(rng, rate: float = 0.13):
     return None
 
 
-def _apply_penalty(g: dict, pen: dict, o: dict, yards: int,
-                   attack_right: bool, off: dict, user_off: bool) -> bool:
-    """Wendet eine Strafe an. True = angenommen (ersetzt das Play), False = abgelehnt (Play zählt)."""
+def _penalty_auto_accept(g: dict, pen: dict, o: dict, yards: int) -> bool:
+    """Entscheidet (für die KI/automatisch), ob die nicht-foulende Seite die Strafe annimmt."""
     off_pen = (pen["side"] == "off")
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
-    accept = True
-    if pen["pre_snap"]:
-        accept = True                                   # Vor-Snap-Foul: immer geahndet, kein Snap
-    elif off_pen:
-        if o["turnover"] or yards < -pen["yards"]:       # Verteidigung lehnt ab, wenn das Play ohnehin schlecht lief
-            accept = False
-    else:
-        gain_first = yards >= g["dist"]
-        pen_gain = (min(int(g["ytz"]) - 1, 18) if pen["spot"] else pen["yards"])
-        if is_td or (gain_first and yards >= pen_gain and not pen["auto_first"]):
-            accept = False                               # Offense lehnt ab, wenn das Play mehr brachte
-    if not accept:
-        return False
+    if off_pen:
+        if o["turnover"] or yards < -pen["yards"]:        # Verteidigung lehnt ab, wenn das Play ohnehin schlecht lief
+            return False
+        return True
+    gain_first = yards >= g["dist"]
+    pen_gain = (min(int(g["ytz"]) - 1, 18) if pen["spot"] else pen["yards"])
+    if is_td or (gain_first and yards >= pen_gain and not pen["auto_first"]):
+        return False                                      # Offense lehnt ab, wenn das Play mehr brachte
+    return True
+
+
+def _penalty_outcome(g: dict, pen: dict, off: dict, attack_right: bool) -> tuple[dict, str]:
+    """Berechnet die Folgen einer ANGENOMMENEN Strafe — ohne den Spielzustand zu ändern.
+    Liefert (Änderungen, Beschriftung)."""
+    off_pen = (pen["side"] == "off")
     ytz = float(g["ytz"]); dist = float(g["dist"]); down = g["down"]
     if off_pen:
         ytz = ytz + (100.0 - ytz) / 2 if ytz + pen["yards"] > 99 else ytz + pen["yards"]  # Half-the-distance zur eigenen Goalline
@@ -2033,19 +2034,36 @@ def _apply_penalty(g: dict, pen: dict, o: dict, yards: int,
             if dist <= 0:
                 down, dist, extra = 1, 10.0, " — First Down"
             label = f"🚩 {pen['name']} (Verteidigung) — +{gained} Yd{extra}"
-    g["ytz"] = round(ytz, 1)
-    g["dist"] = round(max(1.0, dist), 1)
-    g["down"] = down
-    g["absx"] = round((100.0 - g["ytz"]) if attack_right else g["ytz"], 1)
+    changes = {"ytz": round(ytz, 1), "dist": round(max(1.0, dist), 1), "down": down,
+               "absx": round((100.0 - round(ytz, 1)) if attack_right else round(ytz, 1), 1)}
+    return changes, label
+
+
+def _commit_penalty(g: dict, pen: dict, off: dict, user_off: bool, attack_right: bool) -> str:
+    """Schreibt eine angenommene Strafe in den Spielzustand und ins Log. Gibt die Beschriftung zurück."""
+    changes, label = _penalty_outcome(g, pen, off, attack_right)
+    g["ytz"], g["dist"], g["down"], g["absx"] = changes["ytz"], changes["dist"], changes["down"], changes["absx"]
     g["log"].insert(0, {"q": g["q"], "team": off["name"], "desc": label,
                         "hs": g["score"][0], "as_": g["score"][1], "off": user_off, "yards": 0})
+    return label
+
+
+def _apply_penalty(g: dict, pen: dict, o: dict, yards: int,
+                   attack_right: bool, off: dict, user_off: bool) -> bool:
+    """Automatische Strafen-Abwicklung (KI / Vor-Snap). True = angenommen, False = abgelehnt (Play zählt)."""
+    if not (pen["pre_snap"] or _penalty_auto_accept(g, pen, o, yards)):
+        return False
+    _commit_penalty(g, pen, off, user_off, attack_right)
     return True
 
 
-def game_play(cfg: Config, state: dict, choice: str, aim: str | None = None) -> dict:
+def game_play(cfg: Config, state: dict, choice: str, aim: str | None = None,
+              auto: bool = False) -> dict:
     g = state.get("active_game")
     if not g or g["over"]:
         return {"error": "Kein laufendes Spiel."}
+    if g.get("pen_pending"):                              # offene Strafen-Entscheidung zuerst klären
+        return {"error": "Erst die Strafe entscheiden (annehmen oder ablegen)."}
     teams = state["teams"]
     off_i = g["hi"] if g["pos"] == 0 else g["ai"]
     def_i = g["ai"] if g["pos"] == 0 else g["hi"]
@@ -2124,19 +2142,57 @@ def game_play(cfg: Config, state: dict, choice: str, aim: str | None = None) -> 
     attack_right = (g["pos"] == 1)   # Gast greift nach rechts an, Heim nach links
     # Strafen (nur normale Snaps – nicht bei Trick-Plays/FG/PAT)
     pen = None if philly else _roll_penalty(random)
-    if pen and _apply_penalty(g, pen, o, yards, attack_right, off, user_has_ball):
-        pen_desc = g["log"][0]["desc"]
-        _runoff(g, 0 if pen["pre_snap"] else random.randint(4, 8), True)  # Strafe: Uhr steht (Vor-Snap: keine Zeit)
-        _new_decision_options(state)
-        save(cfg, state)
-        cos_y = 0 if pen["pre_snap"] else max(-8, min(yards, int(ytz0) - 2))   # kosmetischer Raumgewinn (wird zurückgepfiffen)
-        return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
-                                     "kind": "penalty", "penalty": True, "user_off": user_has_ball,
-                                     "concept": concept, "coverage": coverage, "aim": aim,
-                                     "pre_snap": bool(pen["pre_snap"]), "pen_name": pen["name"],
-                                     "pen_side": pen["side"], "play_kind": o["kind"], "play_yards": cos_y,
-                                     "ytz0": round(ytz0), "dist0": round(dist0)},
+    if pen:
+        off_pen = (pen["side"] == "off")
+        # Die NICHT-foulende Seite entscheidet (annehmen/ablegen). Vor-Snap-Fouls sind tote-Ball-Fouls -> immer geahndet.
+        # Im Auto-/Sim-Modus gibt es keine interaktive Wahl (die KI entscheidet automatisch).
+        user_decides = (not auto) and (not pen["pre_snap"]) and ((off_pen and not user_has_ball) or ((not off_pen) and user_has_ball))
+        if user_decides:                                  # Nutzer wählt selbst -> Entscheidung offen lassen
+            _, accept_label = _penalty_outcome(g, pen, off, attack_right)
+            play_label = _play_label(concept, o, yards)
+            o_lite = {"kind": o["kind"], "yards": int(o["yards"]),
+                      "turnover": bool(o["turnover"]), "pass": bool(o.get("pass", False))}
+            g["pen_pending"] = {"pen": pen, "o": o_lite, "yards": int(yards),
+                                "concept": concept, "coverage": coverage, "aim": aim,
+                                "ytz0": round(ytz0), "dist0": round(dist0),
+                                "user_off": user_has_ball, "attack_right": attack_right,
+                                "off_i": off_i, "def_i": def_i,
+                                "accept_desc": accept_label,
+                                "decline_desc": f"Play zählt: {play_label} ({'+' if yards >= 0 else ''}{yards} Yd)"}
+            save(cfg, state)
+            return {"ok": True, "play": {
+                "desc": f"🚩 Flagge — {pen['name']} ({'Offense' if off_pen else 'Defense'})",
+                "kind": "penalty", "penalty": True, "choice": True,
+                "pen_name": pen["name"], "pen_side": pen["side"], "pre_snap": False,
+                "accept_desc": accept_label,
+                "decline_desc": f"Play zählt: {play_label} ({'+' if yards >= 0 else ''}{yards} Yd)",
+                "user_off": user_has_ball, "concept": concept, "coverage": coverage, "aim": aim,
+                "play_kind": o["kind"], "play_yards": max(-8, min(yards, int(ytz0) - 2)),
+                "ytz0": round(ytz0), "dist0": round(dist0)},
                 "game": _game_view(state)}
+        if _apply_penalty(g, pen, o, yards, attack_right, off, user_has_ball):
+            pen_desc = g["log"][0]["desc"]
+            _runoff(g, 0 if pen["pre_snap"] else random.randint(4, 8), True)  # Strafe: Uhr steht (Vor-Snap: keine Zeit)
+            _new_decision_options(state)
+            save(cfg, state)
+            cos_y = 0 if pen["pre_snap"] else max(-8, min(yards, int(ytz0) - 2))   # kosmetischer Raumgewinn (wird zurückgepfiffen)
+            return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
+                                         "kind": "penalty", "penalty": True, "user_off": user_has_ball,
+                                         "concept": concept, "coverage": coverage, "aim": aim,
+                                         "pre_snap": bool(pen["pre_snap"]), "pen_name": pen["name"],
+                                         "pen_side": pen["side"], "play_kind": o["kind"], "play_yards": cos_y,
+                                         "ytz0": round(ytz0), "dist0": round(dist0)},
+                    "game": _game_view(state)}
+    return _finalize_play(cfg, state, g, off, deff, o, yards,
+                          concept, coverage, aim, ytz0, dist0, user_has_ball, philly)
+
+
+def _finalize_play(cfg: Config, state: dict, g: dict, off: dict, deff: dict, o: dict, yards: int,
+                   concept: str, coverage: str, aim, ytz0: float, dist0: float,
+                   user_has_ball: bool, philly: bool = False) -> dict:
+    """Verbucht ein regulär gewertetes Play (Score/Down/Uhr/Box) und liefert das Ergebnis."""
+    teams = state["teams"]
+    attack_right = (g["pos"] == 1)
     is_td = (not o["turnover"]) and (g["ytz"] - yards <= 0)
     oob = (not o["turnover"]) and (not is_td) and o["kind"] in ("complete", "run") and random.random() < 0.16  # ins Seitenaus
     # Box-Score (Nutzer-Team)
@@ -2213,6 +2269,37 @@ def game_play(cfg: Config, state: dict, choice: str, aim: str | None = None) -> 
                                  "user_off": user_has_ball, "ytz0": round(ytz0), "dist0": round(dist0),
                                  "spd": spd},
             "game": _game_view(state)}
+
+
+def resolve_penalty(cfg: Config, state: dict, decision: str) -> dict:
+    """Löst eine offene Strafen-Entscheidung des Nutzers auf: 'accept' (annehmen) oder 'decline' (ablegen)."""
+    g = state.get("active_game")
+    if not g or g["over"]:
+        return {"error": "Kein laufendes Spiel."}
+    pend = g.pop("pen_pending", None)
+    if not pend:
+        return {"error": "Keine offene Strafen-Entscheidung."}
+    teams = state["teams"]
+    off, deff = teams[pend["off_i"]], teams[pend["def_i"]]
+    pen, o = pend["pen"], pend["o"]
+    yards, concept, coverage, aim = pend["yards"], pend["concept"], pend["coverage"], pend["aim"]
+    ytz0, dist0, user_off, attack_right = pend["ytz0"], pend["dist0"], pend["user_off"], pend["attack_right"]
+    if decision == "accept":                              # Strafe annehmen -> Play wird zurückgepfiffen
+        pen_desc = _commit_penalty(g, pen, off, user_off, attack_right)
+        _runoff(g, random.randint(4, 8), True)            # Uhr steht nach der Strafe
+        _new_decision_options(state)
+        save(cfg, state)
+        cos_y = max(-8, min(yards, int(ytz0) - 2))
+        return {"ok": True, "play": {"desc": pen_desc, "yards": 0, "scored": False, "td": False,
+                                     "kind": "penalty", "penalty": True, "user_off": user_off,
+                                     "concept": concept, "coverage": coverage, "aim": aim,
+                                     "pre_snap": False, "pen_name": pen["name"], "pen_side": pen["side"],
+                                     "play_kind": o["kind"], "play_yards": cos_y, "no_anim": True,
+                                     "ytz0": round(ytz0), "dist0": round(dist0)},
+                "game": _game_view(state)}
+    # Strafe ablegen -> der reguläre Spielzug zählt
+    return _finalize_play(cfg, state, g, off, deff, o, yards,
+                          concept, coverage, aim, ytz0, dist0, user_off, False)
 
 
 def _switch_possession(g: dict) -> None:
@@ -2561,7 +2648,7 @@ def game_sim_drive(cfg: Config, state: dict) -> dict:
         return {"error": "Kein laufendes Spiel."}
     start, guard = g["pos"], 0
     while not state["active_game"]["over"] and state["active_game"]["pos"] == start and guard < 60:
-        game_play(cfg, state, _auto_choice(state))
+        game_play(cfg, state, _auto_choice(state), auto=True)
         guard += 1
     if state["active_game"]["over"]:
         return finish_game(cfg, state)
@@ -2575,7 +2662,7 @@ def game_sim_rest(cfg: Config, state: dict) -> dict:
         return {"error": "Kein laufendes Spiel."}
     guard = 0
     while not state["active_game"]["over"] and guard < 400:
-        game_play(cfg, state, _auto_choice(state))
+        game_play(cfg, state, _auto_choice(state), auto=True)
         guard += 1
     return finish_game(cfg, state)
 
@@ -2608,4 +2695,9 @@ def _game_view(state: dict) -> dict:
         "user_is_home": g["user_is_home"],
         "coin": g.get("coin"), "kickoff": g.get("kickoff"),
         "weather": g.get("weather", 0), "night": g.get("night", 1),
+        "pen_choice": ({"pen_name": g["pen_pending"]["pen"]["name"],
+                        "pen_side": g["pen_pending"]["pen"]["side"],
+                        "accept_desc": g["pen_pending"]["accept_desc"],
+                        "decline_desc": g["pen_pending"]["decline_desc"]}
+                       if g.get("pen_pending") else None),
     }

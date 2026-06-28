@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v113-handoff"      # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v114-penalty"      # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -403,6 +403,10 @@ _STYLE2 = """
  .optbtn.aim.back{grid-column:1/-1;border-color:#46544e;background:var(--tile);color:var(--mut)}
  .optbtn.snap{grid-column:1/-1;text-align:center;font-size:17px;font-weight:800;letter-spacing:1px;color:#02140c;border-color:#0e8d5e;background:linear-gradient(180deg,#1fd897,#12ac72);padding:14px;box-shadow:0 2px 10px -2px rgba(31,216,151,.5);animation:snappulse 1.1s ease-in-out infinite}
  @keyframes snappulse{0%,100%{box-shadow:0 2px 10px -2px rgba(31,216,151,.45)}50%{box-shadow:0 2px 18px 0 rgba(31,216,151,.85)}}
+ .optbtn.penacc{border-color:#0e8d5e;background:#16321f;color:#bff5da;font-weight:800}
+ .optbtn.penacc:hover{border-color:#1fd897;background:#1c3f28}
+ .optbtn.pendec{border-color:#b34b46;background:#33191a;color:#f5c9c7;font-weight:800}
+ .optbtn.pendec:hover{border-color:#ef5350;background:#3f1f20}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
@@ -2264,7 +2268,7 @@ function gameTurf(g){let t='';[10,20,30,40,50,60,70,80,90].forEach(p=>{t+='<div 
  return '<div class="turf">'+t+'<div class="ball" style="left:'+Math.max(1,Math.min(99,g.absx))+'%"></div></div>';}
 let _preG=null;
 function renderGame(g,play){
- const willAnimate=!!(play&&(play.concept||play.kind==='fg'||play.kind==='punt'||play.penalty));   // läuft eine Snap-/Kick-/Flaggen-Animation?
+ const willAnimate=!!(play&&!play.no_anim&&(play.concept||play.kind==='fg'||play.kind==='punt'||play.penalty));   // läuft eine Snap-/Kick-/Flaggen-Animation?
  if(!willAnimate)playBusy=false;                            // Penalty/2PT/Wechsel: Buttons sofort wieder aktiv rendern
  // Während der Animation das Spielfeld/Anzeige im Vor-Snap-Zustand zeigen — das Ergebnis (Score, Down, Spot, Uhr, Kommentar) erst NACH der Animation
  const disp=(willAnimate&&_preG)?_preG:g;_disp=disp;
@@ -2289,6 +2293,12 @@ function renderGame(g,play){
  else if(willAnimate)h+='<div class="reco"><span class="mut">Spielzug läuft …</span></div>';
  if(disp.over){h+='<div class="posbanner off">Spiel vorbei — Endstand '+esc(disp.away)+' '+disp['as']+' : '+disp.hs+' '+esc(disp.home)+'</div>'+
    '<button onclick="finishGame()">Ergebnis werten &amp; Woche abschließen</button>';}
+ else if(disp.pen_choice){const pc=disp.pen_choice,dis=playBusy?'disabled':'';   // 🚩 Strafe gegen den Gegner -> Nutzer entscheidet
+   h+='<div class="posbanner def">🚩 Flagge — '+esc(pc.pen_name)+' ('+(pc.pen_side==='off'?'Offense':'Defense')+') gegen den Gegner — annehmen oder ablegen?</div>'+
+     '<div class="optgrid" id="optgrid">'+
+       '<button class="optbtn penacc" '+dis+' data-d="accept" onclick="decidePenalty(this.dataset.d)">✔ Annehmen<span class="ty">'+esc(pc.accept_desc)+'</span></button>'+
+       '<button class="optbtn pendec" '+dis+' data-d="decline" onclick="decidePenalty(this.dataset.d)">✖ Ablegen<span class="ty">'+esc(pc.decline_desc)+'</span></button>'+
+     '</div>';}
  else{const ban=disp.awaiting==='pat'?'🏈 Touchdown! Extra-Punkt oder 2-Punkte-Conversion?':disp.awaiting==='2pt'?'🏈 2-Punkte-Versuch — wähle deinen Spielzug von der 3:':(disp.user_offense?'Du am Ball — wähle dein Konzept:':'Verteidigung — wähle deine Coverage:');
    const opts=disp.options||[],dis=playBusy?'disabled':'';
    const to=opts.find(o=>o.key==='__TIMEOUT__');                        // Auszeit -> klein oben rechts
@@ -2310,6 +2320,7 @@ function renderGame(g,play){
   if(play&&play.concept)animateGamePlay(play);
   else if(play&&play.kind==='fg')animateFG(play);           // Field Goal / Extra-Punkt — Kick-Animation
   else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
+  else if(play&&play.penalty&&play.no_anim){playBusy=false;showFormation(g);}   // angenommene Strafe -> nur Ergebnis, keine erneute Animation
   else if(play&&play.penalty)animatePenalty(play);          // Flagge — Schiedsrichter wirft, dann Ergebnis
   else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
  }catch(e){playBusy=false;showFormation(g);}                 // Animationsfehler darf nie sperren
@@ -2347,13 +2358,13 @@ async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=fals
    if(d&&!d.error)renderField(svg,d,play.dist0||10,cols,play.ytz0,true);
    else{let s='<rect width="533" height="360" fill="#0e4a2d"/>';for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';s+=_refFig(258,250);svg.innerHTML=s;}
    setTimeout(()=>_throwFlag(svg,250,120,292,250),250);
-   setTimeout(()=>_penaltyCard(svg,play),1300);
+   if(!play.choice)setTimeout(()=>_penaltyCard(svg,play),1300);   // bei offener Wahl noch kein Ergebnis zeigen
    cont();return;}
- // Post-Snap: das echte Play läuft, der Ref wirft früh die Flagge, danach erscheint die Strafe
+ // Post-Snap: das echte Play läuft, der Ref wirft früh die Flagge, danach erscheint die Strafe (oder die Wahl)
  renderField(svg,d,play.dist0||10,cols,play.ytz0);
  setTimeout(()=>{if(_anim[P])_throwFlag(svg,250,118,300,255);},520);   // Ref wirft, während der Spielzug läuft
  playAnim(svg,d,{kind:play.play_kind||'run',yards:play.play_yards||0,td:false,noResult:true},
-   ()=>{_penaltyCard(svg,play);cont();});                 // erst Tackle, dann Flaggen-Info, dann Strafe
+   ()=>{if(!play.choice)_penaltyCard(svg,play);cont();});  // erst Tackle, dann Flaggen-Info (bei Wahl: direkt zur Entscheidung)
  return;
 }
 function _hex2rgb(c){c=(''+(c||'#888888')).replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];return [parseInt(c.substr(0,2),16),parseInt(c.substr(2,2),16),parseInt(c.substr(4,2),16)];}
@@ -2467,6 +2478,9 @@ function _armPlay(choice,aim){const grid=$('optgrid');if(!grid)return;
   '<button class="optbtn snap" data-k="'+esc(choice)+'" data-a="'+esc(aim||'')+'" onclick="gamePlay(this.dataset.k,this.dataset.a,null,null,1)">🏈 SNAP</button>'+
   '<button class="optbtn aim back" onclick="renderGame(liveG)">↩ Zurück</button>';}
 async function _doPlay(choice,aim){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice)+(aim&&aim!=='auto'?'&aim='+encodeURIComponent(aim):''),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+async function decidePenalty(decision){if(playBusy)return;playBusy=true;_preG=liveG;   // 🚩 Strafe annehmen/ablegen
+ const r=await api('/api/fr/game/penalty?decision='+encodeURIComponent(decision),'POST');
+ if(r.error){playBusy=false;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function _aimMenu(choice,type,label){const grid=$('optgrid');if(!grid)return;
  const ab=(k,a,t)=>'<button class="optbtn aim" data-k="'+esc(choice)+'" data-a="'+esc(a)+'" onclick="gamePlay(this.dataset.k,this.dataset.a)">'+esc(t)+'</button>';
  let h='<div class="aimhdr">'+esc(label)+' — '+(type==='Lauf'?'Laufseite wählen':'Ziel wählen')+'</div>';
@@ -2933,6 +2947,14 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if err:
             return err
         return F.game_play(cfg, st, choice, aim or None)
+
+    @app.post("/api/fr/game/penalty")
+    def fr_game_penalty(decision: str):
+        from gridiron import franchise as F
+        st, err = _fr_load_or_404()
+        if err:
+            return err
+        return F.resolve_penalty(cfg, st, decision)
 
     @app.post("/api/fr/game/finish")
     def fr_game_finish():

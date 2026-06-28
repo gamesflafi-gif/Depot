@@ -627,7 +627,7 @@ def test_game_clock_real(tmp_path):
             assert gg["timeouts"] == [3, 3]               # Auszeiten zur Halbzeit zurückgesetzt
         if any("Zwei-Minuten" in L["desc"] for L in gg["log"]):
             saw_two_min = True
-        F.game_play(cfg, st, F._auto_choice(st))
+        F.game_play(cfg, st, F._auto_choice(st), auto=True)
         guard += 1
     over = st["active_game"]
     assert over["over"] and over["quarter"] >= 4          # über die Uhr beendet (regulär nach Q4 / evtl. OT)
@@ -667,6 +667,55 @@ def test_penalties_apply_rules(tmp_path):
     # _roll_penalty: rate=1 liefert immer, rate=0 nie
     assert F._roll_penalty(_Always([0.0]), rate=1.0) is not None
     assert F._roll_penalty(_Always([0.99]), rate=0.13) is None
+
+
+def test_interactive_penalty_accept_decline(tmp_path):
+    """Strafe gegen den Gegner: der Nutzer entscheidet selbst (annehmen/ablegen);
+    eigenes Foul/Vor-Snap/Auto-Sim bleiben automatisch."""
+    from gridiron import franchise as F
+    cfg = _cfg(tmp_path)
+
+    def _fresh(seed):
+        st = F.new_franchise(cfg, "Adler", n_teams=6, seed=seed)
+        F.do_training(cfg, st, "team"); st.pop("meeting", None)
+        F.start_game(cfg, st)
+        g = st["active_game"]; g["pos"] = 0 if g["user_is_home"] else 1   # Nutzer am Ball
+        F._new_decision_options(st)
+        return st, g
+
+    def _choice_key(st):
+        return next(o["key"] for o in F._game_view(st)["options"] if o.get("type") in ("Pass", "Lauf"))
+
+    defp = lambda rng, rate=0.13: {"name": "Defensive Holding", "side": "def", "yards": 5,
+                                   "auto_first": True, "pre_snap": False, "spot": False}
+
+    # Gegner foult (Defense) -> Nutzer entscheidet. ANNEHMEN: +5 Yd, automatisches First Down.
+    st, g = _fresh(4); F._roll_penalty = defp
+    ytz0 = g["ytz"]
+    r = F.game_play(cfg, st, _choice_key(st))
+    assert r["play"].get("choice") and g.get("pen_pending")
+    assert g["ytz"] == ytz0 and "error" in F.game_play(cfg, st, _choice_key(st))   # eingefroren bis zur Wahl
+    acc = F.resolve_penalty(cfg, st, "accept")
+    assert acc["play"]["kind"] == "penalty" and acc["play"].get("no_anim") and not g.get("pen_pending")
+    assert g["ytz"] == ytz0 - 5 and g["down"] == 1
+
+    # ABLEGEN: der reguläre Spielzug zählt (kein Pending mehr, echtes Ergebnis).
+    st, g = _fresh(4); F._roll_penalty = defp
+    F.game_play(cfg, st, _choice_key(st))
+    dec = F.resolve_penalty(cfg, st, "decline")
+    assert not g.get("pen_pending") and dec["play"].get("concept") and "spd" in dec["play"]
+
+    # Eigenes Foul (Offense) -> KI entscheidet automatisch, keine Nutzer-Wahl.
+    st, g = _fresh(4)
+    F._roll_penalty = lambda rng, rate=0.13: {"name": "Holding (Offense)", "side": "off", "yards": 10,
+                                              "auto_first": False, "pre_snap": False, "spot": False}
+    r = F.game_play(cfg, st, _choice_key(st))
+    assert not r["play"].get("choice") and not g.get("pen_pending")
+
+    # Auto-Sim erzeugt nie eine offene Wahl (auch wenn der Gegner foult).
+    st, g = _fresh(4); F._roll_penalty = defp
+    r = F.game_play(cfg, st, _choice_key(st), auto=True)
+    assert not r["play"].get("choice") and not g.get("pen_pending")
 
 
 def test_random_playcalls_and_philly(tmp_path):
@@ -944,7 +993,12 @@ def test_franchise_interactive_game(tmp_path):
         # Spieluhr-Invarianten bei jedem Snap
         assert g["clock"] >= 0 and g["quarter"] >= 1
         assert 0 <= g["timeouts"][0] <= 3 and 0 <= g["timeouts"][1] <= 3
-        g = F.game_play(cfg, st, g["options"][0]["key"])["game"]
+        r = F.game_play(cfg, st, g["options"][0]["key"])
+        if st["active_game"].get("pen_pending"):           # interaktive Strafen-Entscheidung -> annehmen/ablegen
+            assert r["play"].get("choice") and r["play"]["accept_desc"] and r["play"]["decline_desc"]
+            r = F.resolve_penalty(cfg, st, "accept" if guard % 2 else "decline")
+            assert not st["active_game"].get("pen_pending")
+        g = r["game"]
         guard += 1
     assert g["over"] and g["quarter"] >= 4                 # Spiel endet über die echte Spieluhr (regulär nach Q4, evtl. OT)
     fin = F.finish_game(cfg, st)
