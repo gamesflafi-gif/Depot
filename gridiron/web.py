@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v103-indiv"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v104-field"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -824,6 +824,7 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   '<radialGradient id="ballhi_'+P+'" cx="0.4" cy="0.32" r="0.85"><stop offset="0" stop-color="#b06a30"/><stop offset="0.6" stop-color="#8b4a22"/><stop offset="1" stop-color="#5e3014"/></radialGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
   '<linearGradient id="haze_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9d2c4" stop-opacity=".16"/><stop offset="1" stop-color="#b9d2c4" stop-opacity="0"/></linearGradient>'+
+  '<pattern id="turfTex_'+P+'" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(22)"><line x1="1" y1="0" x2="1" y2="5" stroke="#ffffff" stroke-width=".4" opacity=".045"/><line x1="3.4" y1="0" x2="3.4" y2="5" stroke="#000000" stroke-width=".4" opacity=".05"/></pattern>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker>'+
   '<marker id="arr_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ff7a4d"/></marker></defs>';
@@ -847,6 +848,7 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  for(let fy=Math.floor(nearFy/5)*5;fy<farFy;fy+=5){const f0=Math.max(fy,nearFy),f1=Math.min(fy+5,farFy);
   const a=PJ(XW0,f0),b=PJ(XW1,f0),c=PJ(XW1,f1),e=PJ(XW0,f1);
   s+='<polygon points="'+poly(a,b,c,e)+'" fill="'+((Math.round(fy/5)&1)?'#15623a':'#1a6e44')+'"/>';}
+ {const a=PJ(XW0,nearFy),b=PJ(XW1,nearFy),c=PJ(XW1,farFy),e=PJ(XW0,farFy);s+='<polygon points="'+poly(a,b,c,e)+'" fill="url(#turfTex_'+P+')"/>';}   // feine Rasen-Textur
  for(let fy=-5;fy<=hiFy+0.1;fy+=5)s+=xline(fy,'#eaf6ee',Math.max(0.5,DS(fy)*1.5).toFixed(2),'0.34');
  // Hashmarks (kurze Striche je Yard an den beiden Hash-Linien) wie auf einem echten Feld
  for(let fy=Math.ceil(nearFy);fy<=Math.min(hiFy,34);fy++){if(fy%5===0)continue;[23.58,29.72].forEach(hx=>{const a=PJ(hx-0.5,fy),b=PJ(hx+0.5,fy);
@@ -857,7 +859,9 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   for(let g=0;g<=100;g+=10){const fy=fpos-g; if(fy<-6||fy>fpos||!(g<=50?g:100-g))continue;const lab=(g<=50?g:100-g);
    const la=PJ(6.5,fy),lb=PJ(46.8,fy),fs=Math.max(7,DS(fy)*17);
    s+='<text x="'+la[0].toFixed(1)+'" y="'+(la[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>'+
-      '<text x="'+lb[0].toFixed(1)+'" y="'+(lb[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>';}
+      '<text x="'+lb[0].toFixed(1)+'" y="'+(lb[1]+fs*0.35).toFixed(1)+'" font-size="'+fs.toFixed(1)+'" font-weight="800" fill="#cdeede" opacity="0.5" text-anchor="middle">'+lab+'</text>';
+   if(g!==50){const dir=g<50?-1:1,aw=fs*0.18,ay0=fy+dir*1.4;[PJ(8.7,ay0),PJ(44.6,ay0)].forEach(ap=>{const ty=ap[1]+dir*aw*1.6;   // Richtungspfeil zur nächsten Torlinie
+     s+='<path d="M'+(ap[0]-aw).toFixed(1)+' '+ap[1].toFixed(1)+' L'+(ap[0]+aw).toFixed(1)+' '+ap[1].toFixed(1)+' L'+ap[0].toFixed(1)+' '+ty.toFixed(1)+' Z" fill="#cdeede" opacity="0.42"/>';});}}
   // Endzonen-Wortmarke (verteidigendes Team) auf den Rasen gemalt
   {const ez=PJ(26.65,fpos+5.2),efs=Math.max(5,DS(fpos+5)*15);
    s+='<text x="'+ez[0].toFixed(1)+'" y="'+(ez[1]+efs*0.34).toFixed(1)+'" text-anchor="middle" font-size="'+efs.toFixed(1)+'" font-weight="900" fill="#ffffff" opacity="0.34" letter-spacing="'+(efs*0.16).toFixed(1)+'">'+esc(((cols.defAbbr||'')+'').toUpperCase())+'</text>';}
