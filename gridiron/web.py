@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v109-simaim"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v110-robust"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -2196,7 +2196,7 @@ function skipBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}const 
 function closeBroadcast(){if(bcTimer){clearInterval(bcTimer);bcTimer=null;}bcGame=null;const o=$('overlay');if(o)o.remove();unlockBodyIfNone();}
 
 /* ---------- Interaktiver Spielmodus (selbst Plays callen) ---------- */
-let liveG=null, playBusy=false, _weather=0, _night=1, _disp=null;   // 0 klar /1 Regen /2 Schnee ; _night: Flutlicht ; _disp: Anzeigedaten fürs Feld-HUD
+let liveG=null, playBusy=false, _weather=0, _night=1, _disp=null, _playWatch=0;   // 0 klar /1 Regen /2 Schnee ; _night: Flutlicht ; _disp: Anzeigedaten fürs Feld-HUD
 // Kompaktes Scoreboard/Down&Distance dezent oben aufs Feld
 function _fieldHUD(svg){if(!svg||!_disp)return;const d=_disp,g=el('g',{});g.setAttribute('pointer-events','none');
  const wi=d.weather===1?'🌧':d.weather===2?'❄':(d.night?'🌙':'☀');
@@ -2291,7 +2291,7 @@ function renderGame(g,play){
    const kicks=opts.filter(o=>o.key==='__FG__'||o.key==='__PUNT__');    // FG/Punt -> nur 4. Versuch, ganz oben
    const plays=opts.filter(o=>o.key!=='__TIMEOUT__'&&o.key!=='__FG__'&&o.key!=='__PUNT__');
    const pbtn=o=>'<button class="optbtn'+(o.key==='__PHILLY__'?' philly':'')+'" '+dis+' data-k="'+esc(o.key)+'" data-ty="'+esc(o.type)+'" data-lb="'+esc(o.label)+'" onclick="gamePlay(this.dataset.k,null,this.dataset.ty,this.dataset.lb)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>';
-   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'||disp.awaiting==='2pt'?'off':'def')+'">'+ban+'</div>';
+   h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'||disp.awaiting==='2pt'?'off':'def')+'">'+ban+'<span style="float:right;opacity:.45;font-weight:600;font-size:11px">""" + _BUILD + """</span></div>';
    if(kicks.length||to)h+='<div class="topacts">'+
      kicks.map(o=>'<button class="optbtn kick" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+(o.key==='__FG__'?'🥅 ':'🦵 ')+esc(o.label)+'</button>').join('')+
      (to?'<button class="optbtn to sm" '+dis+' data-k="__TIMEOUT__" onclick="gamePlay(this.dataset.k)">⏱ '+esc(to.label)+'</button>':'')+
@@ -2301,11 +2301,14 @@ function renderGame(g,play){
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+dis+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+dis+'>Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">'+qLabel(p.q)+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
  $('gamemodal').innerHTML=h;
- if(play&&play.concept)animateGamePlay(play);
- else if(play&&play.kind==='fg')animateFG(play);           // Field Goal / Extra-Punkt — Kick-Animation
- else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
- else if(play&&play.penalty)animatePenalty(play);          // Flagge — Schiedsrichter wirft, dann Ergebnis
- else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
+ if(playBusy){clearTimeout(_playWatch);_playWatch=setTimeout(()=>{if(playBusy){playBusy=false;if(liveG)renderGame(liveG);}},11000);}   // Watchdog: nie dauerhaft gesperrt
+ try{
+  if(play&&play.concept)animateGamePlay(play);
+  else if(play&&play.kind==='fg')animateFG(play);           // Field Goal / Extra-Punkt — Kick-Animation
+  else if(play&&play.kind==='punt')animatePunt(play);       // Punt — hoher Bogen, danach Ballwechsel
+  else if(play&&play.penalty)animatePenalty(play);          // Flagge — Schiedsrichter wirft, dann Ergebnis
+  else {playBusy=false; showFormation(g);}                   // 2PT/Wechsel: sofort wieder spielbar
+ }catch(e){playBusy=false;showFormation(g);}                 // Animationsfehler darf nie sperren
 }
 /* Flagge fliegt aus der Hand eines Refs in hohem Bogen aufs Feld (eigene Animationsschleife). */
 let _flagIv={};
