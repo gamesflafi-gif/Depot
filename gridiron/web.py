@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v111-jersey"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v112-snap"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -401,6 +401,8 @@ _STYLE2 = """
  .aimhdr{grid-column:1/-1;font-size:12.5px;color:var(--gold);font-weight:800;margin:1px 0 3px}
  .optbtn.aim{text-align:center;border-color:var(--gold);background:#241f12}.optbtn.aim:hover{background:#322a16}
  .optbtn.aim.back{grid-column:1/-1;border-color:#46544e;background:var(--tile);color:var(--mut)}
+ .optbtn.snap{grid-column:1/-1;text-align:center;font-size:17px;font-weight:800;letter-spacing:1px;color:#02140c;border-color:#0e8d5e;background:linear-gradient(180deg,#1fd897,#12ac72);padding:14px;box-shadow:0 2px 10px -2px rgba(31,216,151,.5);animation:snappulse 1.1s ease-in-out infinite}
+ @keyframes snappulse{0%,100%{box-shadow:0 2px 10px -2px rgba(31,216,151,.45)}50%{box-shadow:0 2px 18px 0 rgba(31,216,151,.85)}}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
@@ -2454,9 +2456,15 @@ function animatePunt(play){const svg=$('gfield');if(!svg){playBusy=false;return;
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-function gamePlay(choice,aim,ty,lb){if(playBusy)return;
- if(!aim&&(ty==='Pass'||ty==='Lauf')){_aimMenu(choice,ty,lb||choice);return;}   // Stufe 2: erst Ziel/Seite wählen, dann startet das Play
- playBusy=true;_preG=liveG;_doPlay(choice,aim);}
+function gamePlay(choice,aim,ty,lb,snap){if(playBusy)return;
+ if(!aim&&(ty==='Pass'||ty==='Lauf')){_aimMenu(choice,ty,lb||choice);return;}   // Stufe 2: Ziel/Seite wählen
+ if(aim&&!snap){_armPlay(choice,aim);return;}                                    // Stufe 3: bereit -> selbst SNAP drücken
+ playBusy=true;_preG=liveG;_doPlay(choice,aim);}                                 // Snap gedrückt -> Play läuft
+function _armPlay(choice,aim){const grid=$('optgrid');if(!grid)return;
+ const at=aim==='L'?'◀ Links':aim==='M'?'▲ Mitte':aim==='R'?'Rechts ▶':(!aim||aim==='auto')?'🎯 Auto':('Ziel '+aim);
+ grid.innerHTML='<div class="aimhdr">Bereit: '+esc(choice)+' · '+esc(at)+' — drücke SNAP</div>'+
+  '<button class="optbtn snap" data-k="'+esc(choice)+'" data-a="'+esc(aim||'')+'" onclick="gamePlay(this.dataset.k,this.dataset.a,null,null,1)">🏈 SNAP</button>'+
+  '<button class="optbtn aim back" onclick="renderGame(liveG)">↩ Zurück</button>';}
 async function _doPlay(choice,aim){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice)+(aim&&aim!=='auto'?'&aim='+encodeURIComponent(aim):''),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function _aimMenu(choice,type,label){const grid=$('optgrid');if(!grid)return;
  const ab=(k,a,t)=>'<button class="optbtn aim" data-k="'+esc(choice)+'" data-a="'+esc(a)+'" onclick="gamePlay(this.dataset.k,this.dataset.a)">'+esc(t)+'</button>';
