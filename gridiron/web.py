@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v102-atmos"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v103-indiv"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -275,6 +275,7 @@ _STYLE2 = """
  .rain{stroke:#aec6e0;stroke-width:.9;opacity:.45;animation:rainf linear infinite}@keyframes rainf{from{transform:translateY(-26px)}to{transform:translateY(380px)}}
  .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
  .flash{fill:#fffceb;animation:flash 2.4s steps(1) infinite}@keyframes flash{0%,90%{opacity:0}92%,96%{opacity:.95}100%{opacity:0}}
+ .bloom{animation:bloom .65s ease-out forwards}@keyframes bloom{0%{opacity:0}18%{opacity:.42}100%{opacity:0}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -949,7 +950,7 @@ const _BUILD2={OL:1.24,DT:1.24,NT:1.26,DE:1.08,TE:1.06,FB:1.10,LB:1.02,MLB:1.04,
    Hose mit Seitenstreifen/Knie, Stutzen + Cleats. Licht von oben-links (Verlauf-Schattierung). */
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
- const edge=_shade(color,-102),hel=_shade(color,-22),pad=_shade(color,20),arm=_shade(color,-8),trim=_shade(color,118),sock=_shade(color,-40),pants='#eef1f5',pantsh='#cbd2db',glove=_shade(color,-58),skin=_SKIN[(idx*5+3)%_SKIN.length],W=_BUILD2[pos]||1.0;
+ const edge=_shade(color,-102),hel=_shade(color,-22),pad=_shade(color,20),arm=_shade(color,-8),trim=_shade(color,118),sock=_shade(color,-40),pants='#eef1f5',pantsh='#cbd2db',glove=(idx%3===0?'#eef1f5':_shade(color,-58)),skin=_SKIN[(idx*5+3)%_SKIN.length],W=_BUILD2[pos]||1.0;
  const BS='url(#bodyShade_'+P+')',n=x=>x.toFixed(2);
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx.toFixed(1)+' '+sy.toFixed(1)+') scale('+ds+')');
  g.appendChild(el('ellipse',{cx:1.1,cy:0.7,rx:5.0*W,ry:1.45,fill:'#03100a',opacity:.4}));          // Bodenschatten (Licht oben-links)
@@ -973,6 +974,7 @@ function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx
    a2.appendChild(el('path',{d:'M'+n(ax-1.05)+' -12.0 Q'+n(ax-1.3)+' -8.5 '+n(ax-0.6)+' -6.6 L'+n(ax+0.7)+' -6.6 Q'+n(ax+1.2)+' -8.5 '+n(ax+0.95)+' -12.0 Z',fill:BS}));
    a2.appendChild(el('rect',{x:n(ax-0.5),y:-7.0,width:1.4,height:.55,fill:trim,opacity:.8}));        // Ärmel-Bündchen
    a2.appendChild(el('ellipse',{cx:n(ax+0.15),cy:-5.7,rx:1.0,ry:1.4,fill:skin,stroke:edge,'stroke-width':.35}));   // Unterarm (Haut)
+   a2.appendChild(el('rect',{x:n(ax-0.55),y:-5.3,width:1.1,height:.55,rx:.2,fill:'#f0f3f6',opacity:.92}));         // Schweißband
    a2.appendChild(el('ellipse',{cx:n(ax+0.2),cy:-4.3,rx:1.05,ry:1.0,fill:glove,stroke:edge,'stroke-width':.35}));fig.appendChild(a2);});   // Handschuh
  // ---- Rumpf / Trikot (Rückenansicht) ----
  const tor='M'+n(-2.6*W)+' -6.1 Q'+n(-3.05*W)+' -9 '+n(-3.4*W)+' -11.6 Q'+n(-3.5*W)+' -12.5 '+n(-2.6*W)+' -12.7 L'+n(2.6*W)+' -12.7 Q'+n(3.5*W)+' -12.5 '+n(3.4*W)+' -11.6 Q'+n(3.05*W)+' -9 '+n(2.6*W)+' -6.1 Z';
@@ -981,6 +983,7 @@ function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx
  fig.appendChild(el('line',{x1:0,y1:-6.4,x2:0,y2:-12.4,stroke:'#000','stroke-width':.35,opacity:.18}));   // Rücken-Mittelnaht
  const np=el('rect',{x:n(-2.0),y:-11.6,width:n(4.0),height:1.3,rx:.3,fill:'#0b0e12',opacity:.5});fig.appendChild(np);  // Nameplate
  const tn=el('text',{x:0,y:-8.2,'text-anchor':'middle','font-size':4.8,fill:'#fff','font-weight':800,stroke:edge,'stroke-width':.45,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
+ if(idx%2===0&&['RB','WR','QB','X','Z','SL','TE','FB'].indexOf(pos)>=0)fig.appendChild(el('rect',{x:-0.95,y:-6.1,width:1.9,height:2.6,rx:.35,fill:'#eef1f4',opacity:.9,stroke:'#c7cdd5','stroke-width':.3}));   // Handtuch am Bund (Skill-Spieler)
  // ---- Schulterpolster-Silhouette ----
  const sp='M'+n(-4.7*W)+' -12.0 Q'+n(-5.2*W)+' -13.6 '+n(-2.9*W)+' -13.6 L'+n(2.9*W)+' -13.6 Q'+n(5.2*W)+' -13.6 '+n(4.7*W)+' -12.0 Q0 -11.0 '+n(-4.7*W)+' -12.0 Z';
  fig.appendChild(el('path',{d:sp,fill:pad,stroke:edge,'stroke-width':.6}));
@@ -1043,6 +1046,10 @@ function catchFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelec
 function throwFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('run','throw');void f.getBBox();f.classList.add('throw');setTimeout(()=>f.classList.remove('throw'),440);}}   // QB-Wurfbewegung
 function handFig(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('hand');void f.getBBox();f.classList.add('hand');setTimeout(()=>f.classList.remove('hand'),340);}}   // Handoff-Geste
 function celebrate(P,id){const g=$(P+'_pl_'+id);if(!g)return;const f=g.querySelector('.fig');if(f){f.classList.remove('down','downb','spin','run','block','carry');f.classList.add('cel','cel'+(Math.floor(Math.random()*10)+1));}}  // 1 von 10 TD-Jubeln
+function _crowdRoar(svg){if(!svg)return;const g=el('g',{});g.setAttribute('pointer-events','none');   // TD: kurzer Licht-Bloom + Blitz-Gewitter in den Rängen
+ let h='<rect width="533" height="360" fill="#ffffff" class="bloom"/>';
+ for(let i=0;i<46;i++)h+='<circle class="flash" cx="'+(Math.random()*533).toFixed(0)+'" cy="'+(2+Math.random()*150).toFixed(0)+'" r="'+(0.7+Math.random()*0.9).toFixed(1)+'" style="animation-delay:'+(Math.random()*0.7).toFixed(2)+'s;animation-duration:0.7s"/>';
+ g.innerHTML=h;svg.appendChild(g);}
 /* Kino-Jubel: Spiel pausiert, Endzonen-Kamera mit Stadion, Feld, traurigen Gegnern & herbeieilendem Team */
 function _celFig(color,cls,extra){return '<g class="fig '+(cls||'')+'"'+(extra||'')+'>'+
    '<rect x="-2.1" y="3.4" width="4.2" height="5.8" rx="1.3" fill="'+color+'" stroke="#06140d" stroke-width="0.9"/>'+   // Rumpf/Beine
@@ -1285,7 +1292,7 @@ function playAnim(svg,d,res,onDone){
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
   if(!done)_anim[P]=requestAnimationFrame(frame);
   else if(td&&carrier){                                                                 // TD: durchgelaufen, Spiel pausiert -> Kino-Jubel
-    celebrate(P,'o'+carrier.i);
+    celebrate(P,'o'+carrier.i);_crowdRoar(svg);                                          // Stadion explodiert
     showResult(svg,{kind,yards,td,pt:[carrier.x,carrier.y]});
     if(res.celColor)setTimeout(()=>tdCelebration(svg,res.celColor,res.celDef,onDone),750);          // Schwenk auf den tanzenden Spieler
     else if(onDone)setTimeout(onDone,2200);
