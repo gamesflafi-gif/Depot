@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v110-robust"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v111-jersey"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -971,7 +971,8 @@ const _BUILD2={OL:1.24,DT:1.24,NT:1.26,DE:1.08,TE:1.06,FB:1.10,LB:1.02,MLB:1.04,
    Hose mit Seitenstreifen/Knie, Stutzen + Cleats. Licht von oben-links (Verlauf-Schattierung). */
 function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx=pp[0],sy=pp[1],ds=(DS(p.y)*_FB).toFixed(3);
  const side=(id&&id[0]==='d')?-1:1;const idx=parseInt((''+(id||'0')).replace(/\D/g,''))||0;const pos=(o&&o.pos)||p.pos;
- const edge=_shade(color,-102),hel=_shade(color,-22),pad=_shade(color,20),arm=_shade(color,-8),trim=_shade(color,118),sock=_shade(color,-40),pants='#eef1f5',pantsh='#cbd2db',glove=(idx%3===0?'#eef1f5':_shade(color,-58)),skin=_SKIN[(idx*5+3)%_SKIN.length],W=_BUILD2[pos]||1.0;
+ const _rgb=_hex2rgb(color),_lum=(0.299*_rgb[0]+0.587*_rgb[1]+0.114*_rgb[2])/255,light=_lum>0.62;
+ const edge=_shade(color,light?-150:-102),hel=_shade(color,-22),pad=_shade(color,light?-14:20),arm=_shade(color,light?-22:-8),trim=light?'#2b323a':_shade(color,118),sock=_shade(color,light?-60:-40),pants='#eef1f5',pantsh='#cbd2db',glove=(idx%3===0?'#dfe4ea':_shade(color,-58)),skin=_SKIN[(idx*5+3)%_SKIN.length],numCol=light?'#15191f':'#ffffff',W=_BUILD2[pos]||1.0;
  const BS='url(#bodyShade_'+P+')',n=x=>x.toFixed(2);
  const g=el('g',{}); g.id=P+'_pl_'+id; g.setAttribute('transform','translate('+sx.toFixed(1)+' '+sy.toFixed(1)+') scale('+ds+')');
  g.appendChild(el('ellipse',{cx:1.1,cy:0.7,rx:5.0*W,ry:1.45,fill:'#03100a',opacity:.4}));          // Bodenschatten (Licht oben-links)
@@ -1003,7 +1004,7 @@ function addPlayer(svg,p,color,id,o,abbr){const P=svg.id;const pp=PJ(p.x,p.y),sx
  fig.appendChild(el('path',{d:tor,fill:BS}));
  fig.appendChild(el('line',{x1:0,y1:-6.4,x2:0,y2:-12.4,stroke:'#000','stroke-width':.35,opacity:.18}));   // Rücken-Mittelnaht
  const np=el('rect',{x:n(-2.0),y:-11.6,width:n(4.0),height:1.3,rx:.3,fill:'#0b0e12',opacity:.5});fig.appendChild(np);  // Nameplate
- const tn=el('text',{x:0,y:-8.2,'text-anchor':'middle','font-size':4.8,fill:'#fff','font-weight':800,stroke:edge,'stroke-width':.45,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
+ const tn=el('text',{x:0,y:-8.2,'text-anchor':'middle','font-size':4.8,fill:numCol,'font-weight':800,stroke:edge,'stroke-width':.45,'paint-order':'stroke'});tn.textContent=num;fig.appendChild(tn);
  if(idx%2===0&&['RB','WR','QB','X','Z','SL','TE','FB'].indexOf(pos)>=0)fig.appendChild(el('rect',{x:-0.95,y:-6.1,width:1.9,height:2.6,rx:.35,fill:'#eef1f4',opacity:.9,stroke:'#c7cdd5','stroke-width':.3}));   // Handtuch am Bund (Skill-Spieler)
  // ---- Schulterpolster-Silhouette ----
  const sp='M'+n(-4.7*W)+' -12.0 Q'+n(-5.2*W)+' -13.6 '+n(-2.9*W)+' -13.6 L'+n(2.9*W)+' -13.6 Q'+n(5.2*W)+' -13.6 '+n(4.7*W)+' -12.0 Q0 -11.0 '+n(-4.7*W)+' -12.0 Z';
@@ -2352,8 +2353,11 @@ async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=fals
    ()=>{_penaltyCard(svg,play);cont();});                 // erst Tackle, dann Flaggen-Info, dann Strafe
  return;
 }
-function gameCols(g,userOff){const me=(lastView&&lastView.color)||'#16c784';const opp=g.user_is_home?g.acolor:g.hcolor;
+function _hex2rgb(c){c=(''+(c||'#888888')).replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];return [parseInt(c.substr(0,2),16),parseInt(c.substr(2,2),16),parseInt(c.substr(4,2),16)];}
+function _colClash(a,b){const x=_hex2rgb(a),y=_hex2rgb(b);return Math.sqrt((x[0]-y[0])*(x[0]-y[0])+(x[1]-y[1])*(x[1]-y[1])+(x[2]-y[2])*(x[2]-y[2]))<150;}   // zu ähnliche Trikotfarben
+function gameCols(g,userOff){let me=(lastView&&lastView.color)||'#16c784',opp=g.user_is_home?g.acolor:g.hcolor;
  const myAb=(lastView&&lastView.abbr)||(g.user_is_home?g.habbr:g.aabbr),opAb=g.user_is_home?g.aabbr:g.habbr;
+ if(_colClash(me,opp)){const away='#eef1f4';if(g.user_is_home)opp=away;else me=away;}   // Heim trägt Farbe, Auswärts bei Clash das weiße Away-Trikot -> nie verwechselbar
  return userOff?{off:me,def:opp,offAbbr:myAb,defAbbr:opAb}:{off:opp,def:me,offAbbr:opAb,defAbbr:myAb};}
 async function showFormation(g){const svg=$('gfield');if(!svg||!g||g.over)return;
  const concept=g.user_offense?((g.options[0]&&g.options[0].key)||'Inside Zone'):'Inside Zone';
