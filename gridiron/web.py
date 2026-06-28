@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v104-field"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v105-deadball"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1172,14 +1172,16 @@ function playAnim(svg,d,res,onDone){
   const gy=carrier?(!isPass?(runEnd?runEnd[1]:null):(gain?gain[1]:null)):null;          // designierter Raumgewinn-Spot (Yard)
   if(carrier&&!carrier._carry){carrier._carry=1;}                                        // Ballträger -> Carry-Animation (Arm am Ball)
   const picked=(kind==='int'&&arrived);                        // nach Interception: Rollen drehen (Defense returnt)
+  const dead=(kind==='incomplete'&&arrived);                    // Pass am Boden -> Ball tot, alle rollen aus & stoppen
   const pressure=isPass&&rushers.some(r=>(!r._ol||el>1.6)&&Math.hypot(r.x-qb.x,r.y-qb.y)<2.3);   // freier/durchgebrochener Rusher
   // ---- QB: Drop in die Pocket, Schritt nach vorn beim Wurf ----
-  if(isPass&&!sacked){
+  if(isPass&&!sacked&&!dead){
    if(el<PAD){steer(qb,C-0.8,-1.5,mx('QB')*0.55,dt,rp('QB'));if(!qb._paf&&el>0.12){qb._paf=1;handFig(P,'o'+qb.i);}}   // Play-Action: am Mesh faken (Übergabe-Geste)
    else{const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C+(res.pa?2.6:0),Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}}   // danach Drop (Boot: leicht herausrollen)
   else if(!isPass){steer(qb,C-0.4,-3.4,mx('QB')*0.7,dt,rp('QB'));}
   // ---- Offense: Blocker (Pocket/Run-Block), Ballträger, Routen ----
   O.forEach(o=>{if(o.pos==='QB')return;
+   if(dead){o.vx=(o.vx||0)*0.55;o.vy=(o.vy||0)*0.55;o.x+=o.vx*dt;o.y+=o.vy*dt;return;}   // toter Ball -> ausrollen, nicht weiterlaufen
    if(PAD&&o===rbF){if(el<PAD+0.28)steer(o,C+1.4,3.0,mx(o.pos),dt,rp(o.pos));else steer(o,C+3.2,-1.6,mx(o.pos)*0.7,dt,rp(o.pos));return;}   // Play-Action: RB täuscht Lauf durch die Line, sichert danach die Boot-Seite
    if(picked){steer(o,intD.x,intD.y,mx(o.pos),dt,rp(o.pos));return;}   // nach INT: Offense jagt den Interceptor
    if((o.pos==='X'||o.pos==='Z'||o.pos==='SL'||o.pos==='TE')&&el<0.4&&!o._rel){o._rel=1;o.vx=(o.vx||0)+((o.i%2)?1.1:-1.1);}   // Release/Stem am Snap
@@ -1228,6 +1230,7 @@ function playAnim(svg,d,res,onDone){
   // ---- Defense: Rush / Mann / Zone / Verfolgung (alles weich gesteuert) ----
   let nearD=null,nbd=1e9;if(carrier)D.forEach(p=>{const dd=Math.hypot(p.x-carrier.x,p.y-carrier.y);if(dd<nbd){nbd=dd;nearD=p;}});   // nächster Verfolger = Tackler
   D.forEach(p=>{const sp=mx(p.pos);
+   if(dead){p.vx=(p.vx||0)*0.55;p.vy=(p.vy||0)*0.55;p.x+=p.vx*dt;p.y+=p.vy*dt;return;}   // toter Ball -> ausrollen
    if(picked){if(p===intD)steer(p,intD.x,Math.max(intD.y-11,-5.5),sp,dt,rp(p.pos));else steer(p,p.x+(intD.x-p.x)*0.05,p.y,sp*0.6,dt,rp(p.pos));return;}   // INT-Return: Interceptor läuft zurück, Rest begleitet
    if(kind==='int'&&p===intD){steer(p,catchPt[0],catchPt[1],sp*1.05,dt,rp(p.pos));return;}   // Interceptor bricht auf den Ball (sitzt am Fangpunkt)
    if(kind==='sack'){steer(p,qb.x,qb.y,sp,dt,rp(p.pos));return;}
@@ -1291,7 +1294,7 @@ function playAnim(svg,d,res,onDone){
   if(fumbled&&!recovered&&recoverer){steer(recoverer,fumbleSpot[0],fumbleSpot[1],mx(recoverer.pos),dt,rp(recoverer.pos));
     if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
   const tackled=!fumble&&atGain&&(contact||el>gainT+1.15);                              // Tackle nur bei ECHTEM Kontakt am Spot (kein Phantom); Notbremse falls Tackler extrem spät
-  const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.85) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
+  const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (td&&atGain) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
   if(!done)_anim[P]=requestAnimationFrame(frame);
