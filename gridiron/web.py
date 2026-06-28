@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v108-aimfix"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v109-simaim"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -537,6 +537,7 @@ _PAGE = """<!doctype html><html lang="de"><head>
   <div class="controls">
    <div><label>Konzept (Offense)</label><select id="sim_c" style="min-width:190px"></select></div>
    <div><label>Coverage (Defense)</label><select id="sim_cov" style="min-width:220px"></select></div>
+   <div><label>Ziel / Laufseite</label><select id="sim_aim" style="min-width:180px" onchange="drawPlay($('sim_c').value,$('sim_cov').value,lastRes)"></select></div>
   </div>
   <div class="controls" style="margin-top:10px">
    <div><label>Down</label><select id="sim_d"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
@@ -681,14 +682,25 @@ function badge(v){const e=v.expected_epa;let c='b-ev';
  return '<span class="badge '+c+'">'+esc(v.verdict)+'  ('+sgn(e)+' EPA)</span>';}
 function simSit(pfx){return 'down='+$(pfx+'d').value+'&ydstogo='+$(pfx+'y').value+'&yardline='+$(pfx+'yl').value+
  '&personnel='+$(pfx+'p').value+'&box='+(pfx==='sim_'?($('sim_box').value||0):0);}
+let _runSet=null;
 async function initSim(){
  const m=await (await fetch('/api/sim/meta')).json();
  const pass=m.concepts.filter(c=>c.type==='Pass'),run=m.concepts.filter(c=>c.type==='Lauf');
+ _runSet=new Set(run.map(c=>c.key));
  $('sim_c').innerHTML='<optgroup label="Pass">'+pass.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>').join('')+
   '</optgroup><optgroup label="Lauf">'+run.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>').join('')+'</optgroup>';
  $('sim_cov').innerHTML=m.coverages.map(c=>'<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>').join('');
+ $('sim_c').onchange=()=>_fillSimAim();
+ await _fillSimAim();
  simReady=true; runSim();
 }
+async function _fillSimAim(){const c=$('sim_c').value,sel=$('sim_aim');if(!sel)return;
+ if(_runSet&&_runSet.has(c)){sel.innerHTML='<option value="">🎯 Auto (bestes Loch)</option><option value="L">◀ Links</option><option value="M">▲ Mitte</option><option value="R">Rechts ▶</option>';return;}
+ let d=null;try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(c)+'&coverage='+encodeURIComponent($('sim_cov').value||'Cover 2'))).json();}catch(e){}
+ const NM={X:'WR außen-links',Z:'WR außen-rechts',SL:'Slot',TE:'Tight End',RB:'Running Back',FB:'Fullback'};
+ let h='<option value="">🎯 Auto (offener Mann)</option>';
+ (d&&d.offense||[]).filter(o=>NM[o.pos]&&o.route&&o.route.length>1).forEach(o=>{h+='<option value="'+esc(o.pos)+'">'+esc(NM[o.pos])+' — '+esc(o.rname||'Route')+'</option>';});
+ sel.innerHTML=h;}
 function kpi(l,v){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';}
 function segCol(cls){return {ok:'#16c784',ok2:'#0e9f6a',mid:'#3a4a44',warn:'#e9b949',bad:'#ef5350'}[cls]||'#3a4a44';}
 function posBadge(p){return '<span class="posb p-'+p+'">'+p+'</span>';}
@@ -790,7 +802,8 @@ function el(tag,a){const e=document.createElementNS(SVGNS,tag);for(const k in a)
 function routeLen(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
 function posAlong(pts,frac){if(pts.length<2)return pts[0];const tot=routeLen(pts);let d=frac*tot;for(let i=1;i<pts.length;i++){const seg=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);if(d<=seg||i===pts.length-1){const t=seg?d/seg:0;return [pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t];}d-=seg;}return pts[pts.length-1];}
 async function drawPlay(concept,coverage,res){
- const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage))).json();
+ const aim=($('sim_aim')&&$('sim_aim').value)||'';
+ const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(concept)+'&coverage='+encodeURIComponent(coverage)+'&aim='+encodeURIComponent(aim))).json();
  if(d.error)return; lastDiag=d; lastRes=res;
  $('sim_fieldcard').style.display='block';
  $('field_title').textContent=concept+' vs '+coverage.replace(/ —.*/,'');
@@ -1342,7 +1355,7 @@ function showResult(svg,res){
  g.appendChild(el('rect',{x:x-w/2,y:y-13,width:w,height:22,rx:6,fill:'#0a0f0d',stroke:col,'stroke-width':td?1.8:1.3}));
  const tx=el('text',{x:x,y:y+2,'text-anchor':'middle','font-size':td?12.5:11,fill:col,'font-weight':800});tx.textContent=label;g.appendChild(tx);svg.appendChild(g);
 }
-function replayPlay(){renderField($('field'),lastDiag,parseInt($('sim_y').value)||10);playAnim($('field'),lastDiag,{kind:(lastDiag&&lastDiag.kind==='run')?'run':'complete',yards:lastRes?lastRes.mean_yards:0});}
+function replayPlay(){if($('sim_c')&&$('sim_c').value){drawPlay($('sim_c').value,$('sim_cov').value,lastRes);return;}renderField($('field'),lastDiag,parseInt($('sim_y').value)||10);playAnim($('field'),lastDiag,{kind:(lastDiag&&lastDiag.kind==='run')?'run':'complete',yards:lastRes?lastRes.mean_yards:0});}
 async function loadBest(cov){
  const r=await (await fetch('/api/sim/best?coverage='+encodeURIComponent(cov)+'&'+simSit('sim_'))).json();
  $('sim_best').innerHTML=r.items.map(x=>'<div class="reco"><span><b>'+esc(x.concept)+'</b> <span class="mut">'+
