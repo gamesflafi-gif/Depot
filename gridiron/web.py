@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v101-world"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v102-atmos"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -809,11 +809,20 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
    '<circle cx="1.4" cy="1.6" r=".6" fill="#929ba6"/><circle cx="4.7" cy="1.1" r=".6" fill="'+_shade(offC,-34)+'"/>'+
    '<circle cx="2.6" cy="4.4" r=".6" fill="'+_shade(defC,-34)+'"/><circle cx="5.7" cy="5" r=".6" fill="#7a8490"/>'+
    '<circle cx="0.5" cy="5.9" r=".5" fill="#7e8893"/><circle cx="3.6" cy="6.4" r=".5" fill="#535b65"/></pattern>'+
+  '<pattern id="crH_'+P+'" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#0e131a"/>'+
+   '<circle cx="1.4" cy="1.6" r=".62" fill="'+_shade(offC,-18)+'"/><circle cx="4.7" cy="1.1" r=".58" fill="'+_shade(offC,34)+'"/>'+
+   '<circle cx="2.6" cy="4.4" r=".58" fill="#cfd5dd"/><circle cx="5.7" cy="5" r=".58" fill="'+_shade(offC,-36)+'"/>'+
+   '<circle cx="0.5" cy="5.9" r=".5" fill="'+_shade(offC,8)+'"/><circle cx="3.6" cy="6.4" r=".5" fill="#5d6670"/></pattern>'+
+  '<pattern id="crA_'+P+'" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#0e131a"/>'+
+   '<circle cx="1.4" cy="1.6" r=".62" fill="'+_shade(defC,-18)+'"/><circle cx="4.7" cy="1.1" r=".58" fill="'+_shade(defC,34)+'"/>'+
+   '<circle cx="2.6" cy="4.4" r=".58" fill="#cfd5dd"/><circle cx="5.7" cy="5" r=".58" fill="'+_shade(defC,-36)+'"/>'+
+   '<circle cx="0.5" cy="5.9" r=".5" fill="'+_shade(defC,8)+'"/><circle cx="3.6" cy="6.4" r=".5" fill="#5d6670"/></pattern>'+
   '<linearGradient id="bowl_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a2c1b" stop-opacity=".92"/><stop offset=".26" stop-color="#0f3d25" stop-opacity="0"/></linearGradient>'+
   '<linearGradient id="bodyShade_'+P+'" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".24"/><stop offset=".48" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".30"/></linearGradient>'+
   '<radialGradient id="domeShade_'+P+'" cx="0.34" cy="0.28" r="0.85"><stop offset="0" stop-color="#ffffff" stop-opacity=".44"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".42"/></radialGradient>'+
   '<radialGradient id="ballhi_'+P+'" cx="0.4" cy="0.32" r="0.85"><stop offset="0" stop-color="#b06a30"/><stop offset="0.6" stop-color="#8b4a22"/><stop offset="1" stop-color="#5e3014"/></radialGradient>'+
   '<radialGradient id="lite_'+P+'" cx="0.5" cy="0.3" r="0.8"><stop offset="0" stop-color="#fdf6d8" stop-opacity=".16"/><stop offset="1" stop-color="#fdf6d8" stop-opacity="0"/></radialGradient>'+
+  '<linearGradient id="haze_'+P+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9d2c4" stop-opacity=".16"/><stop offset="1" stop-color="#b9d2c4" stop-opacity="0"/></linearGradient>'+
   '<marker id="ah_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#19e08f"/></marker>'+
   '<marker id="aht_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ffd34d"/></marker>'+
   '<marker id="arr_'+P+'" markerWidth="7" markerHeight="7" refX="4.5" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#ff7a4d"/></marker></defs>';
@@ -861,10 +870,10 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
  if(ytg<=hiFy)s+=xline(ytg,'#ffd34d','1.6','0.7','6 4');
  if(fpos!=null)[0,53.3].forEach(X=>{const p=PJ(X,fpos);s+='<rect x="'+(p[0]-2).toFixed(1)+'" y="'+(p[1]-4).toFixed(1)+'" width="3.5" height="6" rx="1" fill="#ff7a1a"/>';});
  // ---- Stadion in Zonen: Feld -> Offiziellen/Ketten-Track -> Coaches-Box -> Team-Bank -> Tribüne ----
- const zband=(x0,x1,fill,pat)=>{const a=PJ(x0,nearFy),b=PJ(x1,nearFy),c=PJ(x1,farFy),e=PJ(x0,farFy),pts=poly(a,b,c,e);return '<polygon points="'+pts+'" fill="'+fill+'"/>'+(pat?'<polygon points="'+pts+'" fill="url(#cr_'+P+')" opacity="0.9"/>':'');};
+ const zband=(x0,x1,fill,pat)=>{const a=PJ(x0,nearFy),b=PJ(x1,nearFy),c=PJ(x1,farFy),e=PJ(x0,farFy),pts=poly(a,b,c,e);return '<polygon points="'+pts+'" fill="'+fill+'"/>'+(pat?'<polygon points="'+pts+'" fill="url(#'+pat+'_'+P+')" opacity="0.92"/>':'');};
  const zline=(x,col,w,op,dash)=>{const a=PJ(x,nearFy),b=PJ(x,farFy);return '<line x1="'+a[0].toFixed(1)+'" y1="'+a[1].toFixed(1)+'" x2="'+b[0].toFixed(1)+'" y2="'+b[1].toFixed(1)+'" stroke="'+col+'" stroke-width="'+w+'" opacity="'+op+'"'+(dash?' stroke-dasharray="'+dash+'"':'')+'/>';};
  [[0,-1],[53.3,1]].forEach(sd=>{const fx=o=>sd[0]+sd[1]*o;
-   s+=zband(fx(11.5),fx(30),'#0c1118',true)            // Tribüne (Ränge mit Crowd) ganz hinten
+   s+=zband(fx(11.5),fx(30),'#0c1118',sd[1]<0?'crH':'crA')   // Tribüne in Teamfarben (links Heim, rechts Gast)
      +zband(fx(11.0),fx(11.7),'#0a1f15')               // Mauer/Bande vor der Tribüne
      +zband(fx(5.0),fx(11.0),'#0e2a1a')                // Team-Bank-Zone
      +zband(fx(2.6),fx(5.0),'#163a23')                 // Coaches-Box
@@ -900,6 +909,7 @@ function renderField(svg,d,ytg,cols,fpos,preSnap){
   d.offense.forEach(o=>{if(o.route&&o.route.length>1){let p='';o.route.forEach((pt,i)=>{const q=PJ(pt[0],pt[1]);p+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)+' ';});
    const acc=(o.target||o.carry);s+='<path d="'+p+'" fill="none" stroke="'+(acc?'#ffd34d':'#19e08f')+'" stroke-width="'+(acc?2.2:1.5)+'" opacity="'+(acc?0.9:0.55)+'" marker-end="url(#'+(acc?'aht_':'ah_')+P+')"/>';}});
  }
+ s+='<rect x="0" y="'+_top.toFixed(1)+'" width="533" height="82" fill="url(#haze_'+P+')" pointer-events="none"/>';   // Distanz-Dunst (atmosphärische Tiefe am fernen Feldrand)
  // Lebendige Tribüne: vereinzelte Kamerablitze in den Rängen
  {let fl='';for(let i=0;i<16;i++){const x=(6+Math.random()*521).toFixed(0),y=(3+Math.random()*Math.max(6,_buf-4)).toFixed(0),de=(Math.random()*2.4).toFixed(2);fl+='<circle class="flash" cx="'+x+'" cy="'+y+'" r="'+(0.7+Math.random()*0.7).toFixed(1)+'" style="animation-delay:'+de+'s"/>';}
   for(let i=0;i<8;i++){const lr=Math.random()<0.5,x=(lr?2+Math.random()*22:509+Math.random()*22).toFixed(0),y=(_top+4+Math.random()*150).toFixed(0),de=(Math.random()*2.4).toFixed(2);fl+='<circle class="flash" cx="'+x+'" cy="'+y+'" r="'+(0.6+Math.random()*0.6).toFixed(1)+'" style="animation-delay:'+de+'s"/>';}s+=fl;}
