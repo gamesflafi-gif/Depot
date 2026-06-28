@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v106-aim"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v107-penalty"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -276,6 +276,7 @@ _STYLE2 = """
  .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
  .flash{fill:#fffceb;animation:flash 2.4s steps(1) infinite}@keyframes flash{0%,90%{opacity:0}92%,96%{opacity:.95}100%{opacity:0}}
  .bloom{animation:bloom .65s ease-out forwards}@keyframes bloom{0%{opacity:0}18%{opacity:.42}100%{opacity:0}}
+ .pencard{transform-box:fill-box;transform-origin:center;animation:cardpop .35s ease}@keyframes cardpop{0%{opacity:0;transform:scale(.82)}60%{transform:scale(1.04)}100%{opacity:1;transform:scale(1)}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -2305,14 +2306,18 @@ function _throwFlag(svg,sx,sy,ex,ey){const P=svg.id;if(_flagIv[P])cancelAnimatio
   if(t<1)_flagIv[P]=requestAnimationFrame(fr);}
  _flagIv[P]=requestAnimationFrame(fr);}
 /* Strafen-Karte: zeigt erst NACH dem Play, welche Strafe es war und wie die Yards verrechnet werden. */
-function _penaltyCard(svg,play){const x=266,y=148,name=play.pen_name||'Strafe';
- let eff=(play.desc||'').replace(/^🚩\s*/,'');if(eff.length>48){const m=eff.split('—');eff=(m[1]||eff).trim();}
- const g=el('g',{});
- g.appendChild(el('rect',{x:x-156,y:y-34,width:312,height:70,rx:11,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':2}));
- const t0=el('text',{x:x,y:y-12,'text-anchor':'middle','font-size':12,fill:'#ffd34d','font-weight':800,'letter-spacing':2});t0.textContent='🚩 FLAGGE';
- const t1=el('text',{x:x,y:y+6,'text-anchor':'middle','font-size':15,fill:'#fff','font-weight':800});t1.textContent=name;
- const t2=el('text',{x:x,y:y+24,'text-anchor':'middle','font-size':10.5,fill:'#cdeede'});t2.textContent=eff;
- g.appendChild(t0);g.appendChild(t1);g.appendChild(t2);svg.appendChild(g);}
+function _penaltyCard(svg,play){const x=266,y=146,name=play.pen_name||'Strafe';
+ let eff=(play.desc||'').replace(/^🚩\s*/,'');if(eff.length>52){const m=eff.split('—');eff=(m[1]||eff).trim();}
+ const side=play.pen_side==='off'?'gegen Offense':play.pen_side==='def'?'gegen Defense':'';
+ const g=el('g',{});g.setAttribute('class','pencard');
+ g.appendChild(el('rect',{x:x-162,y:y-42,width:324,height:90,rx:12,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':2}));
+ g.appendChild(el('rect',{x:x-162,y:y-42,width:324,height:20,rx:12,fill:'#3a2f0c'}));
+ const hd=el('text',{x:x,y:y-28,'text-anchor':'middle','font-size':11,fill:'#ffd34d','font-weight':800,'letter-spacing':1.5});hd.textContent='🚩 STRAFE'+(side?' · '+side:'');g.appendChild(hd);
+ const t1=el('text',{x:x,y:y-5,'text-anchor':'middle','font-size':15.5,fill:'#fff','font-weight':800});t1.textContent=name;g.appendChild(t1);
+ const t2=el('text',{x:x,y:y+13,'text-anchor':'middle','font-size':10.5,fill:'#cdeede'});t2.textContent=eff;g.appendChild(t2);
+ g.appendChild(el('rect',{x:x-46,y:y+22,width:92,height:17,rx:8,fill:'#16321f',stroke:'#19e08f','stroke-width':1}));
+ const bt=el('text',{x:x,y:y+34,'text-anchor':'middle','font-size':10,fill:'#5fe6ac','font-weight':800,'letter-spacing':1});bt.textContent='ANGENOMMEN';g.appendChild(bt);
+ svg.appendChild(g);}
 async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
  const cont=()=>{setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},1500);};   // danach normaler Folgesnap
  const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
