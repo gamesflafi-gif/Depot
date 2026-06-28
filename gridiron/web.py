@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v107-penalty"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v108-aimfix"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -2277,7 +2277,7 @@ function renderGame(g,play){
    const to=opts.find(o=>o.key==='__TIMEOUT__');                        // Auszeit -> klein oben rechts
    const kicks=opts.filter(o=>o.key==='__FG__'||o.key==='__PUNT__');    // FG/Punt -> nur 4. Versuch, ganz oben
    const plays=opts.filter(o=>o.key!=='__TIMEOUT__'&&o.key!=='__FG__'&&o.key!=='__PUNT__');
-   const pbtn=o=>'<button class="optbtn'+(o.key==='__PHILLY__'?' philly':'')+'" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>';
+   const pbtn=o=>'<button class="optbtn'+(o.key==='__PHILLY__'?' philly':'')+'" '+dis+' data-k="'+esc(o.key)+'" data-ty="'+esc(o.type)+'" data-lb="'+esc(o.label)+'" onclick="gamePlay(this.dataset.k,null,this.dataset.ty,this.dataset.lb)">'+esc(o.label)+'<span class="ty">'+esc(o.type)+'</span></button>';
    h+='<div class="posbanner '+(disp.user_offense||disp.awaiting==='pat'||disp.awaiting==='2pt'?'off':'def')+'">'+ban+'</div>';
    if(kicks.length||to)h+='<div class="topacts">'+
      kicks.map(o=>'<button class="optbtn kick" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+(o.key==='__FG__'?'🥅 ':'🦵 ')+esc(o.label)+'</button>').join('')+
@@ -2434,9 +2434,8 @@ function animatePunt(play){const svg=$('gfield');if(!svg){playBusy=false;return;
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-function gamePlay(choice,aim){if(playBusy)return;
- if(!aim&&liveG&&liveG.user_offense&&(''+choice).indexOf('__')<0){const opt=(liveG.options||[]).find(o=>o.key===choice);
-   if(opt&&(opt.type==='Pass'||opt.type==='Lauf')){_aimMenu(choice,opt.type,opt.label);return;}}   // Stufe 2: Seite/Ziel wählen
+function gamePlay(choice,aim,ty,lb){if(playBusy)return;
+ if(!aim&&(ty==='Pass'||ty==='Lauf')){_aimMenu(choice,ty,lb||choice);return;}   // Stufe 2: erst Ziel/Seite wählen, dann startet das Play
  playBusy=true;_preG=liveG;_doPlay(choice,aim);}
 async function _doPlay(choice,aim){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice)+(aim&&aim!=='auto'?'&aim='+encodeURIComponent(aim):''),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
 async function _aimMenu(choice,type,label){const grid=$('optgrid');if(!grid)return;
