@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v104-field"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v107-penalty"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -276,6 +276,7 @@ _STYLE2 = """
  .snow{fill:#eef4fb;opacity:.85;animation:snowf linear infinite}@keyframes snowf{0%{transform:translate(0,-22px)}100%{transform:translate(11px,380px)}}
  .flash{fill:#fffceb;animation:flash 2.4s steps(1) infinite}@keyframes flash{0%,90%{opacity:0}92%,96%{opacity:.95}100%{opacity:0}}
  .bloom{animation:bloom .65s ease-out forwards}@keyframes bloom{0%{opacity:0}18%{opacity:.42}100%{opacity:0}}
+ .pencard{transform-box:fill-box;transform-origin:center;animation:cardpop .35s ease}@keyframes cardpop{0%{opacity:0;transform:scale(.82)}60%{transform:scale(1.04)}100%{opacity:1;transform:scale(1)}}
  .fig.run{animation:runc .30s ease-in-out infinite}@keyframes runc{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
  .legL,.legR,.armL,.armR{transform-box:fill-box;transform-origin:center top}
  .fig.run .legL{animation:strdA .30s ease-in-out infinite}.fig.run .legR{animation:strdB .30s ease-in-out infinite}
@@ -397,6 +398,9 @@ _STYLE2 = """
  .optbtn.kick:hover{border-color:#ffd34d;background:#352d18}
  .optbtn.to.sm{margin-left:auto;flex:0 0 auto;padding:7px 11px;font-size:12px;font-weight:700;text-align:center;border-color:#46544e;background:var(--tile);color:#cdeede}
  .optbtn.philly{border-color:#6f8;background:#16321f}
+ .aimhdr{grid-column:1/-1;font-size:12.5px;color:var(--gold);font-weight:800;margin:1px 0 3px}
+ .optbtn.aim{text-align:center;border-color:var(--gold);background:#241f12}.optbtn.aim:hover{background:#322a16}
+ .optbtn.aim.back{grid-column:1/-1;border-color:#46544e;background:var(--tile);color:var(--mut)}
  /* Manager Sub-Navigation & Kader */
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
  .subnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0;background:var(--panel2);border:1px solid #2c3a34;border-radius:12px;padding:6px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
@@ -1172,14 +1176,16 @@ function playAnim(svg,d,res,onDone){
   const gy=carrier?(!isPass?(runEnd?runEnd[1]:null):(gain?gain[1]:null)):null;          // designierter Raumgewinn-Spot (Yard)
   if(carrier&&!carrier._carry){carrier._carry=1;}                                        // Ballträger -> Carry-Animation (Arm am Ball)
   const picked=(kind==='int'&&arrived);                        // nach Interception: Rollen drehen (Defense returnt)
+  const dead=(kind==='incomplete'&&arrived);                    // Pass am Boden -> Ball tot, alle rollen aus & stoppen
   const pressure=isPass&&rushers.some(r=>(!r._ol||el>1.6)&&Math.hypot(r.x-qb.x,r.y-qb.y)<2.3);   // freier/durchgebrochener Rusher
   // ---- QB: Drop in die Pocket, Schritt nach vorn beim Wurf ----
-  if(isPass&&!sacked){
+  if(isPass&&!sacked&&!dead){
    if(el<PAD){steer(qb,C-0.8,-1.5,mx('QB')*0.55,dt,rp('QB'));if(!qb._paf&&el>0.12){qb._paf=1;handFig(P,'o'+qb.i);}}   // Play-Action: am Mesh faken (Übergabe-Geste)
    else{const ty=thrown?qb.y+1.4:(pressure?qb.y+0.5:qb.sy-2.0);steer(qb,C+(res.pa?2.6:0),Math.max(-7.0,ty),mx('QB')*0.95,dt,rp('QB'));}}   // danach Drop (Boot: leicht herausrollen)
   else if(!isPass){steer(qb,C-0.4,-3.4,mx('QB')*0.7,dt,rp('QB'));}
   // ---- Offense: Blocker (Pocket/Run-Block), Ballträger, Routen ----
   O.forEach(o=>{if(o.pos==='QB')return;
+   if(dead){o.vx=(o.vx||0)*0.55;o.vy=(o.vy||0)*0.55;o.x+=o.vx*dt;o.y+=o.vy*dt;return;}   // toter Ball -> ausrollen, nicht weiterlaufen
    if(PAD&&o===rbF){if(el<PAD+0.28)steer(o,C+1.4,3.0,mx(o.pos),dt,rp(o.pos));else steer(o,C+3.2,-1.6,mx(o.pos)*0.7,dt,rp(o.pos));return;}   // Play-Action: RB täuscht Lauf durch die Line, sichert danach die Boot-Seite
    if(picked){steer(o,intD.x,intD.y,mx(o.pos),dt,rp(o.pos));return;}   // nach INT: Offense jagt den Interceptor
    if((o.pos==='X'||o.pos==='Z'||o.pos==='SL'||o.pos==='TE')&&el<0.4&&!o._rel){o._rel=1;o.vx=(o.vx||0)+((o.i%2)?1.1:-1.1);}   // Release/Stem am Snap
@@ -1228,6 +1234,7 @@ function playAnim(svg,d,res,onDone){
   // ---- Defense: Rush / Mann / Zone / Verfolgung (alles weich gesteuert) ----
   let nearD=null,nbd=1e9;if(carrier)D.forEach(p=>{const dd=Math.hypot(p.x-carrier.x,p.y-carrier.y);if(dd<nbd){nbd=dd;nearD=p;}});   // nächster Verfolger = Tackler
   D.forEach(p=>{const sp=mx(p.pos);
+   if(dead){p.vx=(p.vx||0)*0.55;p.vy=(p.vy||0)*0.55;p.x+=p.vx*dt;p.y+=p.vy*dt;return;}   // toter Ball -> ausrollen
    if(picked){if(p===intD)steer(p,intD.x,Math.max(intD.y-11,-5.5),sp,dt,rp(p.pos));else steer(p,p.x+(intD.x-p.x)*0.05,p.y,sp*0.6,dt,rp(p.pos));return;}   // INT-Return: Interceptor läuft zurück, Rest begleitet
    if(kind==='int'&&p===intD){steer(p,catchPt[0],catchPt[1],sp*1.05,dt,rp(p.pos));return;}   // Interceptor bricht auf den Ball (sitzt am Fangpunkt)
    if(kind==='sack'){steer(p,qb.x,qb.y,sp,dt,rp(p.pos));return;}
@@ -1291,7 +1298,7 @@ function playAnim(svg,d,res,onDone){
   if(fumbled&&!recovered&&recoverer){steer(recoverer,fumbleSpot[0],fumbleSpot[1],mx(recoverer.pos),dt,rp(recoverer.pos));
     if(Math.hypot(recoverer.x-fumbleSpot[0],recoverer.y-fumbleSpot[1])<0.9){recovered=true;recT=el;}}
   const tackled=!fumble&&atGain&&(contact||el>gainT+1.15);                              // Tackle nur bei ECHTEM Kontakt am Spot (kein Phantom); Notbremse falls Tackler extrem spät
-  const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.85) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
+  const done=el>6.8 || (kind==='incomplete'&&arrived&&el>arrTime+0.5) || (kind==='int'&&arrived&&(el>arrTime+1.6||(intD&&intD.y<=-4.5)))
     || (kind==='sack'&&sacked&&qb.y<=yards+0.3) || (td&&atGain) || tackled || (oob&&!td&&el>0.8&&(caught||!isPass))
     || (fumble&&((recovered&&el>recT+0.7)||(fumbled&&el>fumT+3.0)));
   if(!done)_anim[P]=requestAnimationFrame(frame);
@@ -2276,7 +2283,7 @@ function renderGame(g,play){
      kicks.map(o=>'<button class="optbtn kick" '+dis+' data-k="'+esc(o.key)+'" onclick="gamePlay(this.dataset.k)">'+(o.key==='__FG__'?'🥅 ':'🦵 ')+esc(o.label)+'</button>').join('')+
      (to?'<button class="optbtn to sm" '+dis+' data-k="__TIMEOUT__" onclick="gamePlay(this.dataset.k)">⏱ '+esc(to.label)+'</button>':'')+
      '</div>';
-   h+='<div class="optgrid">'+plays.map(pbtn).join('')+'</div>'+
+   h+='<div class="optgrid" id="optgrid">'+plays.map(pbtn).join('')+'</div>'+
    (playBusy?'<div class="note" style="margin-top:6px">Spielzug läuft … nächstes Play wählbar, sobald der Ball wieder liegt.</div>':'')+
    '<div style="margin-top:8px"><button class="ghost" onclick="simDrive()" '+dis+'>Drive simulieren</button> <button class="ghost" onclick="simRest()" '+dis+'>Spiel zu Ende simulieren</button></div>';}
  h+='<div class="commentary" style="margin-top:10px">'+disp.log.map(p=>'<div class="cmt"><span class="q">'+qLabel(p.q)+'</span>'+pbadge(p.desc)+'<span class="t">'+esc(p.desc)+'</span></div>').join('')+'</div>';
@@ -2299,19 +2306,23 @@ function _throwFlag(svg,sx,sy,ex,ey){const P=svg.id;if(_flagIv[P])cancelAnimatio
   if(t<1)_flagIv[P]=requestAnimationFrame(fr);}
  _flagIv[P]=requestAnimationFrame(fr);}
 /* Strafen-Karte: zeigt erst NACH dem Play, welche Strafe es war und wie die Yards verrechnet werden. */
-function _penaltyCard(svg,play){const x=266,y=148,name=play.pen_name||'Strafe';
- let eff=(play.desc||'').replace(/^🚩\s*/,'');if(eff.length>48){const m=eff.split('—');eff=(m[1]||eff).trim();}
- const g=el('g',{});
- g.appendChild(el('rect',{x:x-156,y:y-34,width:312,height:70,rx:11,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':2}));
- const t0=el('text',{x:x,y:y-12,'text-anchor':'middle','font-size':12,fill:'#ffd34d','font-weight':800,'letter-spacing':2});t0.textContent='🚩 FLAGGE';
- const t1=el('text',{x:x,y:y+6,'text-anchor':'middle','font-size':15,fill:'#fff','font-weight':800});t1.textContent=name;
- const t2=el('text',{x:x,y:y+24,'text-anchor':'middle','font-size':10.5,fill:'#cdeede'});t2.textContent=eff;
- g.appendChild(t0);g.appendChild(t1);g.appendChild(t2);svg.appendChild(g);}
+function _penaltyCard(svg,play){const x=266,y=146,name=play.pen_name||'Strafe';
+ let eff=(play.desc||'').replace(/^🚩\s*/,'');if(eff.length>52){const m=eff.split('—');eff=(m[1]||eff).trim();}
+ const side=play.pen_side==='off'?'gegen Offense':play.pen_side==='def'?'gegen Defense':'';
+ const g=el('g',{});g.setAttribute('class','pencard');
+ g.appendChild(el('rect',{x:x-162,y:y-42,width:324,height:90,rx:12,fill:'#0a0f0d',stroke:'#ffd34d','stroke-width':2}));
+ g.appendChild(el('rect',{x:x-162,y:y-42,width:324,height:20,rx:12,fill:'#3a2f0c'}));
+ const hd=el('text',{x:x,y:y-28,'text-anchor':'middle','font-size':11,fill:'#ffd34d','font-weight':800,'letter-spacing':1.5});hd.textContent='🚩 STRAFE'+(side?' · '+side:'');g.appendChild(hd);
+ const t1=el('text',{x:x,y:y-5,'text-anchor':'middle','font-size':15.5,fill:'#fff','font-weight':800});t1.textContent=name;g.appendChild(t1);
+ const t2=el('text',{x:x,y:y+13,'text-anchor':'middle','font-size':10.5,fill:'#cdeede'});t2.textContent=eff;g.appendChild(t2);
+ g.appendChild(el('rect',{x:x-46,y:y+22,width:92,height:17,rx:8,fill:'#16321f',stroke:'#19e08f','stroke-width':1}));
+ const bt=el('text',{x:x,y:y+34,'text-anchor':'middle','font-size':10,fill:'#5fe6ac','font-weight':800,'letter-spacing':1});bt.textContent='ANGENOMMEN';g.appendChild(bt);
+ svg.appendChild(g);}
 async function animatePenalty(play){const svg=$('gfield');if(!svg){playBusy=false;return;}const P=svg.id;if(_anim[P])cancelAnimationFrame(_anim[P]);
  const cont=()=>{setTimeout(()=>{playBusy=false;if(liveG)renderGame(liveG);},1500);};   // danach normaler Folgesnap
  const cols=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
  let d=null;
- if(play.concept){try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage))).json();}catch(e){d=null;}}
+ if(play.concept){try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&aim='+encodeURIComponent(play.aim||''))).json();}catch(e){d=null;}}
  if(play.pre_snap||!d||d.error){                          // Vor-Snap-Foul: kein Snap, sofort Pfiff
    if(d&&!d.error)renderField(svg,d,play.dist0||10,cols,play.ytz0,true);
    else{let s='<rect width="533" height="360" fill="#0e4a2d"/>';for(let i=1;i<8;i++)s+='<line x1="0" y1="'+(i*44)+'" x2="533" y2="'+(i*44)+'" stroke="#dfeee6" stroke-width="1" opacity="0.16"/>';s+=_refFig(258,250);svg.innerHTML=s;}
@@ -2351,7 +2362,7 @@ function _snapSequence(svg,d,onDone,mot){const P=svg.id;if(_anim[P])cancelAnimat
  _anim[P]=requestAnimationFrame(fr);}
 async function animateGamePlay(play){const svg=$('gfield');if(!svg||!play.concept)return;
  const variant=Math.floor(Math.random()*5);                  // Formation pro Snap mischen (auch Shotgun/FB)
- const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant)).json();
+ const d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(play.concept)+'&coverage='+encodeURIComponent(play.coverage)+'&variant='+variant+'&aim='+encodeURIComponent(play.aim||''))).json();
  if(d.error)return; renderField(svg,d,play.dist0||10,liveG?gameCols(liveG,play.user_off):null,play.ytz0);_fieldHUD(svg);  // Vor-Snap-Aufstellung am Spot
  const cl=liveG?gameCols(liveG,play.user_off):{off:'#16c784',def:'#ef5350'};
  const res={kind:play.kind,yards:play.yards,td:play.td,celColor:cl.off,celDef:cl.def,spd:play.spd,fumble:play.turnover,fpos:play.ytz0,pa:(play.concept==='PA Boot')};
@@ -2423,7 +2434,21 @@ function animatePunt(play){const svg=$('gfield');if(!svg){playBusy=false;return;
  }
  _anim[P]=requestAnimationFrame(frame);
 }
-async function gamePlay(choice){if(playBusy)return;playBusy=true;_preG=liveG;const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+function gamePlay(choice,aim){if(playBusy)return;
+ if(!aim&&liveG&&liveG.user_offense&&(''+choice).indexOf('__')<0){const opt=(liveG.options||[]).find(o=>o.key===choice);
+   if(opt&&(opt.type==='Pass'||opt.type==='Lauf')){_aimMenu(choice,opt.type,opt.label);return;}}   // Stufe 2: Seite/Ziel wählen
+ playBusy=true;_preG=liveG;_doPlay(choice,aim);}
+async function _doPlay(choice,aim){const r=await api('/api/fr/game/play?choice='+encodeURIComponent(choice)+(aim&&aim!=='auto'?'&aim='+encodeURIComponent(aim):''),'POST');if(r.error){playBusy=false;_preG=null;alert(r.error);return;}liveG=r.game;renderGame(r.game,r.play);}
+async function _aimMenu(choice,type,label){const grid=$('optgrid');if(!grid)return;
+ const ab=(k,a,t)=>'<button class="optbtn aim" data-k="'+esc(choice)+'" data-a="'+esc(a)+'" onclick="gamePlay(this.dataset.k,this.dataset.a)">'+esc(t)+'</button>';
+ let h='<div class="aimhdr">'+esc(label)+' — '+(type==='Lauf'?'Laufseite wählen':'Ziel wählen')+'</div>';
+ if(type==='Lauf'){h+=ab(0,'L','◀ Links')+ab(0,'M','▲ Mitte')+ab(0,'R','Rechts ▶');}
+ else{let d=null;try{d=await (await fetch('/api/sim/diagram?concept='+encodeURIComponent(choice)+'&coverage='+encodeURIComponent('Cover 2'))).json();}catch(e){}
+   const NM={X:'WR außen-links',Z:'WR außen-rechts',SL:'Slot',TE:'Tight End',RB:'Running Back',FB:'Fullback'};
+   h+=ab(0,'auto','🎯 Auto (offener Mann)');
+   (d&&d.offense||[]).filter(o=>NM[o.pos]&&o.route&&o.route.length>1).forEach(o=>{h+=ab(0,o.pos,esc(NM[o.pos])+' — '+esc(o.rname||'Route'));});}
+ h+='<button class="optbtn aim back" onclick="renderGame(liveG)">↩ Zurück</button>';
+ grid.innerHTML=h;}
 async function finishGame(){const r=await api('/api/fr/game/finish','POST');if(r.error){alert(r.error);return;}if(r.view)renderMgr(r.view);showGameResult(r.result);}
 async function simDrive(){if(playBusy)return;const r=await api('/api/fr/game/sim_drive','POST');if(r.error){alert(r.error);return;}
  if(r.result){if(r.view)renderMgr(r.view);showGameResult(r.result);}else renderGame(r.game);}
@@ -2660,10 +2685,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return matrix(cfg, _sit(down, ydstogo, yardline, personnel, box))
 
     @app.get("/api/sim/diagram")
-    def sim_diagram(concept: str, coverage: str, variant: int = 0):
+    def sim_diagram(concept: str, coverage: str, variant: int = 0, aim: str = ""):
         from gridiron.playviz import diagram
         try:
-            return diagram(concept, coverage, variant)
+            return diagram(concept, coverage, variant, aim or None)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -2874,12 +2899,12 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return F.start_game(cfg, st)
 
     @app.post("/api/fr/game/play")
-    def fr_game_play(choice: str):
+    def fr_game_play(choice: str, aim: str = ""):
         from gridiron import franchise as F
         st, err = _fr_load_or_404()
         if err:
             return err
-        return F.game_play(cfg, st, choice)
+        return F.game_play(cfg, st, choice, aim or None)
 
     @app.post("/api/fr/game/finish")
     def fr_game_finish():

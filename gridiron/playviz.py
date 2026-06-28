@@ -243,7 +243,7 @@ def _defense(coverage: str) -> list[dict]:
     return out
 
 
-def diagram(concept: str, coverage: str, variant: int = 0) -> dict:
+def diagram(concept: str, coverage: str, variant: int = 0, aim: str | None = None) -> dict:
     if coverage not in COVERAGES:
         raise ValueError(f"Unbekannte Coverage: {coverage}")
     is_pass = concept in PASS_CONCEPTS
@@ -266,6 +266,8 @@ def diagram(concept: str, coverage: str, variant: int = 0) -> dict:
         skill_routes = {k: (routes.get(k, "block"), _route(routes.get(k, "block"), pos[k]))
                         for k in SKILL}
         target = _open_receiver(skill_routes, defense, primary)   # offene Anspielstation
+        if aim and aim in skill_routes and skill_routes[aim][0] != "block":   # vom Spieler gewähltes Ziel
+            target = aim
         for k in SKILL:
             rname, r = skill_routes[k]
             is_target = (k == target)
@@ -276,6 +278,9 @@ def diagram(concept: str, coverage: str, variant: int = 0) -> dict:
         kind = "pass"
     else:
         run = _run_path(concept, pos["RB"])
+        if aim in ("L", "M", "R"):                            # vom Spieler gewählte Laufseite
+            dx = {"L": -7.5, "M": 0.0, "R": 7.5}[aim]
+            run["path"] = [[round(_clampx(x + dx), 2), y] for x, y in run["path"]]
         hole = run["path"][-1]
         # RB läuft den Pfad, andere Skill-Spieler blocken/stehen; im FB-Set führt der Slot durchs Loch
         for k in SKILL:
