@@ -18,7 +18,7 @@ from gridiron.tendencies import scout
 
 log = logging.getLogger(__name__)
 
-_BUILD = "v112-snap"         # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
+_BUILD = "v113-handoff"      # sichtbarer Versions-Marker (Footer + X-Gridiron-Build), zum Prüfen welcher Stand live ist
 
 _STYLE = """
  :root{--bg:#080c0b;--panel:#161f1c;--panel2:#212c28;--tile:#27332e;--fg:#eaf0ed;--mut:#94a49e;
@@ -1215,7 +1215,8 @@ function playAnim(svg,d,res,onDone){
      return;}
    if(o===tgt){if(fumbled){o.vx=o.vy=0;return;}   // nach Fumble bleibt der Ballträger liegen
      if(isPass){if(!caught)routeStep(o,mx,dt,rp);else steer(o,gain[0],gain[1]+2.0,mx(o.pos),dt,rp(o.pos));}   // Fang -> upfield (YAC), läuft durch bis zum Tackle
-     else{   // Lauf: dem Loch folgen, aber um Verteidiger im Weg herum improvisieren (kein Stehenbleiben)
+     else if(!handoffDone){steer(o,qb.x,qb.y+0.25,mx(o.pos)*0.55,dt,rp(o.pos));}   // Lauf: erst zum Mesh-Punkt zum QB (Handoff abwarten) — nicht schon losrennen
+     else{   // Lauf nach der Übergabe: dem Loch folgen, aber um Verteidiger im Weg herum improvisieren (kein Stehenbleiben)
        let tx,ty;
        if(o.route&&o.ri<o.route.length){const wp=o.route[o.ri];tx=wp[0];ty=wp[1];if(Math.hypot(wp[0]-o.x,wp[1]-o.y)<0.8)o.ri++;}
        else{tx=runEnd?runEnd[0]:C;ty=(runEnd?runEnd[1]:6)+2.0;}   // etwas über den Spot hinaus -> läuft weiter, wird getackelt
